@@ -545,6 +545,44 @@ class OlasMechContract(Contract):
         return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
+    def get_offchain_deliver_data_with_cap(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        sender: str,
+        requester: str,
+        deliverWithSignatures: List[Dict[str, List]],
+        deliveryRates: List[int],
+        maxRates: List[int],
+        paymentData: str,
+    ) -> JSONLike:
+        """Get offchain deliver tx data for the cap-and-actual 5-arg overload."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        # Overloading in Solidity: ethers/web3 can't resolve the function from
+        # the bare name once two overloads coexist, so the explicit signature
+        # string is required.
+        overload_signature = (
+            "deliverMarketplaceWithSignatures("
+            "address,(bytes,bytes,bytes)[],uint256[],uint256[],bytes)"
+        )
+        data = contract_instance.encode_abi(
+            abi_element_identifier=overload_signature,
+            args=[
+                requester,
+                deliverWithSignatures,
+                deliveryRates,
+                maxRates,
+                paymentData,
+            ],
+        )
+
+        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
+            "data"
+        )
+        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+
+    @classmethod
     def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
         """Get tx data"""
         contract_instance = cls.get_instance(ledger_api, contract_address)

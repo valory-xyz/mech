@@ -267,6 +267,8 @@ class OffchainKeys(Enum):
     DELIVERY_RATES = "delivery_rates"
     PAYMENT_DATA = "paymentData"
     DELIVERY_RATES_CAMEL = "deliveryRates"
+    MAX_RATES = "max_rates"
+    MAX_RATES_CAMEL = "maxRates"
 
 
 class OffchainDataKey(Enum):
@@ -2035,7 +2037,7 @@ class TransactionPreparationBehaviour(
             offchain_list_by_sender: Dict[str, Dict] = defaultdict(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
-                    OffchainKeys.DELIVERY_RATES.value: [],
+                    OffchainKeys.MAX_RATES.value: [],
                     REQUEST_IDS_KEY: [],
                 }
             )
@@ -2061,9 +2063,12 @@ class TransactionPreparationBehaviour(
                         ),
                     }
                 )
-                offchain_list_by_sender[sender][
-                    OffchainKeys.DELIVERY_RATES.value
-                ].append(int(data[OffchainDataValue.DELIVERY_RATE.value]))
+                # The per-request value in the signed message is the cap the
+                # requester signed over, so it feeds maxRates. The contract
+                # recomputes requestId with maxRates[i], not deliveryRates[i].
+                offchain_list_by_sender[sender][OffchainKeys.MAX_RATES.value].append(
+                    int(data[OffchainDataValue.DELIVERY_RATE.value])
+                )
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(
@@ -2073,13 +2078,20 @@ class TransactionPreparationBehaviour(
                 deliver_with_signatures = details[
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value
                 ]
-                delivery_rates = details[OffchainKeys.DELIVERY_RATES.value]
+                max_rates = details[OffchainKeys.MAX_RATES.value]
+                # Fork-test placeholder — real per-tool cost source is tracked
+                # in FORK_TEST_EDGE_CASES.md. Clamp at 0 because
+                # MIN_DELIVERY_RATE = 0 is accepted for free tasks and an
+                # unclamped `m - 1` would be -1, failing uint256 encoding and
+                # abandoning the whole off-chain batch for the period.
+                delivery_rates = [max(max_rate - 1, 0) for max_rate in max_rates]
 
                 contract_data = {
                     SENDER: self.synchronized_data.safe_contract_address,
                     REQUESTER_KEY: sender,
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
                     OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
+                    OffchainKeys.MAX_RATES_CAMEL.value: max_rates,
                     OffchainKeys.PAYMENT_DATA.value: b"",
                 }
                 self.context.logger.info(
@@ -2090,7 +2102,7 @@ class TransactionPreparationBehaviour(
                     performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
                     contract_address=mech_address,
                     contract_id=str(OlasMechContract.contract_id),
-                    contract_callable="get_offchain_deliver_data",
+                    contract_callable="get_offchain_deliver_data_with_cap",
                     **contract_data,
                     chain_id=self.params.default_chain_id,
                 )
@@ -2099,7 +2111,7 @@ class TransactionPreparationBehaviour(
                     != ContractApiMessage.Performative.STATE
                 ):
                     self.context.logger.warning(
-                        f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
+                        f"get_offchain_deliver_data_with_cap unsuccessful!: {contract_api_msg}"
                     )
                     # Every off-chain task in this period's batch is
                     # abandoned (including groups already appended to
