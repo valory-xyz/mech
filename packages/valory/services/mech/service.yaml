@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeihxnrxn4bip4deg4ufgzwibio2auqd6ddlyyfkjfbdecqdwteun6u
+agent: valory/mech:0.1.0:bafybeih37oyoixcgreqyvm7duyjlmuv244vhous25b7fhq7xzyvfwiwywu
 number_of_agents: 4
 deployment:
   agent:
@@ -39,6 +39,9 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        operator_markup_bp: ${OPERATOR_MARKUP_BP:int:2000}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -83,6 +86,9 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        operator_markup_bp: ${OPERATOR_MARKUP_BP:int:2000}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -124,6 +130,9 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        operator_markup_bp: ${OPERATOR_MARKUP_BP:int:2000}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
@@ -165,6 +174,9 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        operator_markup_bp: ${OPERATOR_MARKUP_BP:int:2000}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}

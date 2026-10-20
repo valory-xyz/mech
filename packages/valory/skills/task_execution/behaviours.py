@@ -1975,6 +1975,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         task_result = to_multihash(cid)
+        if response is not None and isinstance(response.get("cost_dict"), dict):
+            done_task["cost_dict"] = response["cost_dict"]
         tool = str(done_task.get("tool"))
         dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:

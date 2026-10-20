@@ -82,6 +82,9 @@ from packages.valory.skills.task_execution.models import (
     offchain_metric_labels,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
+from packages.valory.skills.task_execution.utils.cost_calculation import (
+    get_cost_for_done_task,
+)
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -258,6 +261,9 @@ LAST_TX = "last_tx"
 # post-tx behaviour reads, never writes).
 PENDING_TASKS = "pending_tasks"
 PAYMENT_MODEL = "payment_model"
+BASIS_POINTS = 10_000
+# get_cost_for_done_task reports the measured tool cost in USD cents.
+CREDIT_DECIMALS = 2
 
 
 class OffchainKeys(Enum):
@@ -269,6 +275,7 @@ class OffchainKeys(Enum):
     DELIVERY_RATES_CAMEL = "deliveryRates"
     MAX_RATES = "max_rates"
     MAX_RATES_CAMEL = "maxRates"
+    ACTUAL_RATES = "actual_rates"
 
 
 class OffchainDataKey(Enum):
@@ -2003,6 +2010,53 @@ class TransactionPreparationBehaviour(
 
         return self._get_agent_mech_deliver_tx(task_data)
 
+    def _measured_cost_in_token_units(self, done_task: Dict[str, Any]) -> Optional[int]:
+        """Measured tool cost in token base units; None if the tool reported none."""
+        cost_dict = done_task.get("cost_dict")
+        if not isinstance(cost_dict, dict) or cost_dict.get("total_cost") is None:
+            return None
+        credits = get_cost_for_done_task(done_task)
+        return credits * 10 ** (self.params.payment_token_decimals - CREDIT_DECIMALS)
+
+    def _compute_actual_delivery_rate(
+        self, done_task: Dict[str, Any], max_rate: int
+    ) -> int:
+        """Return the rate to charge for one off-chain request, never above its cap.
+
+        The measured cost (see :meth:`_measured_cost_in_token_units`) is marked
+        up by ``operator_markup_bp``. A ``tools_to_pricing`` entry for the tool
+        is a floor and is not marked up. With neither source the signed cap is
+        charged in full. The contract rejects a rate over the signed cap and
+        that would abandon the whole batch, so the result is clamped to it.
+
+        :param done_task: the off-chain done task published by task_execution.
+        :param max_rate: the cap the requester signed over, in token base units.
+        :return: the delivery rate to submit, in token base units.
+        """
+        request_id = done_task.get("request_id")
+        candidates: List[int] = []
+        measured = self._measured_cost_in_token_units(done_task)
+        if measured is not None:
+            markup = BASIS_POINTS + self.params.operator_markup_bp
+            candidates.append((measured * markup + BASIS_POINTS - 1) // BASIS_POINTS)
+        floor = done_task.get(MarketplaceData.DYNAMIC_TOOL_COST.value)
+        if floor is not None:
+            candidates.append(int(floor))
+        if not candidates:
+            self.context.logger.warning(
+                f"No measured cost or tool floor for request {request_id}; "
+                f"charging the signed cap {max_rate}."
+            )
+            return max_rate
+        actual = max(candidates)
+        if actual > max_rate:
+            self.context.logger.warning(
+                f"Actual rate {actual} for request {request_id} exceeds the "
+                f"signed cap {max_rate}; clamping to the cap."
+            )
+            return max_rate
+        return actual
+
     def _get_offchain_tasks_deliver_data(
         self,
     ) -> Generator[None, None, Tuple[Optional[List[Dict[str, Any]]], List[str]]]:
@@ -2038,6 +2092,7 @@ class TransactionPreparationBehaviour(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
                     OffchainKeys.MAX_RATES.value: [],
+                    OffchainKeys.ACTUAL_RATES.value: [],
                     REQUEST_IDS_KEY: [],
                 }
             )
@@ -2066,9 +2121,14 @@ class TransactionPreparationBehaviour(
                 # The per-request value in the signed message is the cap the
                 # requester signed over, so it feeds maxRates. The contract
                 # recomputes requestId with maxRates[i], not deliveryRates[i].
+                max_rate = int(data[OffchainDataValue.DELIVERY_RATE.value])
                 offchain_list_by_sender[sender][OffchainKeys.MAX_RATES.value].append(
-                    int(data[OffchainDataValue.DELIVERY_RATE.value])
+                    max_rate
                 )
+                if self.params.cap_and_actual_enabled:
+                    offchain_list_by_sender[sender][
+                        OffchainKeys.ACTUAL_RATES.value
+                    ].append(self._compute_actual_delivery_rate(data, max_rate))
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(
@@ -2086,12 +2146,7 @@ class TransactionPreparationBehaviour(
                 # until the marketplace redeploy carries the overload and the
                 # operator flips cap_and_actual_enabled per-service.
                 if self.params.cap_and_actual_enabled:
-                    # Fork-test placeholder — real per-tool cost source is tracked
-                    # in FORK_TEST_EDGE_CASES.md. Clamp at 0 because
-                    # MIN_DELIVERY_RATE = 0 is accepted for free tasks and an
-                    # unclamped `m - 1` would be -1, failing uint256 encoding and
-                    # abandoning the whole off-chain batch for the period.
-                    delivery_rates = [max(m - 1, 0) for m in max_rates]
+                    delivery_rates = details[OffchainKeys.ACTUAL_RATES.value]
                     contract_data = {
                         SENDER: self.synchronized_data.safe_contract_address,
                         REQUESTER_KEY: sender,

@@ -162,6 +162,20 @@ class Params(BaseParams):
         self.cap_and_actual_enabled: bool = bool(
             kwargs.get("cap_and_actual_enabled", False)
         )
+        # Markup over the measured tool cost in basis points (2000 = 20%).
+        # Never applied to the per-tool ``tools_to_pricing`` floor, which is
+        # already a price. ``or`` is avoided so an explicit 0 stays 0.
+        raw_markup = kwargs.get("operator_markup_bp")
+        self.operator_markup_bp: int = 2000 if raw_markup is None else int(raw_markup)
+        enforce(self.operator_markup_bp >= 0, "operator_markup_bp must be >= 0")
+        # Decimals of the payment token (18 for xDAI-style, 6 for USDC). The
+        # measured cost is USD cents and the token is assumed to trade at 1 USD,
+        # so cents scale by 10**(decimals - 2) into token base units.
+        raw_decimals = kwargs.get("payment_token_decimals")
+        self.payment_token_decimals: int = (
+            18 if raw_decimals is None else int(raw_decimals)
+        )
+        enforce(self.payment_token_decimals >= 2, "payment_token_decimals must be >= 2")
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No

@@ -4922,6 +4922,104 @@ def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
     assert entry["event"].get("source") == "mech_offchain"
 
 
+def test_finalize_done_task_attaches_cost_dict_from_response(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The response's ``cost_dict`` is copied onto the published done_task.
+
+    Settlement prices the off-chain deliver from this field, so it has to
+    survive into ``synchronized_data.done_tasks``.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    cost_dict = {"total_cost": 0.5, "input_tokens": 10}
+    behaviour._finalize_done_task("bafycid", response={"cost_dict": cost_dict})
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["cost_dict"] == cost_dict
+
+
+def test_finalize_done_task_predict_api_event_carries_cost_dict(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The predict-api event built at finalize time carries the response's ``cost_dict``.
+
+    The event builder reads the field off the done_task, so attaching it
+    there is what makes the analytics row non-null.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    cost_dict = {"total_cost": 0.5}
+    behaviour._finalize_done_task("bafycid", response={"cost_dict": cost_dict})
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
+    assert event["event"]["response"]["cost_dict"] == cost_dict
+
+
+@pytest.mark.parametrize(
+    "response", [None, {}, {"cost_dict": None}, {"cost_dict": "not-a-dict"}]
+)
+def test_finalize_done_task_leaves_cost_dict_absent_without_one(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    response: Any,
+) -> None:
+    """No usable ``cost_dict`` on the response leaves the done_task without one.
+
+    Settlement treats an absent key as "no measured cost" and falls back to
+    the tool floor or the signed cap, so nothing must fabricate the key.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param response: the response envelope handed to ``_finalize_done_task``.
+    """
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid", response=response)
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert "cost_dict" not in done_tasks[0]
+
+
 def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     behaviour: Any,
     params_stub: Any,

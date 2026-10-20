@@ -2718,8 +2718,17 @@ class TestSafeTxHashAndMultisend:
 class TestGetOffchainTasksDeliverData:
     """Test Get Offchain Tasks Deliver Data."""
 
-    def _make_b(self, cap_and_actual_enabled: bool = False) -> "_DummyTransPrep":
-        ctx = _make_full_ctx(cap_and_actual_enabled=cap_and_actual_enabled)
+    def _make_b(
+        self,
+        cap_and_actual_enabled: bool = False,
+        operator_markup_bp: int = 2000,
+        payment_token_decimals: int = 18,
+    ) -> "_DummyTransPrep":
+        ctx = _make_full_ctx(
+            cap_and_actual_enabled=cap_and_actual_enabled,
+            operator_markup_bp=operator_markup_bp,
+            payment_token_decimals=payment_token_decimals,
+        )
         b = _DummyTransPrep(name="b", skill_context=ctx)
         return b
 
@@ -2843,13 +2852,14 @@ class TestGetOffchainTasksDeliverData:
     def test_flag_on_routes_to_cap_wrapper_with_max_and_delivery_rates(self) -> None:
         """Flag on routes to the 5-arg wrapper with both maxRates and deliveryRates.
 
-        maxRates equals the signed rate on the request; deliveryRates is one
-        less, clamped at 0. Guards against silently reverting to the 4-arg
-        path, or dropping either array.
+        maxRates is the signed rate on the request; deliveryRates is the
+        measured cost (50 cents at 2 decimals) marked up 20%. Guards against
+        silently reverting to the 4-arg path, or dropping either array.
         """
-        b = self._make_b(cap_and_actual_enabled=True)
+        b = self._make_b(cap_and_actual_enabled=True, payment_token_decimals=2)
         task = self._offchain_task("r1")
         task["delivery_rate"] = 100
+        task["cost_dict"] = {"total_cost": 0.5}
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
         captured: Dict[str, Any] = {}
 
@@ -2865,18 +2875,19 @@ class TestGetOffchainTasksDeliverData:
 
         assert captured["contract_callable"] == "get_offchain_deliver_data_with_cap"
         assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [99]
+        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [60]
 
     def test_flag_on_clamps_delivery_rate_at_zero_for_free_requests(self) -> None:
-        """Flag-on path clamps a signed rate of 0 to 0 instead of underflowing to -1.
+        """Flag-on path charges 0 for a signed cap of 0 even when the tool had a cost.
 
-        -1 would fail uint256 encoding in the contract wrapper and abandon the
-        whole off-chain batch for the period, including any other requests
-        grouped under the same sender.
+        A rate above the cap would make the contract reject the whole batch
+        for the period, including any other requests grouped under the same
+        sender.
         """
-        b = self._make_b(cap_and_actual_enabled=True)
+        b = self._make_b(cap_and_actual_enabled=True, payment_token_decimals=2)
         task = self._offchain_task("r1")
         task["delivery_rate"] = 0
+        task["cost_dict"] = {"total_cost": 0.5}
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
         captured: Dict[str, Any] = {}
 
@@ -2892,6 +2903,106 @@ class TestGetOffchainTasksDeliverData:
 
         assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
         assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
+
+    def test_flag_off_does_not_price_tasks(self) -> None:
+        """Flag off never calls the pricing function, so the legacy path is byte-identical."""
+        b = self._make_b(cap_and_actual_enabled=False)
+        task = self._offchain_task("r1")
+        task["cost_dict"] = {"total_cost": 0.5}
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(msg)
+            ),
+            patch.object(b, "_compute_actual_delivery_rate") as mock_price,
+        ):
+            _run_gen(b._get_offchain_tasks_deliver_data())
+        mock_price.assert_not_called()
+
+    def test_actual_rate_marks_up_measured_cost(self) -> None:
+        """Measured cost scales by the token decimals and takes the operator markup."""
+        b = self._make_b(operator_markup_bp=2000, payment_token_decimals=6)
+        task = {"request_id": "r1", "cost_dict": {"total_cost": 0.5}}
+        # 50 cents -> 500_000 units at 6 decimals -> 600_000 with 20% markup.
+        assert b._compute_actual_delivery_rate(task, max_rate=1_000_000) == 600_000
+
+    def test_actual_rate_rounds_markup_up(self) -> None:
+        """A fractional marked-up unit rounds up, never down."""
+        b = self._make_b(operator_markup_bp=2000, payment_token_decimals=2)
+        task = {"request_id": "r1", "cost_dict": {"total_cost": 0.01}}
+        # 1 cent * 1.2 = 1.2 -> 2
+        assert b._compute_actual_delivery_rate(task, max_rate=100) == 2
+
+    @pytest.mark.parametrize(
+        "markup_bp, expected", [(0, 50), (2000, 60), (10_000, 100)]
+    )
+    def test_actual_rate_honours_markup(self, markup_bp: int, expected: int) -> None:
+        """Markup 0 charges the measured cost as-is; 100% doubles it."""
+        b = self._make_b(operator_markup_bp=markup_bp, payment_token_decimals=2)
+        task = {"request_id": "r1", "cost_dict": {"total_cost": 0.5}}
+        assert b._compute_actual_delivery_rate(task, max_rate=1_000) == expected
+
+    def test_actual_rate_floor_wins_without_markup(self) -> None:
+        """A tools_to_pricing floor above the marked-up cost is charged as-is."""
+        b = self._make_b(operator_markup_bp=2000, payment_token_decimals=2)
+        task = {
+            "request_id": "r1",
+            "cost_dict": {"total_cost": 0.5},
+            "dynamic_tool_cost": 80,
+        }
+        # 80, not 96: the floor is already a price and is not marked up.
+        assert b._compute_actual_delivery_rate(task, max_rate=1_000) == 80
+
+    def test_actual_rate_measured_wins_over_lower_floor(self) -> None:
+        """The marked-up measured cost is charged when it exceeds the floor."""
+        b = self._make_b(operator_markup_bp=2000, payment_token_decimals=2)
+        task = {
+            "request_id": "r1",
+            "cost_dict": {"total_cost": 0.5},
+            "dynamic_tool_cost": 10,
+        }
+        assert b._compute_actual_delivery_rate(task, max_rate=1_000) == 60
+
+    def test_actual_rate_clamps_to_cap_and_warns(self) -> None:
+        """A rate above the signed cap is clamped to the cap and logged."""
+        b = self._make_b(operator_markup_bp=2000, payment_token_decimals=2)
+        b.context.logger = MagicMock()
+        task = {"request_id": "r1", "cost_dict": {"total_cost": 0.5}}
+        assert b._compute_actual_delivery_rate(task, max_rate=50) == 50
+        b.context.logger.warning.assert_called_once()
+
+    def test_actual_rate_charges_cap_without_cost_or_floor(self) -> None:
+        """With no measured cost and no floor the signed cap is charged, with a warning."""
+        b = self._make_b()
+        b.context.logger = MagicMock()
+        task = {"request_id": "r1"}
+        assert b._compute_actual_delivery_rate(task, max_rate=70) == 70
+        b.context.logger.warning.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "cost_dict",
+        [{}, {"total_cost": None}, {"input_cost": 0.1}, "not-a-dict", None],
+    )
+    def test_actual_rate_treats_cost_dict_without_total_as_no_cost(
+        self, cost_dict: Any
+    ) -> None:
+        """A cost_dict without total_cost is 'no cost', so the floor applies."""
+        b = self._make_b()
+        task = {"request_id": "r1", "cost_dict": cost_dict, "dynamic_tool_cost": 30}
+        assert b._compute_actual_delivery_rate(task, max_rate=100) == 30
+
+    def test_actual_rate_zero_cost_without_floor_is_free(self) -> None:
+        """A reported cost of 0 with no floor charges 0, not the cap."""
+        b = self._make_b(payment_token_decimals=2)
+        task = {"request_id": "r1", "cost_dict": {"total_cost": 0.0}}
+        assert b._compute_actual_delivery_rate(task, max_rate=100) == 0
+
+    def test_actual_rate_scales_by_token_decimals(self) -> None:
+        """The same 50-cent cost is 5e17 at 18 decimals (no markup)."""
+        b = self._make_b(operator_markup_bp=0, payment_token_decimals=18)
+        task = {"request_id": "r1", "cost_dict": {"total_cost": 0.5}}
+        assert b._compute_actual_delivery_rate(task, max_rate=10**18) == 5 * 10**17
 
 
 # ---------------------------------------------------------------------------
