@@ -269,7 +269,6 @@ class OffchainKeys(Enum):
     DELIVERY_RATES_CAMEL = "deliveryRates"
     MAX_RATES = "max_rates"
     MAX_RATES_CAMEL = "maxRates"
-    ACTUAL_RATES = "actual_rates"
 
 
 class OffchainDataKey(Enum):
@@ -2006,15 +2005,22 @@ class TransactionPreparationBehaviour(
         return self._get_agent_mech_deliver_tx(task_data)
 
     def _actual_delivery_rate(self, done_task: Dict[str, Any], max_rate: int) -> int:
-        """The stored price for one off-chain request, never above the signed cap."""
+        """The rate to charge for one off-chain request under cap-and-actual.
+
+        :param done_task: the pooled done task; its ``actual_delivery_rate`` is
+            the price task_execution stored, taken only as a non-negative int.
+        :param max_rate: the rate the requester signed.
+        :return: the stored price clamped to ``max_rate``; ``max_rate`` itself,
+            with a warning, when the stored value is missing or unusable.
+        """
         actual = done_task.get(OffchainDataValue.ACTUAL_DELIVERY_RATE.value)
-        if actual is None:
+        if isinstance(actual, bool) or not isinstance(actual, int) or actual < 0:
             self.context.logger.warning(
-                f"No actual_delivery_rate on done task "
+                f"Unusable actual_delivery_rate {actual!r} on done task "
                 f"{done_task.get('request_id')}; charging the signed cap {max_rate}."
             )
             return max_rate
-        return min(int(actual), max_rate)
+        return min(actual, max_rate)
 
     def _get_offchain_tasks_deliver_data(
         self,
@@ -2051,7 +2057,7 @@ class TransactionPreparationBehaviour(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
                     OffchainKeys.MAX_RATES.value: [],
-                    OffchainKeys.ACTUAL_RATES.value: [],
+                    OffchainKeys.DELIVERY_RATES.value: [],
                     REQUEST_IDS_KEY: [],
                 }
             )
@@ -2084,10 +2090,14 @@ class TransactionPreparationBehaviour(
                 offchain_list_by_sender[sender][OffchainKeys.MAX_RATES.value].append(
                     max_rate
                 )
-                if self.params.cap_and_actual_enabled:
-                    offchain_list_by_sender[sender][
-                        OffchainKeys.ACTUAL_RATES.value
-                    ].append(self._actual_delivery_rate(data, max_rate))
+                # Flag off: the legacy 4-arg call charges the signed value.
+                offchain_list_by_sender[sender][
+                    OffchainKeys.DELIVERY_RATES.value
+                ].append(
+                    self._actual_delivery_rate(data, max_rate)
+                    if self.params.cap_and_actual_enabled
+                    else max_rate
+                )
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(
@@ -2099,19 +2109,17 @@ class TransactionPreparationBehaviour(
                 ]
                 max_rates = details[OffchainKeys.MAX_RATES.value]
 
-                # Flag off: the legacy 4-arg call charges the signed value.
                 contract_data: Dict[str, Any] = {
                     SENDER: self.synchronized_data.safe_contract_address,
                     REQUESTER_KEY: sender,
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
-                    OffchainKeys.DELIVERY_RATES_CAMEL.value: max_rates,
+                    OffchainKeys.DELIVERY_RATES_CAMEL.value: details[
+                        OffchainKeys.DELIVERY_RATES.value
+                    ],
                     OffchainKeys.PAYMENT_DATA.value: b"",
                 }
                 contract_callable = "get_offchain_deliver_data"
                 if self.params.cap_and_actual_enabled:
-                    contract_data[OffchainKeys.DELIVERY_RATES_CAMEL.value] = details[
-                        OffchainKeys.ACTUAL_RATES.value
-                    ]
                     contract_data[OffchainKeys.MAX_RATES_CAMEL.value] = max_rates
                     contract_callable = "get_offchain_deliver_data_with_cap"
 

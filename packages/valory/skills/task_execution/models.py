@@ -260,12 +260,14 @@ class Params(Model):
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
             )
+            enforce(
+                min(self.tools_to_pricing.values()) >= 0,
+                "tools_to_pricing values must be >= 0",
+            )
         # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
-        # scale by payment_token_decimals (the asset is assumed worth 1 USD);
-        # fixed_cost_per_request is USD with USD_DECIMALS decimals.
-        raw_decimals = kwargs.get("payment_token_decimals")
-        self.payment_token_decimals: int = (
-            18 if raw_decimals is None else int(raw_decimals)
+        # scale by payment_token_decimals; the payment asset is assumed worth 1 USD.
+        self.payment_token_decimals: int = int(
+            self._ensure_get("payment_token_decimals", kwargs, int)
         )
         enforce(
             self.payment_token_decimals >= USD_DECIMALS,

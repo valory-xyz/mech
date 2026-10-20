@@ -4928,41 +4928,7 @@ def test_finalize_done_task_attaches_cost_dict_from_response(
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """The response's ``cost_dict`` is copied onto the published done_task.
-
-    Settlement prices the off-chain deliver from this field, so it has to
-    survive into ``synchronized_data.done_tasks``.
-
-    :param behaviour: TaskExecutionBehaviour fixture.
-    :param params_stub: params fixture.
-    :param shared_state: shared_state fixture.
-    :param monkeypatch: pytest monkeypatch fixture.
-    """
-    _finalize_gate_setup(
-        behaviour,
-        shared_state,
-        params_stub,
-        monkeypatch,
-        is_offchain=True,
-        is_marketplace_mech=True,
-    )
-    cost_dict = {"total_cost": 0.5, "input_tokens": 10}
-    behaviour._finalize_done_task("bafycid", response={"cost_dict": cost_dict})
-    done_tasks = shared_state[beh_mod.DONE_TASKS]
-    assert len(done_tasks) == 1
-    assert done_tasks[0]["cost_dict"] == cost_dict
-
-
-def test_finalize_done_task_predict_api_event_carries_cost_dict(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-    monkeypatch: Any,
-) -> None:
-    """The predict-api event built at finalize time carries the response's ``cost_dict``.
-
-    The event builder reads the field off the done_task, so attaching it
-    there is what makes the analytics row non-null.
+    """The response's ``cost_dict`` lands on the done task and on the predict-api event.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture with ``use_offchain=True``.
@@ -4978,9 +4944,11 @@ def test_finalize_done_task_predict_api_event_carries_cost_dict(
         is_offchain=True,
         is_marketplace_mech=True,
     )
-    cost_dict = {"total_cost": 0.5}
+    cost_dict = {"total_cost": 0.5, "input_tokens": 10}
     behaviour._finalize_done_task("bafycid", response={"cost_dict": cost_dict})
     done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["cost_dict"] == cost_dict
     event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
     assert event["event"]["response"]["cost_dict"] == cost_dict
 
@@ -5113,48 +5081,16 @@ def test_price_is_none_without_a_signed_rate(behaviour: Any, params_stub: Any) -
     assert behaviour._price_done_task(task, None) is None
 
 
-def test_finalize_done_task_stores_price_and_exposes_it_to_the_poll(
+def test_finalize_done_task_stores_price_and_reports_it(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """The price lands on the done task and on the off-chain poll envelope.
+    """The price lands on the done task, the poll envelope and the predict-api event.
 
     The gate fixture signs a cap of 1e16 at 18 decimals; a 0.005 USD run with
     the 15% fee prices at 5e15 * 10_000 / 8_500, rounded up.
-
-    :param behaviour: TaskExecutionBehaviour fixture.
-    :param params_stub: params fixture.
-    :param shared_state: shared_state fixture.
-    :param monkeypatch: pytest monkeypatch fixture.
-    """
-    _set_price_params(params_stub, decimals=18, fee_bp=1500)
-    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
-    _finalize_gate_setup(
-        behaviour,
-        shared_state,
-        params_stub,
-        monkeypatch,
-        is_offchain=True,
-        is_marketplace_mech=True,
-    )
-    behaviour._finalize_done_task(
-        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
-    )
-    done_task = shared_state[beh_mod.DONE_TASKS][0]
-    assert done_task["actual_delivery_rate"] == 5_882_352_941_176_471
-    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
-    assert envelope["delivery_rate"] == 5_882_352_941_176_471
-
-
-def test_finalize_done_task_predict_api_event_carries_price(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-    monkeypatch: Any,
-) -> None:
-    """The predict-api event's response carries the stored price as a string.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture with ``use_offchain=True``.
@@ -5175,8 +5111,11 @@ def test_finalize_done_task_predict_api_event_carries_price(
     behaviour._finalize_done_task(
         "bafycid", response={"cost_dict": {"total_cost": 0.005}}
     )
-    done_tasks = shared_state[beh_mod.DONE_TASKS]
-    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 5_882_352_941_176_471
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 5_882_352_941_176_471
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
     assert event["event"]["response"]["actual_delivery_rate"] == "5882352941176471"
 
 
@@ -5216,29 +5155,37 @@ def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
 
 
 @pytest.mark.parametrize(
-    "tools_to_pricing, expected",
-    [({"prediction-offline": 123}, 123), ({}, 10**16)],
+    "tools_to_pricing, max_rates, expected",
+    [
+        ({"prediction-offline": 123}, {"0xmech": 777}, 123),
+        ({}, {"0xmech": 777}, 777),
+        ({}, {}, 10**16),
+    ],
 )
-def test_finalize_done_task_reports_floor_or_recorded_rate_on_chain(
+def test_finalize_done_task_reports_floor_or_mech_max_rate_on_chain(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
     tools_to_pricing: Dict[str, int],
+    max_rates: Dict[str, int],
     expected: int,
 ) -> None:
-    """On-chain: the stored rate is the tool floor when set, else the recorded rate.
+    """On-chain: the stored rate is the tool floor, else the mech's max delivery rate.
 
-    That mirrors what the on-chain settlement path charges, regardless of the
-    cap-and-actual flag.
+    That mirrors what the marketplace deliver charges, regardless of the
+    cap-and-actual flag; only without a configured max rate is the request's
+    recorded rate reported.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
     :param shared_state: shared_state fixture.
     :param monkeypatch: pytest monkeypatch fixture.
     :param tools_to_pricing: the per-tool floors the behaviour is configured with.
+    :param max_rates: the ``mech_to_max_delivery_rate`` param.
     :param expected: the rate settlement will charge.
     """
+    params_stub.mech_to_max_delivery_rate = max_rates
     _set_price_params(params_stub, decimals=18, fee_bp=1500)
     shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
     _finalize_gate_setup(

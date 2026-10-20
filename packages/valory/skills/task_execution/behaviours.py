@@ -1957,10 +1957,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _price_done_task(
         self, done_task: Dict[str, Any], cap: Optional[int]
     ) -> Optional[int]:
-        """Price for a done task: ``(V + F) / (1 - fee)``, floored and capped.
+        """Price for a done task, clamped to the signed cap.
+
+        The price is ``max(ceil((V + F) / (1 - fee)), tool floor)``: V the
+        measured cost, F the fixed share per request, the floor the tool's
+        ``tools_to_pricing`` entry.
 
         :param done_task: the done task, carrying ``cost_dict`` (V) and
-            ``dynamic_tool_cost`` (the ``tools_to_pricing`` floor).
+            ``dynamic_tool_cost`` (the floor) when set.
         :param cap: the rate the requester signed, or None when unknown.
         :return: the rate in payment-asset units, never above ``cap``; the cap
             itself with neither a measured cost nor a floor; None without a cap.
@@ -1983,7 +1987,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if not candidates:
             self.context.logger.warning(
                 f"No measured cost or tool floor for request {request_id}; "
-                f"charging the signed cap {cap}."
+                f"the price falls back to the signed rate {cap}."
             )
             return cap
         price = max(candidates)
@@ -2010,7 +2014,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param price: the cap-and-actual price, already clamped to ``cap``.
         :return: ``price`` for off-chain tasks with the cap-and-actual flag on;
             ``cap`` for off-chain tasks with it off; for on-chain tasks the
-            ``tools_to_pricing`` floor when set, else ``cap``.
+            ``tools_to_pricing`` floor when set, else the mech's max delivery
+            rate (what the marketplace deliver passes), else ``cap``.
         """
         if cap is None:
             return None
@@ -2022,7 +2027,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return price if cap_and_actual and price is not None else cap
         floor = done_task.get("dynamic_tool_cost")
-        return cap if floor is None else int(floor)
+        if floor is not None:
+            return int(floor)
+        max_rates = self.params.mech_to_max_delivery_rate
+        return int(next(iter(max_rates.values()))) if max_rates else cap
 
     def _finalize_done_task(
         self, cid: str, response: Optional[Dict[str, Any]] = None

@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeiclkilfgtjxtvcggq5hdnmpm2gvn3fjqqs2km5ye42ldujiozolum
+  behaviours.py: bafybeickhxv2ong457urdlt5hzr2ykcaxmcwlddqbd72tuhz5rxon5spou
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
   handlers.py: bafybeidi5cfnrf4foura5frfgk747ed7zowwkd7tqofipkj3mzon44rgdm
-  models.py: bafybeiegzuafzo4a4buok5vx2ok2j73gw6bto7sn6f6louwqxsgx62ogym
+  models.py: bafybeihqbolq6jkcdorggzlej2zyapunkjfzj7cl2yqwtsodlee42ispau
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeib7yqov5ch5o2zzgriv3gvqn6pmp2fwwx75ns646a4dnsodtqoeoa
-  tests/test_behaviours.py: bafybeiemqxlydjr2gwgumbzuf2bqhldyvbkumlyolw6ahvu6isbafknvie
+  tests/test_behaviours.py: bafybeiadklsarr7uurwzx5styqex7nxoidynnenyrhupjgn3luhmb5xu7u
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
   tests/test_handlers.py: bafybeie6yp55a4dg5bgovy6cqfbxju72yftqwccsy5ckb6hifdfa5smota
-  tests/test_models.py: bafybeiccrcj45yjv2bl27k64o5am4ahamk26zvlqe4b5qz7ohw6hhzjf4a
+  tests/test_models.py: bafybeiawmd5tkiuzzdcsnopnvscney6eptnotddi4njgz3jz2lausf4vn4
   tests/test_preimage_buffer.py: bafybeifazhvm45fujuccedti3qm2thrwt4fp5hcbk3zar2nw4jqnlxnfae
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
@@ -45,7 +45,7 @@ connections:
 contracts:
 - valory/balance_tracker:0.1.0:bafybeiayyxl643qfpw57vopytxgyd6flxxmwassswuxen7myekqaxdxxvi
 - valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
-- valory/olas_mech:0.1.0:bafybeibvafx574szo2ivkmfdi2vglwnszf5anwskbm4joy3ribvwq5anry
+- valory/olas_mech:0.1.0:bafybeidpu72iftjxjgdg7xqxn3aridkwa7z6svmsod7shaid4tzlxbqsqy
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la

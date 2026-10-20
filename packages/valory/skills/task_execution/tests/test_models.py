@@ -103,23 +103,28 @@ def test_params_marketplace_flag_true(params_kwargs: Dict[str, Any]) -> None:
 
 
 def test_params_price_inputs_default(params_kwargs: Dict[str, Any]) -> None:
-    """Price inputs default to 18 decimals, no fixed share and a 15% fee."""
-    for key in (
-        "payment_token_decimals",
-        "fixed_cost_per_request",
-        "marketplace_fee_bp",
-    ):
+    """The fixed share defaults to 0 and the fee to 15%."""
+    for key in ("fixed_cost_per_request", "marketplace_fee_bp"):
         params_kwargs.pop(key, None)
     p: m.Params = m.Params(name="params", **params_kwargs)
-    assert (
-        p.payment_token_decimals,
-        p.fixed_cost_per_request,
-        p.marketplace_fee_bp,
-    ) == (
-        18,
-        0,
-        1500,
-    )
+    assert (p.fixed_cost_per_request, p.marketplace_fee_bp) == (0, 1500)
+
+
+def test_params_require_payment_token_decimals(params_kwargs: Dict[str, Any]) -> None:
+    """Decimals have no default: a missing value fails at startup, not per task."""
+    params_kwargs.pop("payment_token_decimals")
+    with pytest.raises(AEAEnforceError, match="payment_token_decimals"):
+        m.Params(name="params", **params_kwargs)
+
+
+def test_params_tools_pricing_rejects_negative_floor(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """A negative tool floor is refused; it would otherwise price below zero."""
+    params_kwargs["tools_to_package_hash"] = {"sum": "h1"}
+    params_kwargs["tools_to_pricing"] = {"sum": -1}
+    with pytest.raises(AEAEnforceError, match="tools_to_pricing"):
+        m.Params(name="params", **params_kwargs)
 
 
 def test_params_price_inputs_keep_explicit_zero(params_kwargs: Dict[str, Any]) -> None:

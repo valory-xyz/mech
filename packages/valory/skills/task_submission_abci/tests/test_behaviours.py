@@ -2833,13 +2833,9 @@ class TestGetOffchainTasksDeliverData:
         return calls
 
     def test_flag_off_routes_to_legacy_four_arg_wrapper(self) -> None:
-        """Flag off keeps routing to the legacy 4-arg wrapper with no maxRates key.
-
-        Protects against the branch drifting on by default and breaking prod
-        against the un-redeployed marketplace.
-        """
+        """Flag off routes to the legacy 4-arg wrapper, charging the signed rate."""
         task = self._offchain_task("r1")
-        task["delivery_rate"] = 100
+        task["delivery_rate"], task["actual_delivery_rate"] = 100, 60
         (call,) = self._deliver_calls(
             self._make_b(cap_and_actual_enabled=False), [task]
         )
@@ -2874,41 +2870,28 @@ class TestGetOffchainTasksDeliverData:
         assert call[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
         assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
 
-    def test_flag_off_does_not_read_stored_price(self) -> None:
-        """Flag off never consults the stored price, so the legacy path is byte-identical."""
-        b = self._make_b(cap_and_actual_enabled=False)
-        task = self._offchain_task("r1")
-        task["actual_delivery_rate"] = 60
-        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        with (
-            self._patch_sd(b, [task]),
-            patch.object(
-                b, "get_contract_api_response", side_effect=_gen_returning(msg)
-            ),
-            patch.object(b, "_actual_delivery_rate") as mock_rate,
-        ):
-            _run_gen(b._get_offchain_tasks_deliver_data())
-        mock_rate.assert_not_called()
-
-    def test_stored_price_above_cap_is_clamped(self) -> None:
-        """A stored price above the signed cap is clamped to the cap."""
-        b = self._make_b()
-        task = {"request_id": "r1", "actual_delivery_rate": 150}
-        assert b._actual_delivery_rate(task, max_rate=100) == 100
-
-    def test_stored_price_below_cap_is_charged_as_is(self) -> None:
-        """A stored price below the cap is charged unchanged."""
-        b = self._make_b()
-        task = {"request_id": "r1", "actual_delivery_rate": 60}
-        assert b._actual_delivery_rate(task, max_rate=100) == 60
-
-    def test_missing_stored_price_charges_cap_and_warns(self) -> None:
-        """A done task without a stored price is charged the signed cap, with a warning."""
+    @pytest.mark.parametrize(
+        "task, max_rate, expected, warns",
+        [
+            ({"request_id": "r1", "actual_delivery_rate": 150}, 100, 100, False),
+            ({"request_id": "r1", "actual_delivery_rate": 60}, 100, 60, False),
+            ({"request_id": "r1", "actual_delivery_rate": 0}, 100, 0, False),
+            ({"request_id": "r1"}, 70, 70, True),
+            ({"request_id": "r1", "actual_delivery_rate": None}, 70, 70, True),
+            ({"request_id": "r1", "actual_delivery_rate": "60"}, 100, 100, True),
+            ({"request_id": "r1", "actual_delivery_rate": 60.0}, 100, 100, True),
+            ({"request_id": "r1", "actual_delivery_rate": True}, 100, 100, True),
+            ({"request_id": "r1", "actual_delivery_rate": -1}, 100, 100, True),
+        ],
+    )
+    def test_actual_delivery_rate_charges_a_non_negative_int_up_to_the_cap(
+        self, task: Dict[str, Any], max_rate: int, expected: int, warns: bool
+    ) -> None:
+        """Non-negative ints charge up to the cap; anything else charges the cap and warns."""
         b = self._make_b()
         b.context.logger = MagicMock()
-        task = {"request_id": "r1"}
-        assert b._actual_delivery_rate(task, max_rate=70) == 70
-        b.context.logger.warning.assert_called_once()
+        assert b._actual_delivery_rate(task, max_rate=max_rate) == expected
+        assert b.context.logger.warning.called is warns
 
     def test_batch_keeps_rates_aligned_per_sender(self) -> None:
         """Two senders, out-of-order nonces, priced / clamped / unpriced tasks.

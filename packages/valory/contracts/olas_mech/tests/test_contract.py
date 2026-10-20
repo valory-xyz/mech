@@ -111,8 +111,8 @@ class TestGetOffchainDeliverDataLegacy:
     def test_calldata_selects_the_four_arg_overload(self) -> None:
         """First 4 bytes match the legacy 4-arg signature's selector.
 
-        The refreshed ABI carries three overloads; the bare-name lookup the
-        flag-off path relies on must keep picking the 4-arg one.
+        The bare-name lookup the flag-off path relies on must keep picking the
+        4-arg overload as the ABI gains more.
         """
         deliver_with_sigs = [
             {
