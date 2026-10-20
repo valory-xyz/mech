@@ -5130,6 +5130,7 @@ def test_finalize_done_task_stores_price_and_exposes_it_to_the_poll(
     :param monkeypatch: pytest monkeypatch fixture.
     """
     _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
     _finalize_gate_setup(
         behaviour,
         shared_state,
@@ -5162,6 +5163,7 @@ def test_finalize_done_task_predict_api_event_carries_price(
     """
     params_stub.use_offchain = True
     _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
     _finalize_gate_setup(
         behaviour,
         shared_state,
@@ -5176,6 +5178,82 @@ def test_finalize_done_task_predict_api_event_carries_price(
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
     assert event["event"]["response"]["actual_delivery_rate"] == "5882352941176471"
+
+
+def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: the stored rate and the poll envelope carry the signed cap, not the price.
+
+    The legacy settlement call charges the signed value, so that is what the
+    buyer must be told. The computed price only goes to the log.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 10**16
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 10**16
+
+
+@pytest.mark.parametrize(
+    "tools_to_pricing, expected",
+    [({"prediction-offline": 123}, 123), ({}, 10**16)],
+)
+def test_finalize_done_task_reports_floor_or_recorded_rate_on_chain(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    tools_to_pricing: Dict[str, int],
+    expected: int,
+) -> None:
+    """On-chain: the stored rate is the tool floor when set, else the recorded rate.
+
+    That mirrors what the on-chain settlement path charges, regardless of the
+    cap-and-actual flag.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param tools_to_pricing: the per-tool floors the behaviour is configured with.
+    :param expected: the rate settlement will charge.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=False,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = tools_to_pricing
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == expected
 
 
 @pytest.mark.parametrize(

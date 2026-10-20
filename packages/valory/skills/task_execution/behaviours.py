@@ -1995,6 +1995,35 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return cap
         return price
 
+    def _charged_delivery_rate(
+        self,
+        done_task: Dict[str, Any],
+        is_offchain: bool,
+        cap: Optional[int],
+        price: Optional[int],
+    ) -> Optional[int]:
+        """The rate settlement will charge for this task; None without a signed rate.
+
+        :param done_task: the done task, carrying ``dynamic_tool_cost`` when set.
+        :param is_offchain: whether the task settles through a signed delivery.
+        :param cap: the rate the requester signed, or None when unknown.
+        :param price: the cap-and-actual price, already clamped to ``cap``.
+        :return: ``price`` for off-chain tasks with the cap-and-actual flag on;
+            ``cap`` for off-chain tasks with it off; for on-chain tasks the
+            ``tools_to_pricing`` floor when set, else ``cap``.
+        """
+        if cap is None:
+            return None
+        if is_offchain:
+            cap_and_actual = bool(
+                self.context.shared_state.get(
+                    preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
+                )
+            )
+            return price if cap_and_actual and price is not None else cap
+        floor = done_task.get("dynamic_tool_cost")
+        return cap if floor is None else int(floor)
+
     def _finalize_done_task(
         self, cid: str, response: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -2056,13 +2085,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         signed_rate = executing_task.get(
             "request_delivery_rate", executing_task.get("delivery_rate")
         )
-        actual_delivery_rate = self._price_done_task(
-            done_task, None if signed_rate is None else int(signed_rate)
+        cap = None if signed_rate is None else int(signed_rate)
+        price = self._price_done_task(done_task, cap)
+        actual_delivery_rate = self._charged_delivery_rate(
+            done_task, is_offchain, cap, price
         )
         if actual_delivery_rate is not None:
             done_task["actual_delivery_rate"] = actual_delivery_rate
+            computed = (
+                "" if price == actual_delivery_rate else f" (computed price {price})"
+            )
             self.context.logger.info(
-                f"Delivery rate for task {req_id}: {actual_delivery_rate}."
+                f"Delivery rate for task {req_id}: {actual_delivery_rate}{computed}."
             )
             offchain_entry = self.context.shared_state.get(
                 OFFCHAIN_REQUEST_RESPONSES, {}

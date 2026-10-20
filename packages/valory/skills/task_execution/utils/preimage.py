@@ -149,6 +149,10 @@ PREIMAGE_PENDING_STAMPS_AT = "preimage_pending_stamps_at"  # Dict[str, float]
 # Published by task_submission_abci at setup; read here to decide whether
 # ``posted_at`` is required for a delivered row to count as complete.
 PREDICT_API_WRITE_CONFIGURED = "predict_api_write_configured"  # bool
+# True when the settlement skill routes off-chain deliveries through the
+# cap-and-actual overload. Published by task_submission_abci at setup; read
+# here to report the charge settlement will apply.
+CAP_AND_ACTUAL_ENABLED = "cap_and_actual_enabled"  # bool
 # Circuit breaker for a missing / dead kv_store connection. ``REPLY_SEEN``
 # flips to True on the first reply of any kind; ``TIMEOUTS_SINCE_REPLY``
 # counts consecutive watchdog timeouts. When the latter reaches the write
