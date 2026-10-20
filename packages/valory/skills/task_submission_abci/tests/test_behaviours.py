@@ -2815,10 +2815,10 @@ class TestGetOffchainTasksDeliverData:
         assert included == ["r1"]
 
     def test_flag_off_routes_to_legacy_four_arg_wrapper(self) -> None:
-        """Default (cap_and_actual_enabled=False) must keep calling the legacy
-        4-arg wrapper with no maxRates key. Protects against the branch
-        drifting on by default and breaking prod against the un-redeployed
-        marketplace.
+        """Flag off keeps routing to the legacy 4-arg wrapper with no maxRates key.
+
+        Protects against the branch drifting on by default and breaking prod
+        against the un-redeployed marketplace.
         """
         b = self._make_b(cap_and_actual_enabled=False)
         task = self._offchain_task("r1")
@@ -2841,10 +2841,11 @@ class TestGetOffchainTasksDeliverData:
         assert OffchainKeys.MAX_RATES_CAMEL.value not in captured
 
     def test_flag_on_routes_to_cap_wrapper_with_max_and_delivery_rates(self) -> None:
-        """cap_and_actual_enabled=True routes to the 5-arg overload wrapper and
-        passes both maxRates (equal to the signed rate on the request) and
-        deliveryRates (one less, clamped at 0). Guards against silently
-        reverting to the 4-arg path, or dropping either array.
+        """Flag on routes to the 5-arg wrapper with both maxRates and deliveryRates.
+
+        maxRates equals the signed rate on the request; deliveryRates is one
+        less, clamped at 0. Guards against silently reverting to the 4-arg
+        path, or dropping either array.
         """
         b = self._make_b(cap_and_actual_enabled=True)
         task = self._offchain_task("r1")
@@ -2867,10 +2868,11 @@ class TestGetOffchainTasksDeliverData:
         assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [99]
 
     def test_flag_on_clamps_delivery_rate_at_zero_for_free_requests(self) -> None:
-        """A signed rate of 0 (free task) on the flag-on path must not
-        underflow to -1. -1 would fail uint256 encoding in the contract
-        wrapper and abandon the whole off-chain batch for the period,
-        including any other requests grouped under the same sender.
+        """Flag-on path clamps a signed rate of 0 to 0 instead of underflowing to -1.
+
+        -1 would fail uint256 encoding in the contract wrapper and abandon the
+        whole off-chain batch for the period, including any other requests
+        grouped under the same sender.
         """
         b = self._make_b(cap_and_actual_enabled=True)
         task = self._offchain_task("r1")
