@@ -32,14 +32,18 @@ and switch to ``==6.0.0`` once the stable release ships).
 
 from __future__ import annotations
 
+from typing import Any, Dict
+
 import pytest
 from eth_abi import encode as abi_encode
 from eth_account import Account
 from eth_utils import keccak
 
 from packages.valory.skills.task_execution.utils.request_id import (
+    EXPLICIT_NONCE_TAG,
     SECP256K1_HALF_ORDER,
     compute_request_id,
+    compute_request_id_with_nonce,
     recover_eoa_signer,
 )
 
@@ -320,3 +324,94 @@ def test_recover_eoa_signer_wrong_signature_recovers_different_address() -> None
     # Recovery may succeed with a spurious address or fail entirely; either
     # way it must NOT return the true signer's address.
     assert recovered != _test_signer_address()
+
+
+# --- explicit-nonce request-id derivation ------------------------------------
+
+
+def _reference_request_id_with_nonce(
+    marketplace: str,
+    mech: str,
+    requester: str,
+    request_data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+    domain_separator: bytes,
+) -> bytes:
+    """Independent reference for ``getRequestIdWithNonce``: the tag word comes first."""
+    inner = abi_encode(
+        [
+            "bytes32",
+            "address",
+            "address",
+            "address",
+            "bytes32",
+            "uint256",
+            "bytes32",
+            "uint256",
+        ],
+        [
+            keccak(b"ExplicitNonceDelivery"),
+            marketplace,
+            mech,
+            requester,
+            keccak(request_data),
+            delivery_rate,
+            payment_type,
+            nonce,
+        ],
+    )
+    return keccak(b"\x19\x01" + domain_separator + keccak(inner))
+
+
+@pytest.mark.parametrize(
+    "request_data,delivery_rate,payment_type,nonce",
+    [
+        pytest.param(b"", 0, b"\x00" * 32, 0, id="all_zero_edges"),
+        pytest.param(b"foo", 100, b"\xff" * 32, 4242, id="small_bytes"),
+        pytest.param(
+            bytes(range(64)),
+            2**256 - 1,
+            b"\xaa" * 32,
+            2**256 - 1,
+            id="uint256_upper_bound",
+        ),
+    ],
+)
+def test_compute_request_id_with_nonce_matches_abi_reference(
+    request_data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+) -> None:
+    """The explicit-nonce helper matches the independent reference byte-for-byte."""
+    kwargs: Dict[str, Any] = dict(
+        marketplace="0x" + "11" * 20,
+        mech="0x" + "22" * 20,
+        requester="0x" + "33" * 20,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=payment_type,
+        nonce=nonce,
+        domain_separator=b"\xab" * 32,
+    )
+    assert compute_request_id_with_nonce(**kwargs) == _reference_request_id_with_nonce(
+        **kwargs
+    )
+
+
+def test_explicit_nonce_request_id_differs_from_sequential_for_same_inputs() -> None:
+    """Domain separation: identical fields hash differently on the two paths."""
+    kwargs: Dict[str, Any] = dict(
+        marketplace="0x" + "11" * 20,
+        mech="0x" + "22" * 20,
+        requester="0x" + "33" * 20,
+        request_data=b"same",
+        delivery_rate=7,
+        payment_type=b"\x01" * 32,
+        nonce=7,
+        domain_separator=b"\xab" * 32,
+    )
+    assert compute_request_id_with_nonce(**kwargs) != compute_request_id(**kwargs)
+    assert EXPLICIT_NONCE_TAG == keccak(b"ExplicitNonceDelivery")

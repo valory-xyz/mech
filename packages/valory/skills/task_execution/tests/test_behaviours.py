@@ -6069,3 +6069,40 @@ def test_onchain_tool_exception_still_delivers(
     assert sent, "on-chain failure should still be uploaded and delivered"
     stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert stored.get("status") != "rejected"
+
+
+@pytest.mark.parametrize(
+    "helper, state_key",
+    [
+        (beh_mod._release_outstanding_nonce, beh_mod.ACCEPTED_NONCES_BY_SENDER),
+        (beh_mod._discard_outstanding_nonce, beh_mod.ACCEPTED_NONCES_BY_SENDER),
+        (beh_mod._discard_settling_nonce, beh_mod.SETTLING_NONCES_BY_SENDER),
+    ],
+)
+def test_sequential_nonce_helpers_ignore_explicit_nonce_tasks(
+    shared_state: Any, helper: Any, state_key: str
+) -> None:
+    """An explicit-nonce task never touches the sequential accepted/settling sets.
+
+    Its nonce is a requester-chosen value that may collide numerically with
+    a real sequential slot of the same sender.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    :param helper: the bookkeeping helper under test.
+    :param state_key: the set the helper would otherwise mutate.
+    """
+    sender = "0xSender"
+    shared_state[state_key] = {sender: {7}}
+    helper(
+        shared_state,
+        {
+            "sender": sender,
+            "nonce": 7,
+            "is_offchain": True,
+            beh_mod.NONCE_MODE_KEY: beh_mod.NONCE_MODE_EXPLICIT,
+        },
+    )
+    assert shared_state[state_key] == {sender: {7}}
+    assert beh_mod.SETTLING_NONCES_BY_SENDER not in shared_state or shared_state[
+        beh_mod.SETTLING_NONCES_BY_SENDER
+    ] == {sender: {7}}

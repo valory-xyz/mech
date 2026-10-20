@@ -39,6 +39,10 @@ _CAP_OVERLOAD_SIGNATURE = (
 _LEGACY_OVERLOAD_SIGNATURE = (
     "deliverMarketplaceWithSignatures(address,(bytes,bytes,bytes)[],uint256[],bytes)"
 )
+_NONCES_OVERLOAD_SIGNATURE = (
+    "deliverMarketplaceWithSignatures("
+    "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],bytes)"
+)
 
 
 def _web3_contract() -> object:
@@ -138,3 +142,62 @@ class TestGetOffchainDeliverDataLegacy:
             )
         expected = Web3().keccak(text=_LEGACY_OVERLOAD_SIGNATURE).hex()[:8]
         assert result["data"][:4].hex() == expected
+
+
+class TestGetOffchainDeliverDataWithNonces:
+    """`get_offchain_deliver_data_with_nonces` encodes the explicit-nonce 6-arg overload."""
+
+    def _call(self) -> dict:
+        """Invoke the wrapper with a two-request batch, patching simulate_tx."""
+        deliver_with_sigs = [
+            {
+                "requestData": b"\xaa" * 32,
+                "signature": b"\xbb" * 65,
+                "deliveryData": b"\xcc" * 32,
+            },
+            {
+                "requestData": b"\xdd" * 32,
+                "signature": b"\xee" * 65,
+                "deliveryData": b"\xff" * 32,
+            },
+        ]
+        with (
+            patch.object(
+                OlasMechContract, "get_instance", return_value=_web3_contract()
+            ),
+            patch.object(OlasMechContract, "simulate_tx", return_value={"data": True}),
+        ):
+            return OlasMechContract.get_offchain_deliver_data_with_nonces(
+                ledger_api=None,  # patched away via get_instance / simulate_tx
+                contract_address=_MECH,
+                sender=_SENDER,
+                requester=_REQUESTER,
+                deliverWithSignatures=deliver_with_sigs,
+                deliveryRates=[99, 150],
+                maxRates=[100, 200],
+                nonces=[4243, 4242],
+                paymentData=b"",
+            )
+
+    def test_calldata_selects_the_six_arg_overload(self) -> None:
+        """First 4 bytes match the explicit-nonce 6-arg signature's selector."""
+        result = self._call()
+        expected = Web3().keccak(text=_NONCES_OVERLOAD_SIGNATURE).hex()[:8]
+        assert result["data"][:4].hex() == expected
+
+    def test_calldata_round_trips_rates_and_nonces_in_order(self) -> None:
+        """deliveryRates, maxRates and nonces decode back positionally aligned."""
+        result = self._call()
+        types = [
+            "address",
+            "(bytes,bytes,bytes)[]",
+            "uint256[]",
+            "uint256[]",
+            "uint256[]",
+            "bytes",
+        ]
+        decoded = abi_decode(types, result["data"][4:])
+        assert decoded[0].lower() == _REQUESTER.lower()
+        assert list(decoded[2]) == [99, 150]
+        assert list(decoded[3]) == [100, 200]
+        assert list(decoded[4]) == [4243, 4242]

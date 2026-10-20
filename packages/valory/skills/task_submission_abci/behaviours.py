@@ -71,6 +71,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution.behaviours import (
     ENQUEUED_AT_LOCAL,
+    NONCE_MODE_EXPLICIT,
+    NONCE_MODE_KEY,
+    NONCE_MODE_SEQUENTIAL,
     PREDICT_API_EVENTS,
     SOURCE_OFFCHAIN,
     SOURCE_ONCHAIN,
@@ -269,6 +272,7 @@ class OffchainKeys(Enum):
     DELIVERY_RATES_CAMEL = "deliveryRates"
     MAX_RATES = "max_rates"
     MAX_RATES_CAMEL = "maxRates"
+    NONCES = "nonces"
 
 
 class OffchainDataKey(Enum):
@@ -2053,11 +2057,15 @@ class TransactionPreparationBehaviour(
                 offchain_done_tasks_list, key=lambda x: x[NONCE]
             )
 
-            offchain_list_by_sender: Dict[str, Dict] = defaultdict(
+            # One contract call per (requester, nonce mode): sequential-nonce
+            # tasks go to the counter-based overloads, explicit-nonce tasks to
+            # the 6-arg one, and the two never share a call.
+            offchain_list_by_sender: Dict[Tuple[str, str], Dict] = defaultdict(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
                     OffchainKeys.MAX_RATES.value: [],
                     OffchainKeys.DELIVERY_RATES.value: [],
+                    OffchainKeys.NONCES.value: [],
                     REQUEST_IDS_KEY: [],
                 }
             )
@@ -2065,12 +2073,11 @@ class TransactionPreparationBehaviour(
             mech_address = self.mech_addresses[0]
             for data in tx_list_sorted_by_nonce:
                 sender = data[SENDER]
-                offchain_list_by_sender[sender][REQUEST_IDS_KEY].append(
-                    str(data["request_id"])
-                )
-                offchain_list_by_sender[sender][
-                    OffchainKeys.DELIVER_WITH_SIGNATURES.value
-                ].append(
+                nonce_mode = data.get(NONCE_MODE_KEY, NONCE_MODE_SEQUENTIAL)
+                group = offchain_list_by_sender[(sender, nonce_mode)]
+                group[REQUEST_IDS_KEY].append(str(data["request_id"]))
+                group[OffchainKeys.NONCES.value].append(int(data[NONCE]))
+                group[OffchainKeys.DELIVER_WITH_SIGNATURES.value].append(
                     {
                         OffchainDataKey.REQUEST_DATA_KEY.value: bytes.fromhex(
                             data[OffchainDataValue.IPFS_HASH.value][2:]
@@ -2087,22 +2094,38 @@ class TransactionPreparationBehaviour(
                 # requester signed over, so it feeds maxRates. The contract
                 # recomputes requestId with maxRates[i], not deliveryRates[i].
                 max_rate = int(data[OffchainDataValue.DELIVERY_RATE.value])
-                offchain_list_by_sender[sender][OffchainKeys.MAX_RATES.value].append(
-                    max_rate
-                )
+                group[OffchainKeys.MAX_RATES.value].append(max_rate)
                 # Flag off: the legacy 4-arg call charges the signed value.
-                offchain_list_by_sender[sender][
-                    OffchainKeys.DELIVERY_RATES.value
-                ].append(
+                group[OffchainKeys.DELIVERY_RATES.value].append(
                     self._actual_delivery_rate(data, max_rate)
                     if self.params.cap_and_actual_enabled
                     else max_rate
                 )
 
-            for sender, details in offchain_list_by_sender.items():
+            for (sender, nonce_mode), details in offchain_list_by_sender.items():
                 self.context.logger.info(
-                    f"Preparing deliver data for requester: {sender}"
+                    f"Preparing deliver data for requester: {sender} ({nonce_mode})"
                 )
+                group_request_ids = details[REQUEST_IDS_KEY]
+                if (
+                    nonce_mode == NONCE_MODE_EXPLICIT
+                    and not self.params.cap_and_actual_enabled
+                ):
+                    # The explicit-nonce overload ships with the cap-and-actual
+                    # upgrade; with the flag off these tasks cannot be settled
+                    # and must not be folded into the sequential call.
+                    self.context.logger.warning(
+                        f"Explicit-nonce requests {group_request_ids} for {sender} "
+                        "skipped: cap_and_actual_enabled is off."
+                    )
+                    self.note_settlement_skipped(
+                        group_request_ids,
+                        SOURCE_OFFCHAIN,
+                        mech_address,
+                        self.synchronized_data.period_count,
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    continue
 
                 deliver_with_signatures = details[
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value
@@ -2122,6 +2145,11 @@ class TransactionPreparationBehaviour(
                 if self.params.cap_and_actual_enabled:
                     contract_data[OffchainKeys.MAX_RATES_CAMEL.value] = max_rates
                     contract_callable = "get_offchain_deliver_data_with_cap"
+                if nonce_mode == NONCE_MODE_EXPLICIT:
+                    contract_data[OffchainKeys.NONCES.value] = details[
+                        OffchainKeys.NONCES.value
+                    ]
+                    contract_callable = "get_offchain_deliver_data_with_nonces"
 
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"
@@ -2160,7 +2188,6 @@ class TransactionPreparationBehaviour(
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-                group_request_ids = details[REQUEST_IDS_KEY]
                 if not simulation_ok:
                     self.context.logger.info(
                         f"Simulation failed for offchain deliver of request_ids="

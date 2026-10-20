@@ -34,6 +34,8 @@ from packages.valory.contracts.complementary_service_metadata.contract import (
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.task_execution.behaviours import (
+    NONCE_MODE_EXPLICIT,
+    NONCE_MODE_KEY,
     PREDICT_API_EVENTS,
     SETTLING_NONCES_BY_SENDER,
 )
@@ -2732,9 +2734,12 @@ class TestGetOffchainTasksDeliverData:
 
     @staticmethod
     def _offchain_task(
-        request_id: str, sender: str = "0xSENDER", nonce: int = 1
+        request_id: str,
+        sender: str = "0xSENDER",
+        nonce: int = 1,
+        nonce_mode: Optional[str] = None,
     ) -> Dict:
-        return {
+        task = {
             "request_id": request_id,
             "is_offchain": True,
             "nonce": nonce,
@@ -2744,6 +2749,9 @@ class TestGetOffchainTasksDeliverData:
             "task_result": "de" * 16,
             "delivery_rate": 100,
         }
+        if nonce_mode is not None:
+            task[NONCE_MODE_KEY] = nonce_mode
+        return task
 
     def test_returns_empty_list_when_no_offchain_tasks(self) -> None:
         """Test returns empty list when no offchain tasks."""
@@ -2892,6 +2900,55 @@ class TestGetOffchainTasksDeliverData:
         b.context.logger = MagicMock()
         assert b._actual_delivery_rate(task, max_rate=max_rate) == expected
         assert b.context.logger.warning.called is warns
+
+    def test_explicit_nonce_tasks_go_to_the_six_arg_wrapper_in_their_own_call(
+        self,
+    ) -> None:
+        """Explicit and sequential tasks of one sender settle in separate calls.
+
+        The explicit group carries ``nonces`` aligned with its rates and routes
+        to the 6-arg wrapper; the sequential group is untouched.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        seq = self._offchain_task("s1", nonce=1)
+        seq["actual_delivery_rate"] = 60
+        e_hi = self._offchain_task("e2", nonce=4243, nonce_mode=NONCE_MODE_EXPLICIT)
+        e_hi["delivery_rate"], e_hi["actual_delivery_rate"] = 200, 150
+        e_lo = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        e_lo["delivery_rate"], e_lo["actual_delivery_rate"] = 100, 70
+
+        calls = {
+            c["contract_callable"]: c for c in self._deliver_calls(b, [e_hi, seq, e_lo])
+        }
+
+        assert set(calls) == {
+            "get_offchain_deliver_data_with_cap",
+            "get_offchain_deliver_data_with_nonces",
+        }
+        assert "nonces" not in calls["get_offchain_deliver_data_with_cap"]
+        explicit = calls["get_offchain_deliver_data_with_nonces"]
+        assert explicit["nonces"] == [4242, 4243]
+        assert explicit[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
+        assert explicit[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70, 150]
+
+    def test_explicit_nonce_tasks_are_skipped_when_the_flag_is_off(self) -> None:
+        """Flag off: explicit tasks are not folded into the sequential call."""
+        b = self._make_b(cap_and_actual_enabled=False)
+        task = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(msg)
+            ) as mock_call,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
+        ):
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result == ([], [])
+        mock_call.assert_not_called()
+        mock_skip.assert_called_once_with(
+            ["e1"], SOURCE_OFFCHAIN, "0xMECH", b.synchronized_data.period_count
+        )
 
     def test_batch_keeps_rates_aligned_per_sender(self) -> None:
         """Two senders, out-of-order nonces, priced / clamped / unpriced tasks.

@@ -154,6 +154,17 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+# Wire field selecting the settlement path. Explicit-nonce tasks never touch
+# the sequential accepted/settling nonce sets: their replay protection is the
+# marketplace's per-request-id record, not the shared counter.
+NONCE_MODE_KEY = "nonce_mode"
+NONCE_MODE_SEQUENTIAL = "sequential"
+NONCE_MODE_EXPLICIT = "explicit"
+
+
+def is_explicit_nonce_task(task: Optional[Dict[str, Any]]) -> bool:
+    """Whether ``task`` settles through the explicit-nonce path."""
+    return task is not None and task.get(NONCE_MODE_KEY) == NONCE_MODE_EXPLICIT
 
 
 def _find_sender_key(
@@ -212,7 +223,7 @@ def _release_outstanding_nonce(
         is not enough — the maps are keyed by sender checksum, and
         the wire nonce (int) is the entry inside the per-sender set.
     """
-    if not executing_task:
+    if not executing_task or is_explicit_nonce_task(executing_task):
         return
     sender = executing_task.get(_SENDER_KEY)
     nonce = executing_task.get(_NONCE_KEY)
@@ -268,7 +279,7 @@ def _discard_outstanding_nonce(
     :param shared_state: the AEA shared-state dict.
     :param executing_task: the failed task dict (or None).
     """
-    if not executing_task:
+    if not executing_task or is_explicit_nonce_task(executing_task):
         return
     sender = executing_task.get(_SENDER_KEY)
     nonce = executing_task.get(_NONCE_KEY)
@@ -310,7 +321,7 @@ def _discard_settling_nonce(
     :param shared_state: the AEA shared-state dict.
     :param done_task: the abandoned done-task dict (or None).
     """
-    if not done_task:
+    if not done_task or is_explicit_nonce_task(done_task):
         return
     sender = done_task.get(_SENDER_KEY)
     nonce = done_task.get(_NONCE_KEY)

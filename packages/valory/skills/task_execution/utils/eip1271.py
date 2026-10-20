@@ -133,6 +133,11 @@ _GET_REQUEST_ID_ABI: Dict[str, Any] = {
     "stateMutability": "view",
     "type": "function",
 }
+# Same inputs and output as ``getRequestId``; only the name differs.
+_GET_REQUEST_ID_WITH_NONCE_ABI: Dict[str, Any] = {
+    **_GET_REQUEST_ID_ABI,
+    "name": "getRequestIdWithNonce",
+}
 
 
 def check_eip1271_signature(
@@ -328,17 +333,65 @@ def get_marketplace_request_id_view(
     :param delivery_rate: the delivery rate uint256.
     :param payment_type: the mech's ``paymentType`` bytes32.
     :param nonce: the requester nonce uint256.
-    :return: the 32-byte request id returned by the view.
-    :raises ValueError: only from the explicit 32-byte length guard.
-        Web3 raises ``BadFunctionCallOutput`` when ``eth_call`` returns
-        undecodable output, and ``ContractLogicError`` on a revert;
-        both propagate to the caller.
+    :return: the 32-byte request id returned by the view. Web3 raises
+        ``BadFunctionCallOutput`` when ``eth_call`` returns undecodable
+        output and ``ContractLogicError`` on a revert; both propagate.
     """
+    return _call_request_id_view(
+        ledger_api,
+        marketplace_address,
+        _GET_REQUEST_ID_ABI,
+        mech,
+        requester,
+        data,
+        delivery_rate,
+        payment_type,
+        nonce,
+    )
+
+
+def get_marketplace_request_id_with_nonce_view(
+    ledger_api: EthereumApi,
+    marketplace_address: str,
+    mech: str,
+    requester: str,
+    data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+) -> bytes:
+    """Call the marketplace ``getRequestIdWithNonce`` view and return its bytes32."""
+    return _call_request_id_view(
+        ledger_api,
+        marketplace_address,
+        _GET_REQUEST_ID_WITH_NONCE_ABI,
+        mech,
+        requester,
+        data,
+        delivery_rate,
+        payment_type,
+        nonce,
+    )
+
+
+def _call_request_id_view(
+    ledger_api: EthereumApi,
+    marketplace_address: str,
+    abi: Dict[str, Any],
+    mech: str,
+    requester: str,
+    data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+) -> bytes:
+    """Call one of the marketplace request-id views described by ``abi``."""
     contract_instance = ledger_api.api.eth.contract(
         address=ledger_api.api.to_checksum_address(marketplace_address),
-        abi=[_GET_REQUEST_ID_ABI],
+        abi=[abi],
     )
-    request_id = contract_instance.functions.getRequestId(
+    view = getattr(contract_instance.functions, abi["name"])
+    request_id = view(
         ledger_api.api.to_checksum_address(mech),
         ledger_api.api.to_checksum_address(requester),
         data,
