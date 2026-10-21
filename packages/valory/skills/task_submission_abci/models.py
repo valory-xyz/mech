@@ -42,6 +42,7 @@ from packages.valory.skills.abstract_round_abci.models import (
 from packages.valory.skills.abstract_round_abci.utils import check_type
 from packages.valory.skills.task_execution.models import MechConfig
 from packages.valory.skills.task_execution.utils.preimage import (
+    CAP_AND_ACTUAL_ENABLED,
     PREDICT_API_WRITE_CONFIGURED,
 )
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
@@ -53,11 +54,14 @@ class SharedState(BaseSharedState):
     abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
 
     def setup(self) -> None:
-        """Set up the shared state and publish whether the predict-api write is on."""
+        """Set up the shared state and publish the flags task_execution reads."""
         super().setup()
         params = cast(Params, self.context.params)
         self.context.shared_state[PREDICT_API_WRITE_CONFIGURED] = bool(
             params.use_offchain and params.predict_api_events_url
+        )
+        self.context.shared_state[CAP_AND_ACTUAL_ENABLED] = (
+            params.cap_and_actual_enabled
         )
 
     # Prometheus metrics
@@ -155,6 +159,10 @@ class Params(BaseParams):
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
         self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
+        # Off-chain settlement via the 5-arg cap-and-actual overload; off by default.
+        self.cap_and_actual_enabled: bool = bool(
+            kwargs.get("cap_and_actual_enabled", False)
+        )
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No

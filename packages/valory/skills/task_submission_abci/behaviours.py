@@ -71,6 +71,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution.behaviours import (
     ENQUEUED_AT_LOCAL,
+    NONCE_MODE_EXPLICIT,
+    NONCE_MODE_KEY,
+    NONCE_MODE_SEQUENTIAL,
     PREDICT_API_EVENTS,
     SOURCE_OFFCHAIN,
     SOURCE_ONCHAIN,
@@ -269,6 +272,7 @@ class OffchainKeys(Enum):
     DELIVERY_RATES_CAMEL = "deliveryRates"
     MAX_RATES = "max_rates"
     MAX_RATES_CAMEL = "maxRates"
+    NONCES = "nonces"
 
 
 class OffchainDataKey(Enum):
@@ -286,6 +290,7 @@ class OffchainDataValue(Enum):
     SIGNATURE = "signature"
     TASK_RESULT = "task_result"
     DELIVERY_RATE = "delivery_rate"
+    ACTUAL_DELIVERY_RATE = "actual_delivery_rate"
 
 
 class MarketplaceKeys(Enum):
@@ -573,6 +578,30 @@ def _event_request_id(event: Dict[str, Any]) -> Optional[str]:
         if candidate is not None:
             return str(candidate)
     return None
+
+
+_DELIVER_LIST_KEYS = (
+    OffchainKeys.DELIVER_WITH_SIGNATURES.value,
+    OffchainKeys.DELIVERY_RATES_CAMEL.value,
+    OffchainKeys.MAX_RATES_CAMEL.value,
+    OffchainKeys.NONCES.value,
+)
+
+
+def _slice_deliver_data(
+    contract_data: Dict[str, Any], indices: List[int]
+) -> Dict[str, Any]:
+    """Return a copy of ``contract_data`` keeping only the listed positions.
+
+    :param contract_data: deliver keyword arguments with aligned lists.
+    :param indices: the positions to keep, in order.
+    :return: the sliced copy; non-list keys are carried over unchanged.
+    """
+    sliced = dict(contract_data)
+    for key in _DELIVER_LIST_KEYS:
+        if key in sliced:
+            sliced[key] = [sliced[key][i] for i in indices]
+    return sliced
 
 
 def _nonce_order(task: Dict[str, Any]) -> int:
@@ -2003,6 +2032,24 @@ class TransactionPreparationBehaviour(
 
         return self._get_agent_mech_deliver_tx(task_data)
 
+    def _actual_delivery_rate(self, done_task: Dict[str, Any], max_rate: int) -> int:
+        """The rate to charge for one off-chain request under cap-and-actual.
+
+        :param done_task: the pooled done task; its ``actual_delivery_rate`` is
+            the price task_execution stored, taken only as a non-negative int.
+        :param max_rate: the rate the requester signed.
+        :return: the stored price clamped to ``max_rate``; ``max_rate`` itself,
+            with a warning, when the stored value is missing or unusable.
+        """
+        actual = done_task.get(OffchainDataValue.ACTUAL_DELIVERY_RATE.value)
+        if isinstance(actual, bool) or not isinstance(actual, int) or actual < 0:
+            self.context.logger.warning(
+                f"Unusable actual_delivery_rate {actual!r} on done task "
+                f"{done_task.get('request_id')}; charging the signed cap {max_rate}."
+            )
+            return max_rate
+        return min(actual, max_rate)
+
     def _get_offchain_tasks_deliver_data(
         self,
     ) -> Generator[None, None, Tuple[Optional[List[Dict[str, Any]]], List[str]]]:
@@ -2034,10 +2081,15 @@ class TransactionPreparationBehaviour(
                 offchain_done_tasks_list, key=lambda x: x[NONCE]
             )
 
-            offchain_list_by_sender: Dict[str, Dict] = defaultdict(
+            # One contract call per (requester, nonce mode): sequential-nonce
+            # tasks go to the counter-based overloads, explicit-nonce tasks to
+            # the 6-arg one, and the two never share a call.
+            offchain_list_by_sender: Dict[Tuple[str, str], Dict] = defaultdict(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
                     OffchainKeys.MAX_RATES.value: [],
+                    OffchainKeys.DELIVERY_RATES.value: [],
+                    OffchainKeys.NONCES.value: [],
                     REQUEST_IDS_KEY: [],
                 }
             )
@@ -2045,12 +2097,11 @@ class TransactionPreparationBehaviour(
             mech_address = self.mech_addresses[0]
             for data in tx_list_sorted_by_nonce:
                 sender = data[SENDER]
-                offchain_list_by_sender[sender][REQUEST_IDS_KEY].append(
-                    str(data["request_id"])
-                )
-                offchain_list_by_sender[sender][
-                    OffchainKeys.DELIVER_WITH_SIGNATURES.value
-                ].append(
+                nonce_mode = data.get(NONCE_MODE_KEY, NONCE_MODE_SEQUENTIAL)
+                group = offchain_list_by_sender[(sender, nonce_mode)]
+                group[REQUEST_IDS_KEY].append(str(data["request_id"]))
+                group[OffchainKeys.NONCES.value].append(int(data[NONCE]))
+                group[OffchainKeys.DELIVER_WITH_SIGNATURES.value].append(
                     {
                         OffchainDataKey.REQUEST_DATA_KEY.value: bytes.fromhex(
                             data[OffchainDataValue.IPFS_HASH.value][2:]
@@ -2066,53 +2117,125 @@ class TransactionPreparationBehaviour(
                 # The per-request value in the signed message is the cap the
                 # requester signed over, so it feeds maxRates. The contract
                 # recomputes requestId with maxRates[i], not deliveryRates[i].
-                offchain_list_by_sender[sender][OffchainKeys.MAX_RATES.value].append(
-                    int(data[OffchainDataValue.DELIVERY_RATE.value])
+                max_rate = int(data[OffchainDataValue.DELIVERY_RATE.value])
+                group[OffchainKeys.MAX_RATES.value].append(max_rate)
+                # Flag off: the legacy 4-arg call charges the signed value.
+                group[OffchainKeys.DELIVERY_RATES.value].append(
+                    self._actual_delivery_rate(data, max_rate)
+                    if self.params.cap_and_actual_enabled
+                    else max_rate
                 )
 
-            for sender, details in offchain_list_by_sender.items():
+            # A requester's sequential group goes first. Each deliver is
+            # simulated alone against the live balance, so a second group of
+            # the same requester joins only when both charges fit together.
+            ordered_groups = sorted(
+                offchain_list_by_sender.items(),
+                key=lambda item: (item[0][0], item[0][1] != NONCE_MODE_SEQUENTIAL),
+            )
+            included_charge: Dict[str, int] = {}
+            for (sender, nonce_mode), details in ordered_groups:
                 self.context.logger.info(
-                    f"Preparing deliver data for requester: {sender}"
+                    f"Preparing deliver data for requester: {sender} ({nonce_mode})"
                 )
+                group_request_ids = details[REQUEST_IDS_KEY]
+                group_charge = sum(details[OffchainKeys.DELIVERY_RATES.value])
+                if sender in included_charge:
+                    total = included_charge[sender] + group_charge
+                    balance = yield from self._get_offchain_requester_balance(
+                        mech_address, sender
+                    )
+                    if balance is None or total > balance:
+                        self.context.logger.info(
+                            f"Requests {group_request_ids} for {sender} ({nonce_mode}) "
+                            f"held for the next period: combined charge {total} "
+                            f"against balance {balance}."
+                        )
+                        continue
+                if (
+                    nonce_mode == NONCE_MODE_EXPLICIT
+                    and not self.params.cap_and_actual_enabled
+                ):
+                    # The explicit-nonce overload ships with the cap-and-actual
+                    # upgrade; with the flag off these tasks cannot be settled
+                    # and must not be folded into the sequential call.
+                    self.context.logger.warning(
+                        f"Explicit-nonce requests {group_request_ids} for {sender} "
+                        "skipped: cap_and_actual_enabled is off."
+                    )
+                    self.note_settlement_skipped(
+                        group_request_ids,
+                        SOURCE_OFFCHAIN,
+                        mech_address,
+                        self.synchronized_data.period_count,
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    continue
 
                 deliver_with_signatures = details[
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value
                 ]
                 max_rates = details[OffchainKeys.MAX_RATES.value]
-                # Fork-test placeholder — real per-tool cost source is tracked
-                # in FORK_TEST_EDGE_CASES.md. Clamp at 0 because
-                # MIN_DELIVERY_RATE = 0 is accepted for free tasks and an
-                # unclamped `m - 1` would be -1, failing uint256 encoding and
-                # abandoning the whole off-chain batch for the period.
-                delivery_rates = [max(max_rate - 1, 0) for max_rate in max_rates]
 
-                contract_data = {
+                contract_data: Dict[str, Any] = {
                     SENDER: self.synchronized_data.safe_contract_address,
                     REQUESTER_KEY: sender,
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
-                    OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
-                    OffchainKeys.MAX_RATES_CAMEL.value: max_rates,
+                    OffchainKeys.DELIVERY_RATES_CAMEL.value: details[
+                        OffchainKeys.DELIVERY_RATES.value
+                    ],
                     OffchainKeys.PAYMENT_DATA.value: b"",
                 }
+                contract_callable = "get_offchain_deliver_data"
+                if self.params.cap_and_actual_enabled:
+                    contract_data[OffchainKeys.MAX_RATES_CAMEL.value] = max_rates
+                    contract_callable = "get_offchain_deliver_data_with_cap"
+                if nonce_mode == NONCE_MODE_EXPLICIT:
+                    contract_data[OffchainKeys.NONCES.value] = details[
+                        OffchainKeys.NONCES.value
+                    ]
+                    contract_callable = "get_offchain_deliver_data_with_nonces"
+
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"
                 )
 
-                contract_api_msg = yield from self.get_contract_api_response(
-                    performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-                    contract_address=mech_address,
-                    contract_id=str(OlasMechContract.contract_id),
-                    contract_callable="get_offchain_deliver_data_with_cap",
-                    **contract_data,
-                    chain_id=self.params.default_chain_id,
+                simulated = yield from self._simulate_offchain_deliver(
+                    mech_address, contract_callable, contract_data
                 )
                 if (
-                    contract_api_msg.performative
-                    != ContractApiMessage.Performative.STATE
+                    simulated is not None
+                    and not simulated[1]
+                    and nonce_mode == NONCE_MODE_EXPLICIT
                 ):
-                    self.context.logger.warning(
-                        f"get_offchain_deliver_data_with_cap unsuccessful!: {contract_api_msg}"
+                    # Explicit nonces carry no order, so one bad request must
+                    # not take the group down: keep what settles alone.
+                    split = yield from self._settle_explicit_group_per_request(
+                        mech_address,
+                        contract_callable,
+                        contract_data,
+                        group_request_ids,
                     )
+                    if split is None:
+                        simulated = None
+                    else:
+                        kept, failed_ids = split
+                        if failed_ids:
+                            self.note_settlement_skipped(
+                                failed_ids,
+                                SOURCE_OFFCHAIN,
+                                mech_address,
+                                self.synchronized_data.period_count,
+                            )
+                            counted_request_ids.update(failed_ids)
+                        group_request_ids = [
+                            rid for rid in group_request_ids if rid not in failed_ids
+                        ]
+                        if not group_request_ids:
+                            continue
+                        if kept is not None:
+                            simulated = kept
+                if simulated is None:
                     # Every off-chain task in this period's batch is
                     # abandoned (including groups already appended to
                     # ``tx_list``, since the caller discards it on None),
@@ -2129,9 +2252,7 @@ class TransactionPreparationBehaviour(
                     )
                     return None, []
 
-                data_ = cast(bytes, contract_api_msg.state.body["data"])
-                simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-                group_request_ids = details[REQUEST_IDS_KEY]
+                data_, simulation_ok = simulated
                 if not simulation_ok:
                     self.context.logger.info(
                         f"Simulation failed for offchain deliver of request_ids="
@@ -2146,6 +2267,7 @@ class TransactionPreparationBehaviour(
                     counted_request_ids.update(group_request_ids)
                     continue
                 included_request_ids.extend(group_request_ids)
+                included_charge[sender] = included_charge.get(sender, 0) + group_charge
                 tx_list.append(
                     {
                         "to": mech_address,
@@ -2156,6 +2278,111 @@ class TransactionPreparationBehaviour(
                 )
 
         return tx_list, included_request_ids
+
+    def _simulate_offchain_deliver(
+        self, mech_address: str, contract_callable: str, contract_data: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Tuple[bytes, bool]]]:
+        """Encode and simulate one off-chain deliver call.
+
+        :param mech_address: the mech contract the deliver goes through.
+        :param contract_callable: the ``OlasMechContract`` wrapper to use.
+        :param contract_data: the wrapper's keyword arguments.
+        :return: ``(calldata, simulation_ok)``, or None on a contract error.
+        :yield: AEA protocol messages.
+        """
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=mech_address,
+            contract_id=str(OlasMechContract.contract_id),
+            contract_callable=contract_callable,
+            **contract_data,
+            chain_id=self.params.default_chain_id,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"{contract_callable} unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        return (
+            cast(bytes, contract_api_msg.state.body["data"]),
+            cast(bool, contract_api_msg.state.body["simulation_ok"]),
+        )
+
+    def _get_offchain_requester_balance(
+        self, mech_address: str, requester: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Read a requester's balance in the tracker of the mech's payment type.
+
+        :param mech_address: the mech whose payment type selects the tracker.
+        :param requester: the requester address.
+        :return: the balance in asset units, or None when any read fails.
+        :yield: AEA protocol messages.
+        """
+        mech_type = yield from self._get_mech_payment_type(mech_address)
+        if mech_type is None:
+            return None
+        tracker = yield from self._get_balance_tracker_address(mech_type)
+        if tracker is None:
+            return None
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=tracker,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_requester_balance",
+            requester=requester,
+            chain_id=self.params.default_chain_id,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"get_requester_balance unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        return cast(int, contract_api_msg.state.body["requester_balance"])
+
+    def _settle_explicit_group_per_request(
+        self,
+        mech_address: str,
+        contract_callable: str,
+        contract_data: Dict[str, Any],
+        request_ids: List[str],
+    ) -> Generator[
+        None, None, Optional[Tuple[Optional[Tuple[bytes, bool]], List[str]]]
+    ]:
+        """Simulate each request of a failed explicit group alone and rebuild it.
+
+        :param mech_address: the mech contract the deliver goes through.
+        :param contract_callable: the ``OlasMechContract`` wrapper to use.
+        :param contract_data: the failed group's keyword arguments; its list
+            arguments are positionally aligned.
+        :param request_ids: the group's request ids, aligned with the lists.
+        :return: ``(simulation of the rebuilt group, or None when nothing was
+            removed or nothing is left; ids that fail alone)``; None on a
+            contract error.
+        :yield: AEA protocol messages.
+        """
+        n = len(contract_data[OffchainKeys.DELIVER_WITH_SIGNATURES.value])
+        kept: List[int] = []
+        failed_ids: List[str] = []
+        for i in range(n):
+            single = yield from self._simulate_offchain_deliver(
+                mech_address, contract_callable, _slice_deliver_data(contract_data, [i])
+            )
+            if single is None:
+                return None
+            if single[1]:
+                kept.append(i)
+            else:
+                failed_ids.append(request_ids[i])
+        if not kept:
+            return None, failed_ids
+        if len(kept) == n:
+            return None, []
+        rebuilt = yield from self._simulate_offchain_deliver(
+            mech_address, contract_callable, _slice_deliver_data(contract_data, kept)
+        )
+        if rebuilt is None:
+            return None
+        return rebuilt, failed_ids
 
     def _get_is_nvm_mech(self, mech: str) -> Generator[None, None, Optional[bool]]:
         contract_api_msg = yield from self.get_contract_api_response(

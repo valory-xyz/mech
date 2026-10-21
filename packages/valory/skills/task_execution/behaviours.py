@@ -27,6 +27,7 @@ import time
 from asyncio import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_CEILING
 from enum import Enum
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, cast
@@ -52,7 +53,11 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
-from packages.valory.contracts.olas_mech.contract import OlasMechContract
+from packages.valory.contracts.olas_mech.contract import (
+    OlasMechContract,
+    PAYMENT_TYPE_NATIVE_NVM,
+    PAYMENT_TYPE_TOKEN_NVM,
+)
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -61,15 +66,14 @@ from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import (
+    BASIS_POINTS,
     Params,
+    USD_DECIMALS,
     offchain_metric_labels,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
-from packages.valory.skills.task_execution.utils.cost_calculation import (
-    get_cost_for_done_task,
-)
 from packages.valory.skills.task_execution.utils.ipfs import (
     ComponentPackageLoader,
     ensure_v1,
@@ -150,6 +154,17 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+# Wire field selecting the settlement path. Explicit-nonce tasks never touch
+# the sequential accepted/settling nonce sets: their replay protection is the
+# marketplace's per-request-id record, not the shared counter.
+NONCE_MODE_KEY = "nonce_mode"
+NONCE_MODE_SEQUENTIAL = "sequential"
+NONCE_MODE_EXPLICIT = "explicit"
+
+
+def is_explicit_nonce_task(task: Optional[Dict[str, Any]]) -> bool:
+    """Whether ``task`` settles through the explicit-nonce path."""
+    return task is not None and task.get(NONCE_MODE_KEY) == NONCE_MODE_EXPLICIT
 
 
 def _find_sender_key(
@@ -208,7 +223,7 @@ def _release_outstanding_nonce(
         is not enough — the maps are keyed by sender checksum, and
         the wire nonce (int) is the entry inside the per-sender set.
     """
-    if not executing_task:
+    if not executing_task or is_explicit_nonce_task(executing_task):
         return
     sender = executing_task.get(_SENDER_KEY)
     nonce = executing_task.get(_NONCE_KEY)
@@ -264,7 +279,7 @@ def _discard_outstanding_nonce(
     :param shared_state: the AEA shared-state dict.
     :param executing_task: the failed task dict (or None).
     """
-    if not executing_task:
+    if not executing_task or is_explicit_nonce_task(executing_task):
         return
     sender = executing_task.get(_SENDER_KEY)
     nonce = executing_task.get(_NONCE_KEY)
@@ -306,7 +321,7 @@ def _discard_settling_nonce(
     :param shared_state: the AEA shared-state dict.
     :param done_task: the abandoned done-task dict (or None).
     """
-    if not done_task:
+    if not done_task or is_explicit_nonce_task(done_task):
         return
     sender = done_task.get(_SENDER_KEY)
     nonce = done_task.get(_NONCE_KEY)
@@ -593,6 +608,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash: Dict[str, str] = {}
         self._tools_to_pricing: Dict[str, int] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
+        self._decimals_warned: bool = False
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
@@ -1927,6 +1943,131 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self._finalize_done_task(ipfs_hash, response=response)
 
+    def _measured_cost_in_asset_units(self, done_task: Dict[str, Any]) -> Optional[int]:
+        """Tool spend from ``cost_dict`` in payment-asset units; None if none reported."""
+        cost_dict = done_task.get("cost_dict")
+        if not isinstance(cost_dict, dict):
+            return None
+        total_cost = cost_dict.get("total_cost")
+        if total_cost is None:
+            return None
+        if (
+            isinstance(total_cost, bool)
+            or not isinstance(total_cost, (int, float))
+            or not math.isfinite(total_cost)
+            or total_cost < 0
+        ):
+            self.context.logger.warning(
+                f"Ignoring unusable total_cost {total_cost!r} for request "
+                f"{done_task.get('request_id')}."
+            )
+            return None
+        # A callback the tool never invoked still carries the zeroed default
+        # dict; that is "not measured", not a free run.
+        if total_cost == 0 and not cost_dict.get("total_tokens"):
+            return None
+        usd = Decimal(str(total_cost))
+        scaled = usd * (10**self.params.payment_token_decimals)
+        return int(scaled.to_integral_value(rounding=ROUND_CEILING))
+
+    def _price_done_task(
+        self, done_task: Dict[str, Any], cap: Optional[int]
+    ) -> Optional[int]:
+        """Price for a done task: the grossed-up cost or the tool floor, up to the cap.
+
+        :param done_task: the done task, carrying ``cost_dict`` (V) and
+            ``dynamic_tool_cost`` (the floor) when set.
+        :param cap: the rate the requester signed, or None when unknown.
+        :return: the rate in payment-asset units, never above ``cap``; the cap
+            itself with neither a measured cost nor a floor; None without a cap.
+        """
+        if cap is None:
+            return None
+        request_id = done_task.get("request_id")
+        candidates: List[int] = []
+        measured = self._measured_cost_in_asset_units(done_task)
+        if measured is not None:
+            decimals = self.params.payment_token_decimals
+            fixed = self.params.fixed_cost_per_request * 10 ** (decimals - USD_DECIMALS)
+            net_bp = BASIS_POINTS - self.params.marketplace_fee_bp
+            candidates.append(
+                ((measured + fixed) * BASIS_POINTS + net_bp - 1) // net_bp
+            )
+        floor = done_task.get("dynamic_tool_cost")
+        if floor is not None:
+            candidates.append(int(floor))
+        if not candidates:
+            self.context.logger.warning(
+                f"No measured cost or tool floor for request {request_id}; "
+                f"the price falls back to the signed rate {cap}."
+            )
+            return cap
+        price = max(candidates)
+        if price > cap:
+            self.context.logger.warning(
+                f"Price {price} for request {request_id} exceeds the signed cap "
+                f"{cap}; clamping to the cap."
+            )
+            return cap
+        return price
+
+    def _charged_delivery_rate(
+        self,
+        done_task: Dict[str, Any],
+        is_offchain: bool,
+        cap: Optional[int],
+        price: Optional[int],
+    ) -> Optional[int]:
+        """The rate settlement will charge for this task; None without a signed rate.
+
+        :param done_task: the done task, carrying ``dynamic_tool_cost`` when set.
+        :param is_offchain: whether the task settles through a signed delivery.
+        :param cap: the rate the requester signed, or None when unknown.
+        :param price: the cap-and-actual price, already clamped to ``cap``.
+        :return: the amount the matching settlement path charges.
+        """
+        if cap is None:
+            return None
+        if is_offchain:
+            cap_and_actual = self.context.shared_state.get(
+                preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
+            )
+            return price if cap_and_actual and price is not None else cap
+        # On-chain, only the NVM deliver carries a per-request rate (the tool
+        # floor); every other mech is charged its own max delivery rate.
+        floor = done_task.get("dynamic_tool_cost")
+        if floor is not None and self._mech_is_nvm():
+            return int(floor)
+        max_rates = self.params.mech_to_max_delivery_rate
+        return int(next(iter(max_rates.values()))) if max_rates else cap
+
+    def _warn_once_on_default_decimals(self, is_offchain: bool) -> None:
+        """Warn once when cap-and-actual prices with the default 18 decimals.
+
+        18 is right for native and 18-decimal tokens and wrong for USDC-like
+        assets, so a deployment that never set ``PAYMENT_TOKEN_DECIMALS`` is
+        called out the first time the flag-on price path runs.
+
+        :param is_offchain: whether the task settles through a signed delivery.
+        """
+        if self._decimals_warned or not is_offchain:
+            return
+        if not self.context.shared_state.get(preimage_buffer.CAP_AND_ACTUAL_ENABLED):
+            return
+        self._decimals_warned = True
+        if self.params.payment_token_decimals == 18:
+            self.context.logger.warning(
+                "cap_and_actual_enabled is on with payment_token_decimals=18 (the "
+                "default); confirm this matches the mech's payment asset."
+            )
+
+    def _mech_is_nvm(self) -> bool:
+        """Whether the mech's payment type is one of the NVM subscription types."""
+        payment_model = self.payment_model
+        if not isinstance(payment_model, (bytes, bytearray)):
+            return False
+        return payment_model.hex() in (PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM)
+
     def _finalize_done_task(
         self, cid: str, response: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -1975,6 +2116,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         task_result = to_multihash(cid)
+        if response is not None and isinstance(response.get("cost_dict"), dict):
+            done_task["cost_dict"] = response["cost_dict"]
         tool = str(done_task.get("tool"))
         dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:
@@ -1983,9 +2126,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}."
             )
             done_task["dynamic_tool_cost"] = dynamic_tool_cost
-        else:
-            cost = get_cost_for_done_task(done_task)
-            self.context.logger.info(f"Cost for task {req_id}: {cost}.")
+        signed_rate = executing_task.get(
+            "request_delivery_rate", executing_task.get("delivery_rate")
+        )
+        cap = None if signed_rate is None else int(signed_rate)
+        self._warn_once_on_default_decimals(is_offchain)
+        price = self._price_done_task(done_task, cap)
+        actual_delivery_rate = self._charged_delivery_rate(
+            done_task, is_offchain, cap, price
+        )
+        if actual_delivery_rate is not None:
+            done_task["actual_delivery_rate"] = actual_delivery_rate
+            computed = (
+                "" if price == actual_delivery_rate else f" (computed price {price})"
+            )
+            self.context.logger.info(
+                f"Delivery rate for task {req_id}: {actual_delivery_rate}{computed}."
+            )
+            offchain_entry = self.context.shared_state.get(
+                OFFCHAIN_REQUEST_RESPONSES, {}
+            ).get(str(req_id))
+            if offchain_entry is not None:
+                offchain_entry["delivery_rate"] = actual_delivery_rate
         mech_address = self._get_designated_marketplace_mech_address()
         mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
@@ -2358,6 +2520,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "error": error_text,
                 "executed_at": executed_at_iso,
                 "cost_dict": cost_dict,
+                "actual_delivery_rate": (
+                    str(done_task["actual_delivery_rate"])
+                    if done_task.get("actual_delivery_rate") is not None
+                    else None
+                ),
                 "is_offchain": is_offchain_task,
                 "tool_hash": tool_hash,
                 "execution_latency_ms": execution_latency_ms,

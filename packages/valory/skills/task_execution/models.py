@@ -29,6 +29,9 @@ from aea.skills.base import Model
 from packages.valory.skills.abstract_round_abci.utils import check_type
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+BASIS_POINTS = 10_000
+# fixed_cost_per_request is expressed in USD with this many decimals.
+USD_DECIMALS = 6
 
 
 @dataclasses.dataclass
@@ -257,6 +260,28 @@ class Params(Model):
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
             )
+            enforce(
+                min(self.tools_to_pricing.values()) >= 0,
+                "tools_to_pricing values must be >= 0",
+            )
+        # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
+        # scale by payment_token_decimals; the payment asset is assumed worth 1 USD.
+        self.payment_token_decimals: int = self._ensure_get(
+            "payment_token_decimals", kwargs, int
+        )
+        enforce(
+            self.payment_token_decimals >= USD_DECIMALS,
+            f"payment_token_decimals must be >= {USD_DECIMALS}",
+        )
+        raw_fixed = kwargs.get("fixed_cost_per_request")
+        self.fixed_cost_per_request: int = 0 if raw_fixed is None else int(raw_fixed)
+        enforce(self.fixed_cost_per_request >= 0, "fixed_cost_per_request must be >= 0")
+        raw_fee = kwargs.get("marketplace_fee_bp")
+        self.marketplace_fee_bp: int = 1500 if raw_fee is None else int(raw_fee)
+        enforce(
+            0 <= self.marketplace_fee_bp < BASIS_POINTS,
+            f"marketplace_fee_bp must be in [0, {BASIS_POINTS})",
+        )
 
         super().__init__(*args, **kwargs)
 

@@ -2725,6 +2725,9 @@ from eth_utils import to_checksum_address as _to_checksum  # noqa: E402
 from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E402
     compute_request_id as _compute_request_id,
 )
+from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E402
+    compute_request_id_with_nonce as _compute_request_id_with_nonce,
+)
 
 _SIGVERIFY_MARKETPLACE = "0xdEaDbeefdEaDbeefdEadbEefdeADBeEfDeAdBeEf"
 _SIGVERIFY_MECH = "0xCAFECAFECAFECAFECAFECAFECAFECAFECAFECAFE"
@@ -6666,3 +6669,356 @@ def test_fetch_offchain_request_info_does_not_stamp_a_rejection(
 
     assert ss[preimage.PREIMAGE_RECORDS]["7"][preimage.FIELD_FETCHED_AT] is None
     assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
+
+
+# ---------------------------------------------------------------------------
+# Explicit-nonce path: the requester picks the nonce, signs the
+# getRequestIdWithNonce layout, and the only replay guard is the per-request
+# record on chain. These pin the gate, the hash selection, the chain check
+# and that the sequential nonce sets are never touched.
+# ---------------------------------------------------------------------------
+
+_ZERO_MECH = "0x" + "00" * 20
+
+
+def _make_explicit_eoa_scenario(
+    delivery_rate: int = 123, nonce: int = 4242
+) -> Dict[str, Any]:
+    """Sign an explicit-nonce request id (``getRequestIdWithNonce`` layout).
+
+    :param delivery_rate: the signed cap embedded in the request id.
+    :param nonce: the requester-chosen nonce embedded in the request id.
+    :return: dict with the fields ``_sig_body`` needs.
+    """
+    account = _Account.from_key(_SIGVERIFY_PRIVATE_KEY)
+    sender = _to_checksum(account.address)
+    request_data = bytes.fromhex(_DEFAULT_IPFS_HASH[2:])
+    request_id_bytes = _compute_request_id_with_nonce(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    signature = account.unsafe_sign_hash(request_id_bytes).signature
+    return {
+        "sender": sender,
+        "request_id": str(int.from_bytes(request_id_bytes, "big")),
+        "ipfs_hash": _DEFAULT_IPFS_HASH,
+        "delivery_rate": delivery_rate,
+        "nonce": nonce,
+        "signature_hex": "0x" + signature.hex(),
+    }
+
+
+def _explicit_path_handler(
+    handler_context: Any,
+    monkeypatch: Any,
+    flag: bool = True,
+    ready: bool = True,
+    recorded_mech: str = _ZERO_MECH,
+) -> MechHttpHandler:
+    """A handler with the explicit-nonce path configured and the chain reads stubbed.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param flag: value of the shared-state cap-and-actual flag.
+    :param ready: value of the explicit-nonce self-check outcome.
+    :param recorded_mech: ``priorityMech`` the ``mapRequestIdInfos`` stub returns.
+    :return: the configured handler.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+    handler_context.shared_state[hmod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = flag
+    mh._explicit_nonce_ready = ready
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+    monkeypatch.setattr(
+        hmod.MechMarketplaceContract,
+        "get_request_id_info",
+        classmethod(
+            lambda cls, ledger_api, contract_address, request_id: {
+                "data": (recorded_mech, _ZERO_MECH, _ZERO_MECH, 0, b"", 0)
+            }
+        ),
+    )
+    return mh
+
+
+def _post_with_mode(
+    mh: MechHttpHandler, http_dialogue: Any, scenario: Dict[str, Any], nonce_mode: Any
+) -> None:
+    """Post a signed-request body carrying ``nonce_mode``.
+
+    :param mh: the handler under test.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param scenario: a scenario dict from one of the ``_make_*_scenario`` helpers.
+    :param nonce_mode: the wire value for ``nonce_mode``.
+    """
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    body[hmod.RequestKey.NONCE_MODE.value] = nonce_mode
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+
+def _capture_rejections(mh: MechHttpHandler, monkeypatch: Any) -> Dict[str, Any]:
+    """Record the reason and status of the next rejection the handler sends.
+
+    :param mh: the handler under test.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :return: a dict filled with ``reason`` and ``status_code`` on rejection.
+    """
+    stored: Dict[str, Any] = {}
+    real = mh._send_rejection_response
+
+    def _capture(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        real(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture)
+    return stored
+
+
+def test_explicit_nonce_request_accepts_without_touching_sequential_sets(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """An explicit-nonce request is accepted and leaves the sequential nonce sets alone.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    scenario = _make_explicit_eoa_scenario(nonce=4242)
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+
+    assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+    (task,) = handler_context.shared_state["pending_tasks"]
+    assert task[hmod.RequestKey.NONCE_MODE.value] == hmod.NONCE_MODE_EXPLICIT
+    assert task[hmod.RequestKey.NONCE.value] == 4242
+    accepted = handler_context.shared_state.get(hmod.ACCEPTED_NONCES_BY_SENDER, {})
+    assert scenario["sender"] not in accepted
+
+
+@pytest.mark.parametrize("flag, ready", [(False, True), (True, False)])
+def test_explicit_nonce_request_refused_when_path_not_enabled(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, flag: bool, ready: bool
+) -> None:
+    """Flag off or self-check not passed: 503 with a reason that names the path.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param flag: the shared-state cap-and-actual flag.
+    :param ready: the explicit-nonce self-check outcome.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch, flag=flag, ready=ready)
+    stored = _capture_rejections(mh, monkeypatch)
+    _post_with_mode(
+        mh, http_dialogue, _make_explicit_eoa_scenario(), hmod.NONCE_MODE_EXPLICIT
+    )
+    assert stored["status_code"] == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.EXPLICIT_NONCE_DISABLED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_explicit_nonce_request_refused_when_request_id_recorded_on_chain(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A request id the marketplace already recorded is a replay: 401.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(
+        handler_context, monkeypatch, recorded_mech=_SIGVERIFY_MECH
+    )
+    stored = _capture_rejections(mh, monkeypatch)
+    _post_with_mode(
+        mh, http_dialogue, _make_explicit_eoa_scenario(), hmod.NONCE_MODE_EXPLICIT
+    )
+    assert stored["status_code"] == HttpCode.UNAUTHORIZED_CODE.value
+    assert stored["reason"] == hmod.REQUEST_ID_ALREADY_RECORDED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_explicit_nonce_request_rejects_a_sequential_layout_signature(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Domain separation: a signature over ``getRequestId`` fails on the explicit path.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    stored = _capture_rejections(mh, monkeypatch)
+    _post_with_mode(mh, http_dialogue, _make_eoa_scenario(nonce=4242), "explicit")
+    assert stored["status_code"] == HttpCode.UNAUTHORIZED_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_sequential_request_defaults_nonce_mode(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A body without ``nonce_mode`` is the sequential path, tagged as such.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch, flag=False, ready=False)
+    scenario = _make_eoa_scenario(nonce=0)
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+    (task,) = handler_context.shared_state["pending_tasks"]
+    assert task[hmod.RequestKey.NONCE_MODE.value] == hmod.NONCE_MODE_SEQUENTIAL
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {
+        scenario["sender"]: {0}
+    }
+
+
+def test_unknown_nonce_mode_is_a_bad_request(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """An unsupported ``nonce_mode`` value is a 400 like any other malformed body.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    _post_with_mode(mh, http_dialogue, _make_explicit_eoa_scenario(), "random")
+    assert (
+        handler_context.outbox.sent[-1].status_code == HttpCode.BAD_REQUEST_CODE.value
+    )
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_explicit_nonce_request_refused_at_the_per_sender_in_flight_cap(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Explicit tasks in flight for the sender count against the same cap as sequential ones.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    scenario = _make_explicit_eoa_scenario()
+    handler_context.shared_state["pending_tasks"] = [
+        {
+            hmod.RequestKey.IS_OFFCHAIN.value: True,
+            hmod.RequestKey.NONCE_MODE.value: hmod.NONCE_MODE_EXPLICIT,
+            hmod.RequestKey.SENDER.value: scenario["sender"].lower(),
+            hmod.RequestKey.REQUEST_ID_CAMEL.value: i,
+        }
+        for i in range(hmod.MAX_ACCEPTED_PER_SENDER)
+    ]
+    stored = _capture_rejections(mh, monkeypatch)
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert stored["status_code"] == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.SENDER_INFLIGHT_LIMIT
+
+
+def _local_explicit_selfcheck_id(mh: MechHttpHandler) -> bytes:
+    """The explicit-nonce request id the self-check computes locally.
+
+    :param mh: a handler with the verification constants seeded.
+    :return: the 32-byte request id.
+    """
+    return _compute_request_id_with_nonce(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=hmod._SELFCHECK_REQUESTER,
+        request_data=hmod._SELFCHECK_REQUEST_DATA,
+        delivery_rate=hmod._SELFCHECK_DELIVERY_RATE,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=hmod._SELFCHECK_NONCE,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+
+
+def test_explicit_nonce_selfcheck_opens_the_path_only_on_a_match(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A matching ``getRequestIdWithNonce`` view enables explicit accepts; a mismatch does not.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch, ready=False)
+    expected = _local_explicit_selfcheck_id(mh)
+    monkeypatch.setattr(
+        hmod, "get_marketplace_request_id_with_nonce_view", lambda **_kw: expected
+    )
+    mh._selfcheck_explicit_nonce_derivation(MagicMock())
+    assert mh._explicit_nonce_ready is True
+
+    monkeypatch.setattr(
+        hmod, "get_marketplace_request_id_with_nonce_view", lambda **_kw: b"\x00" * 32
+    )
+    mh._selfcheck_explicit_nonce_derivation(MagicMock())
+    assert mh._explicit_nonce_ready is False
+
+
+def test_explicit_nonce_selfcheck_keeps_sequential_path_when_view_reverts(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A marketplace without the view leaves explicit accepts off and the constants loaded.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch, ready=False)
+
+    def _revert(**_kw: Any) -> bytes:
+        raise hmod.ContractLogicError("execution reverted")
+
+    monkeypatch.setattr(hmod, "get_marketplace_request_id_with_nonce_view", _revert)
+    mh._selfcheck_explicit_nonce_derivation(MagicMock())
+    assert mh._explicit_nonce_ready is False
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE

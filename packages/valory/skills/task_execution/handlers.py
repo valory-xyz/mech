@@ -64,8 +64,11 @@ from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.task_execution.behaviours import (
+    NONCE_MODE_EXPLICIT,
+    NONCE_MODE_SEQUENTIAL,
     PREDICT_API_EVENTS,
     _release_outstanding_nonce,
+    is_explicit_nonce_task,
 )
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import (
@@ -78,11 +81,13 @@ from packages.valory.skills.task_execution.utils.eip1271 import (
     check_eip1271_signature,
     get_marketplace_domain_separator,
     get_marketplace_request_id_view,
+    get_marketplace_request_id_with_nonce_view,
 )
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 from packages.valory.skills.task_execution.utils.request_id import (
     compute_request_id,
+    compute_request_id_with_nonce,
     recover_eoa_signer,
     to_request_id_bytes32,
 )
@@ -275,6 +280,12 @@ SENDER_RESOLUTION_FAILED = "sender address resolution failed"
 # outcome as a credential rejection — nothing about the client's
 # signature is wrong, they simply have too much unsettled work.
 SENDER_INFLIGHT_LIMIT = "sender in-flight request limit reached"
+# Explicit-nonce path outcomes. The path is only open once the settlement
+# flag is on and the boot self-check found ``getRequestIdWithNonce`` on the
+# marketplace; replay protection is the per-request-id record on chain.
+EXPLICIT_NONCE_DISABLED = "explicit-nonce requests are not enabled on this mech"
+REQUEST_ID_ALREADY_RECORDED = "request id already recorded on-chain"
+REQUEST_INFO_READ_FAILED = "on-chain mapRequestIdInfos read failed"
 # Reason surfaced when the EIP-1271 ``isValidSignature`` view call
 # fails with an infra-side error distinct from a genuine credential
 # rejection (``Web3RPCError``, ``BadResponseFormat``,
@@ -516,6 +527,7 @@ class RequestKey(str, Enum):
     IS_OFFCHAIN = "is_offchain"
     SIGNATURE = "signature"
     NONCE = "nonce"
+    NONCE_MODE = "nonce_mode"
 
 
 class ResponseKey(str, Enum):
@@ -1524,6 +1536,7 @@ class MechHttpHandler(AbstractResponseHandler):
         # the request-handling path 401s with a clear reason.
         self._domain_separator: Optional[bytes] = None
         self._payment_type: Optional[bytes] = None
+        self._explicit_nonce_ready: bool = False
         self._marketplace_mech_address: Optional[str] = (
             self._resolve_marketplace_mech_address()
         )
@@ -1908,6 +1921,7 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return
         self._selfcheck_marketplace_request_id_derivation(ledger_api)
+        self._selfcheck_explicit_nonce_derivation(ledger_api)
 
     def _selfcheck_marketplace_request_id_derivation(
         self, ledger_api: EthereumApi
@@ -1998,6 +2012,77 @@ class MechHttpHandler(AbstractResponseHandler):
             self._payment_type = None
             return
         self.context.logger.info("Marketplace request-id self-check passed.")
+
+    def _selfcheck_explicit_nonce_derivation(self, ledger_api: EthereumApi) -> None:
+        """Open the explicit-nonce path only if the marketplace serves its view.
+
+        Compares ``getRequestIdWithNonce`` with the local reimplementation on
+        the same dummy inputs as the sequential self-check. Unlike that check
+        this one never disables anything: a marketplace that is not upgraded
+        yet, a mismatch or a transport failure all leave
+        ``_explicit_nonce_ready`` False, so explicit requests get a 503 while
+        sequential requests are unaffected.
+
+        :param ledger_api: the ledger API object used for the view call.
+        """
+        self._explicit_nonce_ready = False
+        if self._domain_separator is None or self._payment_type is None:
+            return
+        marketplace_address = self.params.mech_marketplace_address
+        mech_address = cast(str, self._marketplace_mech_address)
+        try:
+            onchain_request_id = get_marketplace_request_id_with_nonce_view(
+                ledger_api=ledger_api,
+                marketplace_address=marketplace_address,
+                mech=mech_address,
+                requester=_SELFCHECK_REQUESTER,
+                data=_SELFCHECK_REQUEST_DATA,
+                delivery_rate=_SELFCHECK_DELIVERY_RATE,
+                payment_type=self._payment_type,
+                nonce=_SELFCHECK_NONCE,
+            )
+            local_request_id = compute_request_id_with_nonce(
+                marketplace=marketplace_address,
+                mech=mech_address,
+                requester=_SELFCHECK_REQUESTER,
+                request_data=_SELFCHECK_REQUEST_DATA,
+                delivery_rate=_SELFCHECK_DELIVERY_RATE,
+                payment_type=self._payment_type,
+                nonce=_SELFCHECK_NONCE,
+                domain_separator=self._domain_separator,
+            )
+        except (RequestException, TimeoutError, Web3RPCError):
+            self.context.logger.warning(
+                "Explicit-nonce self-check hit a transport error; explicit-nonce "
+                "requests stay disabled until the next restart.",
+                exc_info=True,
+            )
+            return
+        except (ContractLogicError, BadFunctionCallOutput, ValueError):
+            self.context.logger.info(
+                "Marketplace does not serve getRequestIdWithNonce; explicit-nonce "
+                "requests disabled until the mech restarts against an upgraded "
+                "marketplace."
+            )
+            return
+        if onchain_request_id != local_request_id:
+            self.context.logger.error(
+                "Marketplace getRequestIdWithNonce does not match the local "
+                "reimplementation (onchain=0x%s local=0x%s); explicit-nonce "
+                "requests disabled.",
+                onchain_request_id.hex(),
+                local_request_id.hex(),
+            )
+            return
+        self._explicit_nonce_ready = True
+        self.context.logger.info("Explicit-nonce self-check passed.")
+
+    def _explicit_nonce_accepts_enabled(self) -> bool:
+        """Whether explicit-nonce requests may be accepted right now."""
+        flag = bool(
+            self.context.shared_state.get(preimage_buffer.CAP_AND_ACTUAL_ENABLED, False)
+        )
+        return flag and self._explicit_nonce_ready
 
     def start_prometheus_server(self) -> None:
         """Starts the prometheus server"""
@@ -2108,6 +2193,11 @@ class MechHttpHandler(AbstractResponseHandler):
             # gets the coerced ``int`` value.
             wire_nonce = data[RequestKey.NONCE.value]
             request_nonce = int(wire_nonce)
+            nonce_mode = str(
+                data.get(RequestKey.NONCE_MODE.value, NONCE_MODE_SEQUENTIAL)
+            )
+            if nonce_mode not in (NONCE_MODE_SEQUENTIAL, NONCE_MODE_EXPLICIT):
+                raise ValueError(f"unsupported nonce_mode {nonce_mode!r}")
         except Exception as e:
             self.context.logger.error(
                 f"Error processing signed request. body_len={len(http_msg.body)} "
@@ -2134,6 +2224,24 @@ class MechHttpHandler(AbstractResponseHandler):
         if not self._reject_unless_uint256_decimal(wire_nonce, "nonce"):
             self._handle_bad_request(
                 http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
+            return
+        if (
+            nonce_mode == NONCE_MODE_EXPLICIT
+            and not self._explicit_nonce_accepts_enabled()
+        ):
+            self.context.logger.info(
+                "Explicit-nonce request %s refused: the path is not enabled.",
+                request_id,
+            )
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason=EXPLICIT_NONCE_DISABLED,
+                status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                status_text="Service unavailable",
+                outcome=REQUEST_OUTCOME_DISABLED,
             )
             return
 
@@ -2208,6 +2316,7 @@ class MechHttpHandler(AbstractResponseHandler):
             nonce=request_nonce,
             wire_request_id=request_id,
             signature_hex=signature_hex,
+            nonce_mode=nonce_mode,
         )
         if not sig_verdict.ok:
             # Route infra-side failures (boot constants unset, ledger
@@ -2321,11 +2430,17 @@ class MechHttpHandler(AbstractResponseHandler):
                 outcome=REQUEST_OUTCOME_SENDER_UNRESOLVED,
             )
             return
-        nonce_verdict = self._bind_wire_nonce_to_chain(
-            sender_checksum=sender_checksum,
-            wire_nonce=request_nonce,
-            wire_request_id=request_id,
-        )
+        if nonce_mode == NONCE_MODE_EXPLICIT:
+            nonce_verdict = self._check_explicit_request_id_unused(
+                sender_checksum=sender_checksum,
+                wire_request_id=request_id,
+            )
+        else:
+            nonce_verdict = self._bind_wire_nonce_to_chain(
+                sender_checksum=sender_checksum,
+                wire_nonce=request_nonce,
+                wire_request_id=request_id,
+            )
         if not nonce_verdict.ok:
             if nonce_verdict.is_infra:
                 status_code = HttpCode.SERVICE_UNAVAILABLE_CODE.value
@@ -2429,6 +2544,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 data=enqueue_data,
                 sender_checksum=sender_checksum,
                 wire_nonce=request_nonce,
+                nonce_mode=nonce_mode,
             )
         except Exception as e:
             self.context.logger.error(
@@ -3069,6 +3185,7 @@ class MechHttpHandler(AbstractResponseHandler):
         data: Dict[str, Any],
         sender_checksum: str,
         wire_nonce: int,
+        nonce_mode: str = NONCE_MODE_SEQUENTIAL,
     ) -> Dict[str, Any]:
         """Enqueue the off-chain task and buffer its request metadata locally.
 
@@ -3087,6 +3204,8 @@ class MechHttpHandler(AbstractResponseHandler):
         :param wire_nonce: the wire ``nonce`` (already coerced to
             ``int`` and admitted by the nonce-bind gate). Recorded in
             the outstanding set alongside the pending task.
+        :param nonce_mode: ``sequential`` or ``explicit``; explicit tasks are
+            kept out of the sequential accepted/settling nonce sets.
         :return: the queued task dict.
         :raises Exception: if either queue write fails; partial state is rolled back.
         """
@@ -3146,6 +3265,7 @@ class MechHttpHandler(AbstractResponseHandler):
             "task_executor_address",
             "request_id_nonce",
             "requestIdWithNonce",
+            RequestKey.NONCE_MODE.value,
             "tool",
             "enqueued_at_local",
         }
@@ -3153,10 +3273,12 @@ class MechHttpHandler(AbstractResponseHandler):
         # ``_handle_signed_requests`` and 400 on missing), so it is present
         # on every accepted request; excluding it here keeps the log
         # a real anomaly signal instead of firing on 100% of requests.
+        # ``request_id`` and ``nonce_mode`` are legitimately on every body (the
+        # validated values are applied from the parameters), so they are not
+        # anomalies worth a log line.
+        expected_on_body = {RequestKey.REQUEST_ID.value, RequestKey.NONCE_MODE.value}
         dropped_keys = [
-            k
-            for k in data.keys()
-            if k in reserved_keys and k != RequestKey.REQUEST_ID.value
+            k for k in data.keys() if k in reserved_keys and k not in expected_on_body
         ]
         if dropped_keys:
             # Log at info: dropping is the safe outcome, but an integration
@@ -3172,6 +3294,7 @@ class MechHttpHandler(AbstractResponseHandler):
             RequestKey.REQUEST_ID_CAMEL.value: int(request_id),
             BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),
             RequestKey.IS_OFFCHAIN.value: True,
+            RequestKey.NONCE_MODE.value: nonce_mode,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
             **{k: v for k, v in data.items() if k not in reserved_keys},
             # Receipt time; kept last so it also wins if the filter above lapses.
@@ -3184,9 +3307,10 @@ class MechHttpHandler(AbstractResponseHandler):
             # admission gate on subsequent accepts computes the correct
             # next-expected slot. Moves to the settling set at done
             # time via ``_release_outstanding_nonce``.
-            self.accepted_nonces_by_sender.setdefault(sender_checksum, set()).add(
-                wire_nonce
-            )
+            if nonce_mode != NONCE_MODE_EXPLICIT:
+                self.accepted_nonces_by_sender.setdefault(sender_checksum, set()).add(
+                    wire_nonce
+                )
         except Exception:
             self._rollback_offchain_enqueue(
                 request_id,
@@ -3438,6 +3562,7 @@ class MechHttpHandler(AbstractResponseHandler):
         nonce: int,
         wire_request_id: str,
         signature_hex: str,
+        nonce_mode: str = NONCE_MODE_SEQUENTIAL,
     ) -> SignatureVerdict:
         """Verify the caller signed the marketplace-derived request_id.
 
@@ -3479,6 +3604,8 @@ class MechHttpHandler(AbstractResponseHandler):
             the wire; must equal the locally-derived value.
         :param signature_hex: hex-encoded signature bytes, with or without
             a leading ``0x``.
+        :param nonce_mode: ``sequential`` (default) or ``explicit``; selects
+            the marketplace request-id layout the signature is checked against.
         :return: a :class:`SignatureVerdict`. ``ok=True`` on a valid
             signature whose wire nonce sits inside the accepted
             on-chain window; ``ok=False`` with ``is_infra=True`` on
@@ -3561,7 +3688,12 @@ class MechHttpHandler(AbstractResponseHandler):
             )
 
         try:
-            derived = compute_request_id(
+            derive = (
+                compute_request_id_with_nonce
+                if nonce_mode == NONCE_MODE_EXPLICIT
+                else compute_request_id
+            )
+            derived = derive(
                 marketplace=marketplace_address,
                 mech=mech_address,
                 requester=sender_checksum,
@@ -3870,6 +4002,8 @@ class MechHttpHandler(AbstractResponseHandler):
                 return False
             if not task.get(RequestKey.IS_OFFCHAIN.value):
                 return False
+            if is_explicit_nonce_task(task):
+                return False
             task_sender = str(task.get(RequestKey.SENDER.value, "")).lower()
             if task_sender != sender_lower:
                 return False
@@ -3919,6 +4053,99 @@ class MechHttpHandler(AbstractResponseHandler):
                 )
                 matched = True
         return matched
+
+    def _check_explicit_request_id_unused(
+        self,
+        sender_checksum: str,
+        wire_request_id: str,
+    ) -> SignatureVerdict:
+        """Admission gate for the explicit-nonce path.
+
+        The request id already encodes the requester-chosen nonce, so the
+        only replay guard is the marketplace's per-request-id record
+        (``mapRequestIdInfos``): a recorded ``priorityMech`` means the
+        request was delivered before. Local in-flight duplicates are caught
+        earlier by the request-id dedup; here the sender's explicit tasks in
+        ``pending_tasks`` and ``done_tasks`` are counted against the same
+        in-flight cap the sequential path applies.
+
+        :param sender_checksum: the sender address in checksum form.
+        :param wire_request_id: the wire request_id (ASCII decimal, already
+            range-checked and matched against the local derivation).
+        :return: a :class:`SignatureVerdict`.
+        """
+        sender_lower = sender_checksum.lower()
+        in_flight = sum(
+            1
+            for task in (*self.pending_tasks, *self.done_tasks)
+            if isinstance(task, dict)
+            and is_explicit_nonce_task(task)
+            and str(task.get(RequestKey.SENDER.value, "")).lower() == sender_lower
+        )
+        if in_flight >= MAX_ACCEPTED_PER_SENDER:
+            self.context.logger.warning(
+                "Sender %s has %d explicit-nonce requests in flight; refusing %s.",
+                sender_checksum,
+                in_flight,
+                wire_request_id,
+            )
+            return SignatureVerdict(
+                ok=False, reason=SENDER_INFLIGHT_LIMIT, is_infra=True
+            )
+        ledger_settings = self._get_ledger_settings()
+        if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            self.context.logger.warning(
+                "Cannot check request id %s on chain: ledger settings unavailable.",
+                wire_request_id,
+            )
+            return SignatureVerdict(
+                ok=False, reason=REQUEST_INFO_READ_FAILED, is_infra=True
+            )
+        rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
+        chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
+        ledger_api = self._get_ledger_api(rpc_address, chain_id)
+        request_id_bytes = to_request_id_bytes32(int(wire_request_id))
+        try:
+            result = self._run_with_wall_clock_deadline(
+                lambda: MechMarketplaceContract.get_request_id_info(
+                    ledger_api=ledger_api,
+                    contract_address=self.params.mech_marketplace_address,
+                    request_id=request_id_bytes,
+                ),
+                deadline_seconds=_RPC_WALL_CLOCK_DEADLINE_SECONDS,
+                label="mapRequestIdInfos_read",
+            )
+            info = result.get(BodyKey.DATA.value)
+            priority_mech = str(info[0]) if info else ZERO_ADDRESS
+        except RuntimeError as exc:
+            self.context.logger.warning(
+                "mapRequestIdInfos read could not be dispatched for %s: %s.",
+                wire_request_id,
+                exc,
+            )
+            return SignatureVerdict(ok=False, reason=RPC_QUEUE_SATURATED, is_infra=True)
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Timeout, transport failure or a deterministic ABI / config
+            # drift: all fail closed with a retryable 503.
+            self.context.logger.warning(
+                "mapRequestIdInfos read failed for %s: %r",
+                wire_request_id,
+                exc,
+                exc_info=True,
+            )
+            return SignatureVerdict(
+                ok=False, reason=REQUEST_INFO_READ_FAILED, is_infra=True
+            )
+        if int(priority_mech, 16) != 0:
+            self.context.logger.warning(
+                "Request id %s from %s is already recorded on chain; refusing.",
+                wire_request_id,
+                sender_checksum,
+            )
+            return SignatureVerdict(
+                ok=False, reason=REQUEST_ID_ALREADY_RECORDED, is_infra=False
+            )
+        return SignatureVerdict(ok=True, reason="", is_infra=False)
 
     def _bind_wire_nonce_to_chain(
         self,

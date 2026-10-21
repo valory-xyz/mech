@@ -44,6 +44,11 @@ SECP256K1_HALF_ORDER: int = int(
     16,
 )
 
+# ``MechMarketplace.EXPLICIT_NONCE_TAG``: the first word of the explicit-nonce
+# request id, so a signature for that path can never be replayed on the
+# sequential-nonce path and vice versa.
+EXPLICIT_NONCE_TAG: bytes = keccak(b"ExplicitNonceDelivery")
+
 
 def _encode_address(address: str) -> bytes:
     """Return the 32-byte left-padded encoding of an Ethereum address."""
@@ -126,6 +131,48 @@ def compute_request_id(
         _computeDomainSeparator()``).
     :return: 32-byte request_id.
     """
+    _check_lengths(domain_separator, payment_type)
+    inner = _request_fields(
+        marketplace, mech, requester, request_data, delivery_rate, payment_type, nonce
+    )
+    return _digest(domain_separator, inner)
+
+
+def compute_request_id_with_nonce(
+    marketplace: str,
+    mech: str,
+    requester: str,
+    request_data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+    domain_separator: bytes,
+) -> bytes:
+    """Compute the explicit-nonce request_id, mirroring ``getRequestIdWithNonce``.
+
+    Same layout as :func:`compute_request_id` with ``EXPLICIT_NONCE_TAG`` as
+    the first encoded word. ``delivery_rate`` is the signed cap and ``nonce``
+    is the requester-chosen per-request value.
+
+    :param marketplace: mech marketplace contract address (0x-prefixed).
+    :param mech: mech contract address (0x-prefixed).
+    :param requester: requester address, EOA or Safe (0x-prefixed).
+    :param request_data: raw request data blob signed on-chain.
+    :param delivery_rate: uint256 signed cap for the request.
+    :param payment_type: bytes32 payment type identifier.
+    :param nonce: uint256 requester-chosen nonce for this request.
+    :param domain_separator: 32-byte EIP-712 domain separator.
+    :return: 32-byte request_id.
+    """
+    _check_lengths(domain_separator, payment_type)
+    inner = _encode_bytes32(EXPLICIT_NONCE_TAG) + _request_fields(
+        marketplace, mech, requester, request_data, delivery_rate, payment_type, nonce
+    )
+    return _digest(domain_separator, inner)
+
+
+def _check_lengths(domain_separator: bytes, payment_type: bytes) -> None:
+    """Reject a domain separator that is not 32 bytes or a payment type over 32."""
     if len(domain_separator) != 32:
         raise ValueError(
             f"domain_separator must be 32 bytes, got {len(domain_separator)}"
@@ -135,7 +182,18 @@ def compute_request_id(
             f"payment_type must be at most 32 bytes, got {len(payment_type)}"
         )
 
-    inner = (
+
+def _request_fields(
+    marketplace: str,
+    mech: str,
+    requester: str,
+    request_data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+) -> bytes:
+    """The ``abi.encode`` body shared by ``getRequestId`` and ``getRequestIdWithNonce``."""
+    return (
         _encode_address(marketplace)
         + _encode_address(mech)
         + _encode_address(requester)
@@ -144,10 +202,11 @@ def compute_request_id(
         + _encode_bytes32(payment_type)
         + _encode_uint256(nonce)
     )
-    inner_hash = keccak(inner)
 
-    outer = b"\x19\x01" + domain_separator + inner_hash
-    return keccak(outer)
+
+def _digest(domain_separator: bytes, inner: bytes) -> bytes:
+    """EIP-712 digest of ``inner`` under ``domain_separator``."""
+    return keccak(b"\x19\x01" + domain_separator + keccak(inner))
 
 
 def recover_eoa_signer(message_hash: bytes, signature: bytes) -> Optional[str]:

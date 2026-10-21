@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicmt7dci7ynyx7n6oruj5sshf6pe53z4jgn3cbszruidiq4vffjwe
+agent: valory/mech:0.1.0:bafybeiayuaso5c2f3p5s5zvhanvj22oqcd5pqtoo2ci24zctj7d3vjxzwa
 number_of_agents: 4
 deployment:
   agent:
@@ -39,6 +39,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -83,6 +84,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -124,6 +126,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
@@ -165,6 +168,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -215,6 +219,9 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
@@ -238,6 +245,9 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -262,6 +272,9 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -287,6 +300,9 @@ type: skill
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}

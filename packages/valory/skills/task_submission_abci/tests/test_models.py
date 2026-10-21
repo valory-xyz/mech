@@ -219,7 +219,9 @@ def test_shared_state_setup_publishes_whether_the_predict_api_write_is_configure
     for use_offchain, url, expected in cases:
         ctx = SimpleNamespace(
             params=SimpleNamespace(
-                use_offchain=use_offchain, predict_api_events_url=url
+                use_offchain=use_offchain,
+                predict_api_events_url=url,
+                cap_and_actual_enabled=False,
             ),
             shared_state={},
             is_abstract_component=False,
@@ -230,3 +232,29 @@ def test_shared_state_setup_publishes_whether_the_predict_api_write_is_configure
             use_offchain,
             url,
         )
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_shared_state_setup_publishes_the_cap_and_actual_flag(
+    monkeypatch: Any, enabled: bool
+) -> None:
+    """task_execution reads the flag from shared state, so setup must publish it as-is."""
+    from types import SimpleNamespace
+
+    from packages.valory.skills.task_execution.utils.preimage import (
+        CAP_AND_ACTUAL_ENABLED,
+    )
+    from packages.valory.skills.task_submission_abci import models as models_mod
+
+    monkeypatch.setattr(models_mod.BaseSharedState, "setup", lambda self: None)
+    ctx = SimpleNamespace(
+        params=SimpleNamespace(
+            use_offchain=False,
+            predict_api_events_url="",
+            cap_and_actual_enabled=enabled,
+        ),
+        shared_state={},
+        is_abstract_component=False,
+    )
+    models_mod.SharedState(name="state", skill_context=ctx).setup()
+    assert ctx.shared_state[CAP_AND_ACTUAL_ENABLED] is enabled

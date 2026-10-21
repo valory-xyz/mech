@@ -4922,6 +4922,396 @@ def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
     assert entry["event"].get("source") == "mech_offchain"
 
 
+def test_finalize_done_task_attaches_cost_dict_from_response(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The response's ``cost_dict`` lands on the done task and on the predict-api event.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    cost_dict = {"total_cost": 0.5, "input_tokens": 10}
+    behaviour._finalize_done_task("bafycid", response={"cost_dict": cost_dict})
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["cost_dict"] == cost_dict
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
+    assert event["event"]["response"]["cost_dict"] == cost_dict
+
+
+CAP_ONE_USD_6DEC = 1_000_000
+
+
+def _priced_task(**extra: Any) -> Dict[str, Any]:
+    """A done task shaped for ``_price_done_task``."""
+    return {"request_id": "r1", **extra}
+
+
+def _set_price_params(
+    params_stub: Any, decimals: int = 6, fixed: int = 0, fee_bp: int = 0
+) -> None:
+    params_stub.payment_token_decimals = decimals
+    params_stub.fixed_cost_per_request = fixed
+    params_stub.marketplace_fee_bp = fee_bp
+
+
+def test_price_is_measured_plus_fixed_grossed_up_for_fee(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Price is (V + F) / (1 - fee): 0.5 USD spend, 0.012 USD share, 15% fee."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    # (500_000 + 12_000) * 10_000 / 8_500 = 602_352.9 -> 602_353
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 602_353
+
+
+def test_price_keeps_sub_cent_costs(behaviour: Any, params_stub: Any) -> None:
+    """A 0.002 USD run is exactly 2e15 at 18 decimals, not rounded to a cent."""
+    _set_price_params(params_stub, decimals=18)
+    task = _priced_task(cost_dict={"total_cost": 0.002})
+    assert behaviour._price_done_task(task, 10**18) == 2 * 10**15
+
+
+def test_price_rounds_fee_gross_up_up(behaviour: Any, params_stub: Any) -> None:
+    """A fractional grossed-up unit rounds up, never down."""
+    _set_price_params(params_stub, decimals=6, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.000001})
+    # 1 unit * 10_000 / 8_500 = 1.18 -> 2
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 2
+
+
+@pytest.mark.parametrize(
+    "floor, expected", [(800_000, 800_000), (10, 500_000), (500_000, 500_000)]
+)
+def test_price_is_the_higher_of_computed_and_floor(
+    behaviour: Any, params_stub: Any, floor: int, expected: int
+) -> None:
+    """The tools_to_pricing floor wins when higher; the computed price otherwise."""
+    _set_price_params(params_stub, decimals=6)
+    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=floor)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == expected
+
+
+def test_price_clamps_to_cap_and_warns(behaviour: Any, params_stub: Any) -> None:
+    """A price above the signed cap is clamped to the cap and logged."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    assert behaviour._price_done_task(task, 50) == 50
+    behaviour.context.logger.warning.assert_called_once()
+
+
+def test_price_charges_cap_without_cost_or_floor(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """With no measured cost and no floor the signed cap is charged, with a warning."""
+    _set_price_params(params_stub)
+    behaviour.context.logger = MagicMock()
+    assert behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC) == 1_000_000
+    behaviour.context.logger.warning.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "cost_dict", [{}, {"total_cost": None}, {"input_cost": 0.1}, "not-a-dict", None]
+)
+def test_price_treats_cost_dict_without_total_as_no_cost(
+    behaviour: Any, params_stub: Any, cost_dict: Any
+) -> None:
+    """A cost_dict without total_cost is 'no cost', so the floor applies."""
+    _set_price_params(params_stub)
+    task = _priced_task(cost_dict=cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+
+
+def test_price_zero_cost_with_tokens_charges_only_the_fixed_share(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """A measured run that cost 0 charges F grossed up, not the cap; 0 when F is 0."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.0, "total_tokens": 120})
+    # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 14_118
+    _set_price_params(params_stub, decimals=6)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 0
+
+
+def test_price_treats_an_unused_callback_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """An untouched callback's zeroed dict is 'not measured': floor or cap, not free."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    pristine = beh_mod.TokenCounterCallback().cost_dict
+    assert behaviour._price_done_task(_priced_task(cost_dict=pristine), 70) == 70
+    behaviour.context.logger.warning.assert_called_once()
+    floored = _priced_task(cost_dict=pristine, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(floored, 70) == 30
+
+
+@pytest.mark.parametrize("total_cost", ["0.5", float("nan"), float("inf"), -0.01, True])
+def test_price_ignores_unusable_total_cost(
+    behaviour: Any, params_stub: Any, total_cost: Any
+) -> None:
+    """Unusable total_cost values are ignored with a warning, never raised on."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    task = _priced_task(cost_dict={"total_cost": total_cost}, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+    behaviour.context.logger.warning.assert_called_once()
+
+
+def test_price_is_none_without_a_signed_rate(behaviour: Any, params_stub: Any) -> None:
+    """Without a signed rate there is no cap to price against."""
+    _set_price_params(params_stub)
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    assert behaviour._price_done_task(task, None) is None
+
+
+def test_finalize_done_task_stores_price_and_reports_it(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The price lands on the done task, the poll envelope and the predict-api event.
+
+    The gate fixture signs a cap of 1e16 at 18 decimals; a 0.005 USD run with
+    the 15% fee prices at 5e15 * 10_000 / 8_500, rounded up.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 5_882_352_941_176_471
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 5_882_352_941_176_471
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
+    assert event["event"]["response"]["actual_delivery_rate"] == "5882352941176471"
+
+
+def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: the stored rate and the poll envelope carry the signed cap, not the price.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 10**16
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 10**16
+
+
+NVM_TOKEN_PAYMENT_TYPE = bytes.fromhex(beh_mod.PAYMENT_TYPE_TOKEN_NVM)
+FIXED_PRICE_PAYMENT_TYPE = bytes(32)
+
+
+@pytest.mark.parametrize("flag", [True, False])
+@pytest.mark.parametrize(
+    "payment_type, tools_to_pricing, max_rates, expected",
+    [
+        (NVM_TOKEN_PAYMENT_TYPE, {"prediction-offline": 123}, {"0xmech": 777}, 123),
+        (NVM_TOKEN_PAYMENT_TYPE, {}, {"0xmech": 777}, 777),
+        (FIXED_PRICE_PAYMENT_TYPE, {"prediction-offline": 123}, {"0xmech": 777}, 777),
+        (FIXED_PRICE_PAYMENT_TYPE, {}, {}, 10**16),
+    ],
+)
+def test_finalize_done_task_reports_what_the_onchain_deliver_charges(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    flag: bool,
+    payment_type: bytes,
+    tools_to_pricing: Dict[str, int],
+    max_rates: Dict[str, int],
+    expected: int,
+) -> None:
+    """On-chain: NVM mechs report the tool floor, every other mech its max rate.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param flag: the cap-and-actual flag, which must not matter on-chain.
+    :param payment_type: the mech payment type published at boot.
+    :param tools_to_pricing: the per-tool floors the behaviour is configured with.
+    :param max_rates: the ``mech_to_max_delivery_rate`` param.
+    :param expected: the rate settlement will charge.
+    """
+    params_stub.mech_to_max_delivery_rate = max_rates
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = flag
+    shared_state[beh_mod.PAYMENT_MODEL] = payment_type
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=False,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = tools_to_pricing
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == expected
+
+
+def test_finalize_done_task_treats_a_missing_flag_as_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Without the shared-state flag an off-chain task is charged the signed cap.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state.pop(beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED, None)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == 10**16
+
+
+@pytest.mark.parametrize("decimals, warns", [(18, True), (6, False)])
+def test_finalize_done_task_warns_once_on_default_decimals_with_the_flag_on(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    decimals: int,
+    warns: bool,
+) -> None:
+    """The first flag-on off-chain price with 18 decimals logs one warning.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param decimals: the configured ``payment_token_decimals``.
+    :param warns: whether the warning is expected.
+    """
+    _set_price_params(params_stub, decimals=decimals, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour.context.logger = MagicMock()
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    behaviour._warn_once_on_default_decimals(is_offchain=True)
+    calls = [
+        c
+        for c in behaviour.context.logger.warning.call_args_list
+        if "payment_token_decimals=18" in str(c)
+    ]
+    assert len(calls) == (1 if warns else 0)
+
+
+@pytest.mark.parametrize(
+    "response", [None, {}, {"cost_dict": None}, {"cost_dict": "not-a-dict"}]
+)
+def test_finalize_done_task_leaves_cost_dict_absent_without_one(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    response: Any,
+) -> None:
+    """No usable ``cost_dict`` on the response leaves the done_task without one.
+
+    Settlement treats an absent key as "no measured cost" and falls back to
+    the tool floor or the signed cap, so nothing must fabricate the key.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param response: the response envelope handed to ``_finalize_done_task``.
+    """
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid", response=response)
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert "cost_dict" not in done_tasks[0]
+
+
 def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     behaviour: Any,
     params_stub: Any,
@@ -5679,3 +6069,40 @@ def test_onchain_tool_exception_still_delivers(
     assert sent, "on-chain failure should still be uploaded and delivered"
     stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert stored.get("status") != "rejected"
+
+
+@pytest.mark.parametrize(
+    "helper, state_key",
+    [
+        (beh_mod._release_outstanding_nonce, beh_mod.ACCEPTED_NONCES_BY_SENDER),
+        (beh_mod._discard_outstanding_nonce, beh_mod.ACCEPTED_NONCES_BY_SENDER),
+        (beh_mod._discard_settling_nonce, beh_mod.SETTLING_NONCES_BY_SENDER),
+    ],
+)
+def test_sequential_nonce_helpers_ignore_explicit_nonce_tasks(
+    shared_state: Any, helper: Any, state_key: str
+) -> None:
+    """An explicit-nonce task never touches the sequential accepted/settling sets.
+
+    Its nonce is a requester-chosen value that may collide numerically with
+    a real sequential slot of the same sender.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    :param helper: the bookkeeping helper under test.
+    :param state_key: the set the helper would otherwise mutate.
+    """
+    sender = "0xSender"
+    shared_state[state_key] = {sender: {7}}
+    helper(
+        shared_state,
+        {
+            "sender": sender,
+            "nonce": 7,
+            "is_offchain": True,
+            beh_mod.NONCE_MODE_KEY: beh_mod.NONCE_MODE_EXPLICIT,
+        },
+    )
+    assert shared_state[state_key] == {sender: {7}}
+    assert beh_mod.SETTLING_NONCES_BY_SENDER not in shared_state or shared_state[
+        beh_mod.SETTLING_NONCES_BY_SENDER
+    ] == {sender: {7}}

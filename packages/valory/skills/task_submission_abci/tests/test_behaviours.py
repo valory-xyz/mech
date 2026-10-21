@@ -34,6 +34,8 @@ from packages.valory.contracts.complementary_service_metadata.contract import (
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.task_execution.behaviours import (
+    NONCE_MODE_EXPLICIT,
+    NONCE_MODE_KEY,
     PREDICT_API_EVENTS,
     SETTLING_NONCES_BY_SENDER,
 )
@@ -2718,8 +2720,8 @@ class TestSafeTxHashAndMultisend:
 class TestGetOffchainTasksDeliverData:
     """Test Get Offchain Tasks Deliver Data."""
 
-    def _make_b(self) -> "_DummyTransPrep":
-        ctx = _make_full_ctx()
+    def _make_b(self, cap_and_actual_enabled: bool = False) -> "_DummyTransPrep":
+        ctx = _make_full_ctx(cap_and_actual_enabled=cap_and_actual_enabled)
         b = _DummyTransPrep(name="b", skill_context=ctx)
         return b
 
@@ -2732,9 +2734,12 @@ class TestGetOffchainTasksDeliverData:
 
     @staticmethod
     def _offchain_task(
-        request_id: str, sender: str = "0xSENDER", nonce: int = 1
+        request_id: str,
+        sender: str = "0xSENDER",
+        nonce: int = 1,
+        nonce_mode: Optional[str] = None,
     ) -> Dict:
-        return {
+        task = {
             "request_id": request_id,
             "is_offchain": True,
             "nonce": nonce,
@@ -2744,6 +2749,9 @@ class TestGetOffchainTasksDeliverData:
             "task_result": "de" * 16,
             "delivery_rate": 100,
         }
+        if nonce_mode is not None:
+            task[NONCE_MODE_KEY] = nonce_mode
+        return task
 
     def test_returns_empty_list_when_no_offchain_tasks(self) -> None:
         """Test returns empty list when no offchain tasks."""
@@ -2814,59 +2822,248 @@ class TestGetOffchainTasksDeliverData:
         assert tx_list[0]["to"] == "0xMECH"
         assert included == ["r1"]
 
-    def test_calls_cap_wrapper_with_max_and_delivery_rates(self) -> None:
-        """Route to the 5-arg overload wrapper with both maxRates and deliveryRates.
-
-        maxRates equals the signed rate on the request; deliveryRates is one
-        less, clamped at 0. Guards against silently reverting to the 4-arg
-        path, or dropping either array.
-        """
-        b = self._make_b()
-        task = self._offchain_task("r1")
-        task["delivery_rate"] = 100
+    def _deliver_calls(
+        self, b: Any, tasks: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Run the deliver-data builder; return the kwargs of each contract call in order."""
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        captured: Dict[str, Any] = {}
+        calls: List[Dict[str, Any]] = []
 
         def _capture(*_args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
+            calls.append(kwargs)
             return _gen_returning(msg)()
 
         with (
-            self._patch_sd(b, [task]),
+            self._patch_sd(b, tasks),
             patch.object(b, "get_contract_api_response", side_effect=_capture),
         ):
             _run_gen(b._get_offchain_tasks_deliver_data())
+        return calls
 
-        assert captured["contract_callable"] == "get_offchain_deliver_data_with_cap"
-        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [99]
+    def test_flag_off_routes_to_legacy_four_arg_wrapper(self) -> None:
+        """Flag off routes to the legacy 4-arg wrapper, charging the signed rate."""
+        task = self._offchain_task("r1")
+        task["delivery_rate"], task["actual_delivery_rate"] = 100, 60
+        (call,) = self._deliver_calls(
+            self._make_b(cap_and_actual_enabled=False), [task]
+        )
+        assert call["contract_callable"] == "get_offchain_deliver_data"
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [100]
+        assert OffchainKeys.MAX_RATES_CAMEL.value not in call
 
-    def test_delivery_rate_clamped_at_zero_for_free_requests(self) -> None:
-        """A signed rate of 0 (free task) must not underflow to -1.
+    def test_flag_on_routes_to_cap_wrapper_with_max_and_delivery_rates(self) -> None:
+        """Flag on routes to the 5-arg wrapper with both maxRates and deliveryRates.
 
-        -1 would fail uint256 encoding in the contract wrapper and
-        abandon the whole off-chain batch for the period, including any
-        other requests that happened to be grouped under the same
+        maxRates is the signed rate on the request; deliveryRates is the price
+        task_execution stored on the done task. Guards against silently
+        reverting to the 4-arg path, or dropping either array.
+        """
+        task = self._offchain_task("r1")
+        task["delivery_rate"], task["actual_delivery_rate"] = 100, 60
+        (call,) = self._deliver_calls(self._make_b(cap_and_actual_enabled=True), [task])
+        assert call["contract_callable"] == "get_offchain_deliver_data_with_cap"
+        assert call[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [60]
+
+    def test_flag_on_clamps_stored_price_to_a_zero_cap(self) -> None:
+        """A signed cap of 0 is charged 0 even when the stored price is higher.
+
+        A rate above the cap would make the contract reject the whole batch
+        for the period, including any other requests grouped under the same
         sender.
         """
-        b = self._make_b()
         task = self._offchain_task("r1")
-        task["delivery_rate"] = 0
-        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        captured: Dict[str, Any] = {}
+        task["delivery_rate"], task["actual_delivery_rate"] = 0, 60
+        (call,) = self._deliver_calls(self._make_b(cap_and_actual_enabled=True), [task])
+        assert call[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
 
-        def _capture(*_args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
-            return _gen_returning(msg)()
+    @pytest.mark.parametrize(
+        "task, max_rate, expected, warns",
+        [
+            ({"request_id": "r1", "actual_delivery_rate": 150}, 100, 100, False),
+            ({"request_id": "r1", "actual_delivery_rate": 60}, 100, 60, False),
+            ({"request_id": "r1", "actual_delivery_rate": 0}, 100, 0, False),
+            ({"request_id": "r1"}, 70, 70, True),
+            ({"request_id": "r1", "actual_delivery_rate": None}, 70, 70, True),
+            ({"request_id": "r1", "actual_delivery_rate": "60"}, 100, 100, True),
+            ({"request_id": "r1", "actual_delivery_rate": 60.0}, 100, 100, True),
+            ({"request_id": "r1", "actual_delivery_rate": True}, 100, 100, True),
+            ({"request_id": "r1", "actual_delivery_rate": -1}, 100, 100, True),
+        ],
+    )
+    def test_actual_delivery_rate_charges_a_non_negative_int_up_to_the_cap(
+        self, task: Dict[str, Any], max_rate: int, expected: int, warns: bool
+    ) -> None:
+        """Non-negative ints charge up to the cap; anything else charges the cap and warns."""
+        b = self._make_b()
+        b.context.logger = MagicMock()
+        assert b._actual_delivery_rate(task, max_rate=max_rate) == expected
+        assert b.context.logger.warning.called is warns
+
+    def test_explicit_nonce_tasks_go_to_the_six_arg_wrapper_in_their_own_call(
+        self,
+    ) -> None:
+        """Explicit and sequential tasks of one sender settle in separate calls.
+
+        The explicit group carries ``nonces`` aligned with its rates and routes
+        to the 6-arg wrapper; the sequential group is untouched.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        seq = self._offchain_task("s1", nonce=1)
+        seq["actual_delivery_rate"] = 60
+        e_hi = self._offchain_task("e2", nonce=4243, nonce_mode=NONCE_MODE_EXPLICIT)
+        e_hi["delivery_rate"], e_hi["actual_delivery_rate"] = 200, 150
+        e_lo = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        e_lo["delivery_rate"], e_lo["actual_delivery_rate"] = 100, 70
+
+        with patch.object(
+            b, "_get_offchain_requester_balance", side_effect=_gen_returning(10**9)
+        ):
+            calls = {
+                c["contract_callable"]: c
+                for c in self._deliver_calls(b, [e_hi, seq, e_lo])
+            }
+
+        assert set(calls) == {
+            "get_offchain_deliver_data_with_cap",
+            "get_offchain_deliver_data_with_nonces",
+        }
+        assert "nonces" not in calls["get_offchain_deliver_data_with_cap"]
+        explicit = calls["get_offchain_deliver_data_with_nonces"]
+        assert explicit["nonces"] == [4242, 4243]
+        assert explicit[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
+        assert explicit[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70, 150]
+
+    @pytest.mark.parametrize(
+        "balance, expect_explicit",
+        [(1000, True), (130, True), (129, False), (None, False)],
+    )
+    def test_second_group_of_a_requester_joins_only_when_both_charges_fit(
+        self, balance: Optional[int], expect_explicit: bool
+    ) -> None:
+        """A requester's explicit group joins the batch only if seq + explicit <= balance.
+
+        Each deliver is simulated alone, so the builder adds the two charges
+        itself; a held group is not counted as a failed attempt.
+
+        :param balance: the requester balance the tracker reports (None = read failed).
+        :param expect_explicit: whether the explicit group's call is expected.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        seq = self._offchain_task("s1", nonce=1)
+        seq["actual_delivery_rate"] = 60
+        exp = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        exp["actual_delivery_rate"] = 70
+        with (
+            patch.object(
+                b,
+                "_get_offchain_requester_balance",
+                side_effect=_gen_returning(balance),
+            ),
+            patch.object(b, "note_settlement_skipped") as mock_skip,
+        ):
+            calls = self._deliver_calls(b, [exp, seq])
+        callables = [c["contract_callable"] for c in calls]
+        assert callables[0] == "get_offchain_deliver_data_with_cap"
+        assert ("get_offchain_deliver_data_with_nonces" in callables) is expect_explicit
+        mock_skip.assert_not_called()
+
+    def test_explicit_group_keeps_the_requests_that_settle_alone(self) -> None:
+        """A failed explicit group is split per request; only the lone failures are skipped.
+
+        The group of three fails, each request is simulated alone, the one
+        that fails alone is noted as skipped, and the other two are rebuilt
+        into one call.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        tasks = [
+            self._offchain_task(f"e{i}", nonce=4240 + i, nonce_mode=NONCE_MODE_EXPLICIT)
+            for i in (1, 2, 3)
+        ]
+        for task in tasks:
+            task["actual_delivery_rate"] = 70
+
+        def _simulate(*_args: Any, **kwargs: Any) -> Any:
+            nonces = kwargs.get("nonces", [])
+            ok = not (len(nonces) == 3 or nonces == [4242])
+            return _gen_returning(
+                _state_contract_msg({"data": b"\xdd", "simulation_ok": ok})
+            )()
 
         with (
-            self._patch_sd(b, [task]),
-            patch.object(b, "get_contract_api_response", side_effect=_capture),
+            self._patch_sd(b, tasks),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_simulate
+            ) as mock_call,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
         ):
-            _run_gen(b._get_offchain_tasks_deliver_data())
+            tx_list, included = _run_gen(b._get_offchain_tasks_deliver_data())
 
-        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
+        assert included == ["e1", "e3"]
+        assert len(tx_list) == 1
+        mock_skip.assert_called_once_with(
+            ["e2"], SOURCE_OFFCHAIN, "0xMECH", b.synchronized_data.period_count
+        )
+        assert mock_call.call_args_list[-1].kwargs["nonces"] == [4241, 4243]
+        assert mock_call.call_count == 5
+
+    def test_explicit_nonce_tasks_are_skipped_when_the_flag_is_off(self) -> None:
+        """Flag off: explicit tasks are not folded into the sequential call."""
+        b = self._make_b(cap_and_actual_enabled=False)
+        task = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(msg)
+            ) as mock_call,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
+        ):
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result == ([], [])
+        mock_call.assert_not_called()
+        mock_skip.assert_called_once_with(
+            ["e1"], SOURCE_OFFCHAIN, "0xMECH", b.synchronized_data.period_count
+        )
+
+    def test_batch_keeps_rates_aligned_per_sender(self) -> None:
+        """Two senders, out-of-order nonces, priced / clamped / unpriced tasks.
+
+        Within each sender group ``deliveryRates[i]`` and ``maxRates[i]`` must
+        line up with ``deliverWithSignatures[i]`` after nonce ordering, and
+        the unpriced task is charged its cap with a warning.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        b.context.logger = MagicMock()
+        a2 = self._offchain_task("a2", sender="0xA", nonce=2)
+        a2["ipfs_hash"], a2["delivery_rate"], a2["actual_delivery_rate"] = (
+            "0x" + "02" * 16,
+            200,
+            150,
+        )
+        a1 = self._offchain_task("a1", sender="0xA", nonce=1)
+        a1["ipfs_hash"], a1["delivery_rate"], a1["actual_delivery_rate"] = (
+            "0x" + "01" * 16,
+            100,
+            300,
+        )
+        b1 = self._offchain_task("b1", sender="0xB", nonce=5)
+        b1["delivery_rate"] = 70
+
+        calls = {c["requester"]: c for c in self._deliver_calls(b, [a2, b1, a1])}
+
+        group_a = calls["0xA"]
+        assert group_a[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
+        assert group_a[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [100, 150]
+        assert [
+            d["requestData"]
+            for d in group_a[OffchainKeys.DELIVER_WITH_SIGNATURES.value]
+        ] == [bytes.fromhex("01" * 16), bytes.fromhex("02" * 16)]
+        group_b = calls["0xB"]
+        assert group_b[OffchainKeys.MAX_RATES_CAMEL.value] == [70]
+        assert group_b[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70]
+        b.context.logger.warning.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
