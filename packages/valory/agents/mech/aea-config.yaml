@@ -43,11 +43,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeifc7ixpncwmraqy6aafbjgp6mlemf3wk7l65qm7kvkyt64qnoufbi
-- valory/mech_abci:0.1.0:bafybeib7neoiucm6gt3njr6dois35lp6bmkyp5gnk6xqm437xcpywjid2u
+- valory/mech_abci:0.1.0:bafybeiaa27qkihj77clsitdliywtdojzooqo2iotjrucnrnkrccltroxk4
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeicejqwu2o7fddlpl2fr5uo45a7exm4p6okflqroo4rhqdigazwnt4
-- valory/task_submission_abci:0.1.0:bafybeic5ciauyvsoeseuqzdhthklrr2xosl4f4w2sr6iursl5taok4mhqi
+- valory/task_execution:0.1.0:bafybeieqedkjdag4654jvm7pap7p56lrpi25yh4uxbvfmjensm72mvlpru
+- valory/task_submission_abci:0.1.0:bafybeib6smot7mlhuuuggxxc746pa4e7tdtf2l7qv3pt4n4dvujz32hv3y
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
