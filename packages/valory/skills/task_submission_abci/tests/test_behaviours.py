@@ -74,6 +74,7 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     ZERO_IPFS_HASH,
 )
 from packages.valory.skills.task_submission_abci.rounds import decode_tx_payload
+
 from packages.valory.skills.task_submission_abci.tests.conftest import (
     _error_contract_msg,
     _error_ledger_msg,
@@ -91,6 +92,9 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
     _state_contract_msg,
     _state_ledger_msg,
 )
+
+# A settlement deadline every explicit-nonce test task can meet.
+_FAR_DEADLINE = 2**32
 
 # ---------------------------------------------------------------------------
 # Helpers: concrete subclasses + minimal skill context
@@ -2738,6 +2742,7 @@ class TestGetOffchainTasksDeliverData:
         sender: str = "0xSENDER",
         nonce: int = 1,
         nonce_mode: Optional[str] = None,
+        deadline: Optional[int] = None,
     ) -> Dict:
         task = {
             "request_id": request_id,
@@ -2751,6 +2756,8 @@ class TestGetOffchainTasksDeliverData:
         }
         if nonce_mode is not None:
             task[NONCE_MODE_KEY] = nonce_mode
+        if nonce_mode == NONCE_MODE_EXPLICIT:
+            task[beh_mod.DEADLINE_KEY] = _FAR_DEADLINE if deadline is None else deadline
         return task
 
     def test_returns_empty_list_when_no_offchain_tasks(self) -> None:
@@ -2930,8 +2937,10 @@ class TestGetOffchainTasksDeliverData:
             "get_offchain_deliver_data_with_nonces",
         }
         assert "nonces" not in calls["get_offchain_deliver_data_with_cap"]
+        assert "deadlines" not in calls["get_offchain_deliver_data_with_cap"]
         explicit = calls["get_offchain_deliver_data_with_nonces"]
         assert explicit["nonces"] == [4242, 4243]
+        assert explicit["deadlines"] == [_FAR_DEADLINE, _FAR_DEADLINE]
         assert explicit[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
         assert explicit[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70, 150]
 
@@ -3007,6 +3016,50 @@ class TestGetOffchainTasksDeliverData:
         )
         assert mock_call.call_args_list[-1].kwargs["nonces"] == [4241, 4243]
         assert mock_call.call_count == 5
+
+    def test_expired_explicit_tasks_are_dropped_before_the_batch_is_built(
+        self,
+    ) -> None:
+        """A task past (or within the margin of) its deadline is dropped, not simulated.
+
+        The others settle; the dropped one is removed from the local done
+        tasks, stamped abandoned and counted dropped, never ``sim_failed``.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        now = int(time.time())
+        fresh = self._offchain_task("e1", nonce=4241, nonce_mode=NONCE_MODE_EXPLICIT)
+        stale = self._offchain_task(
+            "e2",
+            nonce=4242,
+            nonce_mode=NONCE_MODE_EXPLICIT,
+            deadline=now + beh_mod.EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS - 1,
+        )
+        unreadable = self._offchain_task(
+            "e3", nonce=4243, nonce_mode=NONCE_MODE_EXPLICIT
+        )
+        unreadable[beh_mod.DEADLINE_KEY] = "soon"
+        for task in (fresh, stale, unreadable):
+            task["actual_delivery_rate"] = 70
+        b.context.shared_state[DONE_TASKS] = [
+            dict(fresh),
+            dict(stale),
+            dict(unreadable),
+        ]
+        with (
+            patch.object(b, "note_settlement_skipped") as mock_skip,
+            patch.object(b, "count_settlement") as mock_count,
+            patch.object(beh_mod.preimage_buffer, "record_stamp") as mock_stamp,
+        ):
+            calls = self._deliver_calls(b, [fresh, stale, unreadable])
+        (call_kwargs,) = calls
+        assert call_kwargs["nonces"] == [4241]
+        assert call_kwargs["deadlines"] == [_FAR_DEADLINE]
+        mock_skip.assert_not_called()
+        mock_count.assert_any_call(
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 2
+        )
+        assert {c.args[1] for c in mock_stamp.call_args_list} == {"e2", "e3"}
+        assert [t["request_id"] for t in b.context.shared_state[DONE_TASKS]] == ["e1"]
 
     def test_explicit_nonce_tasks_are_skipped_when_the_flag_is_off(self) -> None:
         """Flag off: explicit tasks are not folded into the sequential call."""

@@ -273,6 +273,7 @@ class OffchainKeys(Enum):
     MAX_RATES = "max_rates"
     MAX_RATES_CAMEL = "maxRates"
     NONCES = "nonces"
+    DEADLINES = "deadlines"
 
 
 class OffchainDataKey(Enum):
@@ -550,6 +551,57 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             SETTLEMENT_OUTCOME_SIM_FAILED, source, mech_address, retried
         )
 
+    def drop_expired_explicit_tasks(
+        self, tasks: List[Dict[str, Any]], mech_address: str
+    ) -> List[Dict[str, Any]]:
+        """Drop the explicit-nonce tasks whose signed deadline no longer allows settlement.
+
+        The marketplace reverts a settlement past the deadline, so such a task
+        can never be paid: it is removed from the local done tasks at once,
+        its durable record is stamped abandoned and it is counted ``dropped``.
+        Agents that did not execute it hold no local copy and only leave it
+        out of the batch.
+
+        :param tasks: the off-chain done tasks of this period.
+        :param mech_address: the ``mech_address`` label value.
+        :return: ``tasks`` without the expired ones.
+        """
+        now = time.time()
+        expired = [task for task in tasks if _explicit_deadline_passed(task, now)]
+        if not expired:
+            return tasks
+        expired_ids = {str(task.get("request_id")) for task in expired}
+        with self.done_tasks_lock():
+            local_tasks = self.context.shared_state.get(DONE_TASKS, [])
+            self.context.shared_state[DONE_TASKS] = [
+                task
+                for task in local_tasks
+                if str(task.get("request_id")) not in expired_ids
+            ]
+        for task in expired:
+            preimage_buffer.record_stamp(
+                self.context.shared_state,
+                str(task.get("request_id")),
+                abandoned_at=int(now),
+            )
+            self.context.logger.warning(
+                "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped: its signed "
+                "deadline %s leaves no time to settle; the delivery will not be "
+                "settled on-chain.",
+                SOURCE_OFFCHAIN,
+                task.get("request_id"),
+                task.get(SENDER),
+                task.get(NONCE),
+                task.get("tool"),
+                task.get(DEADLINE_KEY),
+            )
+        self.count_settlement(
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, mech_address, len(expired)
+        )
+        return [
+            task for task in tasks if str(task.get("request_id")) not in expired_ids
+        ]
+
 
 def _event_request_id(event: Dict[str, Any]) -> Optional[str]:
     """Return the ``str`` request id a predict-api event is keyed on.
@@ -585,7 +637,32 @@ _DELIVER_LIST_KEYS = (
     OffchainKeys.DELIVERY_RATES_CAMEL.value,
     OffchainKeys.MAX_RATES_CAMEL.value,
     OffchainKeys.NONCES.value,
+    OffchainKeys.DEADLINES.value,
 )
+
+# An explicit-nonce request settles only up to its signed deadline, and one
+# expired item reverts the whole call. A batch built now lands on chain after
+# the settlement rounds, so anything closer than this is dropped rather than
+# risked.
+EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS = 120
+DEADLINE_KEY = "deadline"
+
+
+def _explicit_deadline_passed(task: Dict[str, Any], now: float) -> bool:
+    """Whether an explicit-nonce done task can no longer be settled in time.
+
+    :param task: a done-task dict.
+    :param now: the current Unix time.
+    :return: True for an explicit task whose deadline is missing, unreadable
+        or within the settlement margin.
+    """
+    if task.get(NONCE_MODE_KEY) != NONCE_MODE_EXPLICIT:
+        return False
+    try:
+        deadline = int(task[DEADLINE_KEY])
+    except (KeyError, TypeError, ValueError):
+        return True
+    return deadline < now + EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS
 
 
 def _slice_deliver_data(
@@ -2073,6 +2150,12 @@ class TransactionPreparationBehaviour(
         counted_request_ids: Set[str] = set()
 
         if len(offchain_done_tasks_list) > 0:
+            # uses the first mech in config as marketplace mech
+            mech_address = self.mech_addresses[0]
+            offchain_done_tasks_list = self.drop_expired_explicit_tasks(
+                offchain_done_tasks_list, mech_address
+            )
+        if len(offchain_done_tasks_list) > 0:
             self.context.logger.info(
                 f"{len(offchain_done_tasks_list)} Offchain Requests Found. Preparing deliver onchain tx(s)"
             )
@@ -2083,24 +2166,25 @@ class TransactionPreparationBehaviour(
 
             # One contract call per (requester, nonce mode): sequential-nonce
             # tasks go to the counter-based overloads, explicit-nonce tasks to
-            # the 6-arg one, and the two never share a call.
+            # the deadline-carrying one, and the two never share a call.
             offchain_list_by_sender: Dict[Tuple[str, str], Dict] = defaultdict(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
                     OffchainKeys.MAX_RATES.value: [],
                     OffchainKeys.DELIVERY_RATES.value: [],
                     OffchainKeys.NONCES.value: [],
+                    OffchainKeys.DEADLINES.value: [],
                     REQUEST_IDS_KEY: [],
                 }
             )
-            # uses the first mech in config as marketplace mech
-            mech_address = self.mech_addresses[0]
             for data in tx_list_sorted_by_nonce:
                 sender = data[SENDER]
                 nonce_mode = data.get(NONCE_MODE_KEY, NONCE_MODE_SEQUENTIAL)
                 group = offchain_list_by_sender[(sender, nonce_mode)]
                 group[REQUEST_IDS_KEY].append(str(data["request_id"]))
                 group[OffchainKeys.NONCES.value].append(int(data[NONCE]))
+                if nonce_mode == NONCE_MODE_EXPLICIT:
+                    group[OffchainKeys.DEADLINES.value].append(int(data[DEADLINE_KEY]))
                 group[OffchainKeys.DELIVER_WITH_SIGNATURES.value].append(
                     {
                         OffchainDataKey.REQUEST_DATA_KEY.value: bytes.fromhex(
@@ -2193,6 +2277,9 @@ class TransactionPreparationBehaviour(
                 if nonce_mode == NONCE_MODE_EXPLICIT:
                     contract_data[OffchainKeys.NONCES.value] = details[
                         OffchainKeys.NONCES.value
+                    ]
+                    contract_data[OffchainKeys.DEADLINES.value] = details[
+                        OffchainKeys.DEADLINES.value
                     ]
                     contract_callable = "get_offchain_deliver_data_with_nonces"
 

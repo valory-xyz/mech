@@ -593,14 +593,15 @@ class OlasMechContract(Contract):
         deliveryRates: List[int],
         maxRates: List[int],
         nonces: List[int],
+        deadlines: List[int],
         paymentData: str,
     ) -> JSONLike:
-        """Get offchain deliver tx data for the explicit-nonce 6-arg overload."""
+        """Get offchain deliver tx data for the explicit-nonce overload (nonces and deadlines)."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         overload_signature = (
             "deliverMarketplaceWithSignatures("
-            "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],bytes)"
+            "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],uint256[],bytes)"
         )
         data = contract_instance.encode_abi(
             abi_element_identifier=overload_signature,
@@ -610,6 +611,7 @@ class OlasMechContract(Contract):
                 deliveryRates,
                 maxRates,
                 nonces,
+                deadlines,
                 paymentData,
             ],
         )

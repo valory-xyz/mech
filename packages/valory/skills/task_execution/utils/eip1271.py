@@ -133,10 +133,27 @@ _GET_REQUEST_ID_ABI: Dict[str, Any] = {
     "stateMutability": "view",
     "type": "function",
 }
-# Same inputs and output as ``getRequestId``; only the name differs.
+# Explicit-nonce view: the signed cap, the requester-chosen nonce and the
+# settlement deadline, hashed as EIP-712 typed data under the explicit-nonce
+# domain (``getDomainSeparatorWithNonce``).
 _GET_REQUEST_ID_WITH_NONCE_ABI: Dict[str, Any] = {
-    **_GET_REQUEST_ID_ABI,
+    "inputs": [
+        {"internalType": "address", "name": "mech", "type": "address"},
+        {"internalType": "address", "name": "requester", "type": "address"},
+        {"internalType": "bytes", "name": "data", "type": "bytes"},
+        {"internalType": "uint256", "name": "maxDeliveryRate", "type": "uint256"},
+        {"internalType": "bytes32", "name": "paymentType", "type": "bytes32"},
+        {"internalType": "uint256", "name": "nonce", "type": "uint256"},
+        {"internalType": "uint256", "name": "deadline", "type": "uint256"},
+    ],
     "name": "getRequestIdWithNonce",
+    "outputs": [{"internalType": "bytes32", "name": "requestId", "type": "bytes32"}],
+    "stateMutability": "view",
+    "type": "function",
+}
+_EXPLICIT_DOMAIN_SEPARATOR_ABI: Dict[str, Any] = {
+    **_DOMAIN_SEPARATOR_ABI,
+    "name": "getDomainSeparatorWithNonce",
 }
 
 
@@ -350,7 +367,31 @@ def get_marketplace_request_id_view(
     )
 
 
-def get_marketplace_request_id_with_nonce_view(
+def get_marketplace_explicit_domain_separator(
+    ledger_api: EthereumApi, marketplace_address: str
+) -> bytes:
+    """Return the explicit-nonce signing domain, ``getDomainSeparatorWithNonce()``.
+
+    A separate EIP-712 domain from :func:`get_marketplace_domain_separator`;
+    the two are never interchangeable.
+
+    :param ledger_api: the ledger API object.
+    :param marketplace_address: the mech marketplace contract address.
+    :return: the 32-byte domain separator.
+    :raises ValueError: only from the explicit 32-byte length guard; Web3's
+        ``BadFunctionCallOutput`` and ``ContractLogicError`` propagate.
+    """
+    contract_instance = ledger_api.api.eth.contract(
+        address=ledger_api.api.to_checksum_address(marketplace_address),
+        abi=[_EXPLICIT_DOMAIN_SEPARATOR_ABI],
+    )
+    result = bytes(contract_instance.functions.getDomainSeparatorWithNonce().call())
+    if len(result) != 32:
+        raise ValueError(f"domain_separator length is {len(result)}, expected 32")
+    return result
+
+
+def get_marketplace_request_id_with_nonce_view(  # pylint: disable=too-many-arguments
     ledger_api: EthereumApi,
     marketplace_address: str,
     mech: str,
@@ -359,6 +400,7 @@ def get_marketplace_request_id_with_nonce_view(
     delivery_rate: int,
     payment_type: bytes,
     nonce: int,
+    deadline: int,
 ) -> bytes:
     """Call the marketplace ``getRequestIdWithNonce`` view and return its bytes32."""
     return _call_request_id_view(
@@ -371,6 +413,7 @@ def get_marketplace_request_id_with_nonce_view(
         delivery_rate,
         payment_type,
         nonce,
+        deadline,
     )
 
 
@@ -384,6 +427,7 @@ def _call_request_id_view(
     delivery_rate: int,
     payment_type: bytes,
     nonce: int,
+    *extra_args: int,
 ) -> bytes:
     """Call one of the marketplace request-id views described by ``abi``."""
     contract_instance = ledger_api.api.eth.contract(
@@ -398,6 +442,7 @@ def _call_request_id_view(
         delivery_rate,
         payment_type,
         nonce,
+        *extra_args,
     ).call()
     result = bytes(request_id)
     if len(result) != 32:
