@@ -187,7 +187,7 @@ def compute_request_id_with_nonce(  # pylint: disable=too-many-arguments
             EXPLICIT_NONCE_TYPE_HASH, mech, requester, keccak256(data),
             maxDeliveryRate, paymentType, nonce, deadline))
         requestId = keccak256(abi.encodePacked(
-            "", getDomainSeparatorWithNonce(), structHash))
+            "\x19\x01", getDomainSeparatorWithNonce(), structHash))
 
     ``delivery_rate`` is the signed cap, ``nonce`` the requester-chosen
     per-request value and ``deadline`` the last Unix timestamp at which the

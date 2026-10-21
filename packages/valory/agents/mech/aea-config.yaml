@@ -43,11 +43,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeihp55ry2ttct4x37n5qbhloom6dpzgarx3d2xz6zjthm22jc4fmua
-- valory/mech_abci:0.1.0:bafybeihxfdhmxydizkygsuifgp56e4yt5wwbgf2thruh4w33qmyyhd67je
+- valory/mech_abci:0.1.0:bafybeiaq4dab2ih2cigje2jebpigpmu2juikeyugyjnzwtb5jbmqzfumxm
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeigenhgxh4hso2cf2yjsfgupzchtjp4jy6flmywqiisicrptewqqhi
-- valory/task_submission_abci:0.1.0:bafybeib6ifjlrdcy7nh3ekfagbj2cjh6quos6iacpnnao6qx6kfo7nxprq
+- valory/task_execution:0.1.0:bafybeiazku3m5xjhomd2le6zggmz4onhivrafjyk7ytawrrznrgwuttlwe
+- valory/task_submission_abci:0.1.0:bafybeigjzvguyizsxehhmtn7dnliixgbrcgqbmpdsnug2x7aytlmuvtale
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
@@ -215,6 +215,7 @@ models:
       mech_to_max_delivery_rate: ${dict:{}}
       mech_to_config: ${dict:{}}
       cap_and_actual_enabled: ${bool:false}
+      explicit_deadline_settlement_margin_seconds: ${int:180}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}

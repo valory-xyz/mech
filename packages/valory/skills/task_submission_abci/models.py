@@ -163,6 +163,13 @@ class Params(BaseParams):
         self.cap_and_actual_enabled: bool = bool(
             kwargs.get("cap_and_actual_enabled", False)
         )
+        # An explicit-nonce task closer than this to its signed deadline when a
+        # batch is built is dropped rather than risked: the batch still goes
+        # through payload consensus, signature collection and submission, and
+        # one expired item reverts the whole call.
+        self.explicit_deadline_settlement_margin_seconds: int = int(
+            kwargs.get("explicit_deadline_settlement_margin_seconds", 180)
+        )
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No

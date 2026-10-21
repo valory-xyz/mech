@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeigr2ua4fakxprpq2otxvntp5fn7l2zgnadcffcn24wb4oa2jc4equ
+agent: valory/mech:0.1.0:bafybeihcjbovtssbxbscyaaf3ey7r3gnxvu4bsc65igqgbhzr6zwjq6swa
 number_of_agents: 4
 deployment:
   agent:
@@ -40,6 +40,7 @@ type: skill
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -85,6 +86,7 @@ type: skill
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -127,6 +129,7 @@ type: skill
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
@@ -169,6 +172,7 @@ type: skill
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}

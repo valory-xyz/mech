@@ -557,50 +557,62 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """Drop the explicit-nonce tasks whose signed deadline no longer allows settlement.
 
         The marketplace reverts a settlement past the deadline, so such a task
-        can never be paid: it is removed from the local done tasks at once,
-        its durable record is stamped abandoned and it is counted ``dropped``.
-        Agents that did not execute it hold no local copy and only leave it
-        out of the batch.
+        can never be paid. Every agent leaves it out of the batch, judged
+        against the consensus time of the last round transition so all agents
+        build the same batch. Only the agent that executed it holds a local
+        copy: that agent removes it, stamps its durable record abandoned,
+        logs it and counts it ``dropped``, once fleet-wide.
 
         :param tasks: the off-chain done tasks of this period.
         :param mech_address: the ``mech_address`` label value.
         :return: ``tasks`` without the expired ones.
         """
-        now = time.time()
-        expired = [task for task in tasks if _explicit_deadline_passed(task, now)]
+        now = self._consensus_timestamp()
+        margin = int(self.params.explicit_deadline_settlement_margin_seconds)
+        expired = [
+            task for task in tasks if _explicit_deadline_passed(task, now, margin)
+        ]
         if not expired:
             return tasks
         expired_ids = {str(task.get("request_id")) for task in expired}
-        with self.done_tasks_lock():
-            local_tasks = self.context.shared_state.get(DONE_TASKS, [])
-            self.context.shared_state[DONE_TASKS] = [
-                task
-                for task in local_tasks
-                if str(task.get("request_id")) not in expired_ids
-            ]
-        for task in expired:
-            preimage_buffer.record_stamp(
-                self.context.shared_state,
-                str(task.get("request_id")),
-                abandoned_at=int(now),
-            )
-            self.context.logger.warning(
-                "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped: its signed "
-                "deadline %s leaves no time to settle; the delivery will not be "
-                "settled on-chain.",
-                SOURCE_OFFCHAIN,
-                task.get("request_id"),
-                task.get(SENDER),
-                task.get(NONCE),
-                task.get("tool"),
-                task.get(DEADLINE_KEY),
-            )
+        local_ids = self.local_request_ids(sorted(expired_ids))
+        if local_ids:
+            with self.done_tasks_lock():
+                local_tasks = self.context.shared_state.get(DONE_TASKS, [])
+                self.context.shared_state[DONE_TASKS] = [
+                    task
+                    for task in local_tasks
+                    if str(task.get("request_id")) not in local_ids
+                ]
+            for task in expired:
+                if str(task.get("request_id")) not in local_ids:
+                    continue
+                preimage_buffer.record_stamp(
+                    self.context.shared_state,
+                    str(task.get("request_id")),
+                    abandoned_at=now,
+                )
+                self.context.logger.warning(
+                    "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped: its "
+                    "signed deadline %s leaves no time to settle; the delivery will "
+                    "not be settled on-chain.",
+                    SOURCE_OFFCHAIN,
+                    task.get("request_id"),
+                    task.get(SENDER),
+                    task.get(NONCE),
+                    task.get("tool"),
+                    task.get(DEADLINE_KEY),
+                )
         self.count_settlement(
-            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, mech_address, len(expired)
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, mech_address, len(local_ids)
         )
         return [
             task for task in tasks if str(task.get("request_id")) not in expired_ids
         ]
+
+    def _consensus_timestamp(self) -> int:
+        """The Unix time of the last round transition, identical on every agent."""
+        return int(self.round_sequence.last_round_transition_timestamp.timestamp())
 
 
 def _event_request_id(event: Dict[str, Any]) -> Optional[str]:
@@ -640,21 +652,17 @@ _DELIVER_LIST_KEYS = (
     OffchainKeys.DEADLINES.value,
 )
 
-# An explicit-nonce request settles only up to its signed deadline, and one
-# expired item reverts the whole call. A batch built now lands on chain after
-# the settlement rounds, so anything closer than this is dropped rather than
-# risked.
-EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS = 120
 DEADLINE_KEY = "deadline"
 
 
-def _explicit_deadline_passed(task: Dict[str, Any], now: float) -> bool:
+def _explicit_deadline_passed(task: Dict[str, Any], now: int, margin: int) -> bool:
     """Whether an explicit-nonce done task can no longer be settled in time.
 
     :param task: a done-task dict.
-    :param now: the current Unix time.
+    :param now: the consensus Unix time the batch is built at.
+    :param margin: seconds the settlement rounds need after the batch is built.
     :return: True for an explicit task whose deadline is missing, unreadable
-        or within the settlement margin.
+        or less than ``margin`` ahead of ``now``.
     """
     if task.get(NONCE_MODE_KEY) != NONCE_MODE_EXPLICIT:
         return False
@@ -662,7 +670,7 @@ def _explicit_deadline_passed(task: Dict[str, Any], now: float) -> bool:
         deadline = int(task[DEADLINE_KEY])
     except (KeyError, TypeError, ValueError):
         return True
-    return deadline < now + EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS
+    return deadline < now + margin
 
 
 def _slice_deliver_data(

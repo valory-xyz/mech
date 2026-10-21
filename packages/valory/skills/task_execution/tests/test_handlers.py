@@ -7070,12 +7070,31 @@ def test_explicit_nonce_request_refused_when_its_deadline_is_too_close(
     """
     mh = _explicit_path_handler(handler_context, monkeypatch)
     stored = _capture_rejections(mh, monkeypatch)
-    too_soon = int(time.time()) + 599
+    monkeypatch.setattr(hmod.time, "time", lambda: 1_700_000_000.0)
+    too_soon = 1_700_000_000 + 600 - 1
     scenario = _make_explicit_eoa_scenario(deadline=too_soon)
     _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
     assert stored["status_code"] == HttpCode.UNAUTHORIZED_CODE.value
     assert stored["reason"] == hmod.EXPLICIT_NONCE_DEADLINE_TOO_SOON
     assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_explicit_nonce_request_with_exactly_the_floor_left_is_accepted(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The floor is inclusive: a deadline exactly the floor away is enough.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    monkeypatch.setattr(hmod.time, "time", lambda: 1_700_000_000.0)
+    scenario = _make_explicit_eoa_scenario(deadline=1_700_000_000 + 600)
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+    (task,) = handler_context.shared_state["pending_tasks"]
+    assert task[hmod.RequestKey.DEADLINE.value] == 1_700_000_000 + 600
 
 
 def test_explicit_nonce_request_without_a_deadline_is_a_bad_request(

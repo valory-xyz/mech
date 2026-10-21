@@ -264,8 +264,6 @@ class Params(Model):
                 min(self.tools_to_pricing.values()) >= 0,
                 "tools_to_pricing values must be >= 0",
             )
-        # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
-        # scale by payment_token_decimals; the payment asset is assumed worth 1 USD.
         # Floor on how far away an explicit-nonce request's signed settlement
         # deadline must be at acceptance: the mech executes, pools and settles
         # through the Safe before then, and settlement past the deadline
@@ -273,6 +271,8 @@ class Params(Model):
         self.explicit_nonce_min_deadline_seconds: int = int(
             kwargs.get("explicit_nonce_min_deadline_seconds", 600)
         )
+        # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
+        # scale by payment_token_decimals; the payment asset is assumed worth 1 USD.
         self.payment_token_decimals: int = self._ensure_get(
             "payment_token_decimals", kwargs, int
         )

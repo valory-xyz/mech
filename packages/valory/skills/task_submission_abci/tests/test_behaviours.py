@@ -75,6 +75,7 @@ from packages.valory.skills.task_submission_abci.behaviours import (
 )
 from packages.valory.skills.task_submission_abci.rounds import decode_tx_payload
 from packages.valory.skills.task_submission_abci.tests.conftest import (
+    CONSENSUS_TIMESTAMP,
     _error_contract_msg,
     _error_ledger_msg,
     _gen_returning,
@@ -3019,29 +3020,36 @@ class TestGetOffchainTasksDeliverData:
     def test_expired_explicit_tasks_are_dropped_before_the_batch_is_built(
         self,
     ) -> None:
-        """A task past (or within the margin of) its deadline is dropped, not simulated.
+        """A task closer than the margin to its deadline, judged at consensus time, is dropped.
 
-        The others settle; the dropped one is removed from the local done
-        tasks, stamped abandoned and counted dropped, never ``sim_failed``.
+        The boundary is exact: a deadline one second short of the margin is
+        dropped, one at the margin is kept. The executing agent removes the
+        dropped task, stamps it abandoned and counts it ``dropped``; an
+        unreadable deadline is dropped too, never simulated.
         """
         b = self._make_b(cap_and_actual_enabled=True)
-        now = int(time.time())
-        fresh = self._offchain_task("e1", nonce=4241, nonce_mode=NONCE_MODE_EXPLICIT)
-        stale = self._offchain_task(
+        margin = b.params.explicit_deadline_settlement_margin_seconds
+        at_margin = self._offchain_task(
+            "e1",
+            nonce=4241,
+            nonce_mode=NONCE_MODE_EXPLICIT,
+            deadline=CONSENSUS_TIMESTAMP + margin,
+        )
+        short = self._offchain_task(
             "e2",
             nonce=4242,
             nonce_mode=NONCE_MODE_EXPLICIT,
-            deadline=now + beh_mod.EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS - 1,
+            deadline=CONSENSUS_TIMESTAMP + margin - 1,
         )
         unreadable = self._offchain_task(
             "e3", nonce=4243, nonce_mode=NONCE_MODE_EXPLICIT
         )
         unreadable[beh_mod.DEADLINE_KEY] = "soon"
-        for task in (fresh, stale, unreadable):
+        for task in (at_margin, short, unreadable):
             task["actual_delivery_rate"] = 70
         b.context.shared_state[DONE_TASKS] = [
-            dict(fresh),
-            dict(stale),
+            dict(at_margin),
+            dict(short),
             dict(unreadable),
         ]
         with (
@@ -3049,16 +3057,45 @@ class TestGetOffchainTasksDeliverData:
             patch.object(b, "count_settlement") as mock_count,
             patch.object(beh_mod.preimage_buffer, "record_stamp") as mock_stamp,
         ):
-            calls = self._deliver_calls(b, [fresh, stale, unreadable])
+            calls = self._deliver_calls(b, [at_margin, short, unreadable])
         (call_kwargs,) = calls
         assert call_kwargs["nonces"] == [4241]
-        assert call_kwargs["deadlines"] == [_FAR_DEADLINE]
+        assert call_kwargs["deadlines"] == [CONSENSUS_TIMESTAMP + margin]
         mock_skip.assert_not_called()
         mock_count.assert_any_call(
             SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 2
         )
         assert {c.args[1] for c in mock_stamp.call_args_list} == {"e2", "e3"}
+        assert all(
+            c.kwargs["abandoned_at"] == CONSENSUS_TIMESTAMP
+            for c in mock_stamp.call_args_list
+        )
         assert [t["request_id"] for t in b.context.shared_state[DONE_TASKS]] == ["e1"]
+
+    def test_an_agent_that_did_not_execute_an_expired_task_only_leaves_it_out(
+        self,
+    ) -> None:
+        """Without a local copy nothing is stamped or counted; the batch still excludes it."""
+        b = self._make_b(cap_and_actual_enabled=True)
+        margin = b.params.explicit_deadline_settlement_margin_seconds
+        short = self._offchain_task(
+            "e2",
+            nonce=4242,
+            nonce_mode=NONCE_MODE_EXPLICIT,
+            deadline=CONSENSUS_TIMESTAMP + margin - 1,
+        )
+        short["actual_delivery_rate"] = 70
+        b.context.shared_state[DONE_TASKS] = []
+        with (
+            patch.object(b, "count_settlement") as mock_count,
+            patch.object(beh_mod.preimage_buffer, "record_stamp") as mock_stamp,
+        ):
+            calls = self._deliver_calls(b, [short])
+        assert calls == []
+        mock_stamp.assert_not_called()
+        mock_count.assert_any_call(
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 0
+        )
 
     def test_explicit_nonce_tasks_are_skipped_when_the_flag_is_off(self) -> None:
         """Flag off: explicit tasks are not folded into the sequential call."""
