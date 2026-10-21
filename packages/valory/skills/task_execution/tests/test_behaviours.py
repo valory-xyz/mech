@@ -5062,6 +5062,43 @@ def test_price_treats_an_unused_callback_as_not_measured(
     assert behaviour._price_done_task(floored, 70) == 30
 
 
+def test_price_treats_an_unpriced_only_run_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """A callback that only saw an unpriced model is 'not measured': floor or cap."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    callback = beh_mod.TokenCounterCallback()
+    callback(
+        "unknown-model-xyz", lambda text, model: 0, input_tokens=10, output_tokens=10
+    )
+    assert (
+        behaviour._price_done_task(_priced_task(cost_dict=callback.cost_dict), 70) == 70
+    )
+    floored = _priced_task(cost_dict=callback.cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(floored, 70) == 30
+
+
+def test_price_treats_a_partly_unpriced_run_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """One priced call plus one unpriced call is not charged at the priced part alone."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    callback = beh_mod.TokenCounterCallback()
+    callback(
+        "gpt-6.1-sol", lambda text, model: 0, input_tokens=1000, output_tokens=1000
+    )
+    callback(
+        "unknown-model-xyz", lambda text, model: 0, input_tokens=10, output_tokens=10
+    )
+    assert callback.cost_dict["total_cost"] > 0
+    task = _priced_task(cost_dict=callback.cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+    behaviour.context.logger.warning.assert_called_once()
+    assert "incomplete" in behaviour.context.logger.warning.call_args.args[0]
+
+
 @pytest.mark.parametrize("total_cost", ["0.5", float("nan"), float("inf"), -0.01, True])
 def test_price_ignores_unusable_total_cost(
     behaviour: Any, params_stub: Any, total_cost: Any

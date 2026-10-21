@@ -189,6 +189,7 @@ class TestTokenCounterCallbackCall:
         assert cb.actual_model == "unknown-model-xyz"
         assert cb.cost_dict["total_cost"] == 0
         assert cb.cost_dict["total_tokens"] == 0
+        assert cb.cost_dict["unpriced_calls"] == 1
         assert "not in the price table" in caplog.text
 
     def test_unpriced_model_counts_only_its_reported_cost(self) -> None:
@@ -204,6 +205,21 @@ class TestTokenCounterCallbackCall:
         assert cb.cost_dict["extra_cost"] == pytest.approx(0.02)
         assert cb.cost_dict["total_cost"] == pytest.approx(0.02)
         assert cb.cost_dict["total_tokens"] == 0
+        assert cb.cost_dict["unpriced_calls"] == 0
+
+    def test_priced_call_after_an_unpriced_one_keeps_the_tally_marked_incomplete(
+        self,
+    ) -> None:
+        """A priced call adds its own cost but does not clear ``unpriced_calls``."""
+        cb = TokenCounterCallback()
+        cb("unknown-model-xyz", _dummy_counter, input_tokens=10, output_tokens=10)
+        cb(MODEL, _dummy_counter, input_tokens=1000, output_tokens=1000)
+        priced = TokenCounterCallback.TOKEN_PRICES[MODEL]
+        assert cb.cost_dict["total_tokens"] == 2000
+        assert cb.cost_dict["total_cost"] == pytest.approx(
+            priced["input"] + priced["output"]
+        )
+        assert cb.cost_dict["unpriced_calls"] == 1
 
     def test_unpriced_model_with_a_bad_cost_is_logged_not_raised(self, caplog) -> None:  # type: ignore
         """A non-numeric reported cost on an unpriced model is caught like any other callback error."""
