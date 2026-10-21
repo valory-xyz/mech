@@ -2917,9 +2917,13 @@ class TestGetOffchainTasksDeliverData:
         e_lo = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
         e_lo["delivery_rate"], e_lo["actual_delivery_rate"] = 100, 70
 
-        calls = {
-            c["contract_callable"]: c for c in self._deliver_calls(b, [e_hi, seq, e_lo])
-        }
+        with patch.object(
+            b, "_get_offchain_requester_balance", side_effect=_gen_returning(10**9)
+        ):
+            calls = {
+                c["contract_callable"]: c
+                for c in self._deliver_calls(b, [e_hi, seq, e_lo])
+            }
 
         assert set(calls) == {
             "get_offchain_deliver_data_with_cap",
@@ -2930,6 +2934,79 @@ class TestGetOffchainTasksDeliverData:
         assert explicit["nonces"] == [4242, 4243]
         assert explicit[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
         assert explicit[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70, 150]
+
+    @pytest.mark.parametrize(
+        "balance, expect_explicit",
+        [(1000, True), (130, True), (129, False), (None, False)],
+    )
+    def test_second_group_of_a_requester_joins_only_when_both_charges_fit(
+        self, balance: Optional[int], expect_explicit: bool
+    ) -> None:
+        """A requester's explicit group joins the batch only if seq + explicit <= balance.
+
+        Each deliver is simulated alone, so the builder adds the two charges
+        itself; a held group is not counted as a failed attempt.
+
+        :param balance: the requester balance the tracker reports (None = read failed).
+        :param expect_explicit: whether the explicit group's call is expected.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        seq = self._offchain_task("s1", nonce=1)
+        seq["actual_delivery_rate"] = 60
+        exp = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        exp["actual_delivery_rate"] = 70
+        with (
+            patch.object(
+                b,
+                "_get_offchain_requester_balance",
+                side_effect=_gen_returning(balance),
+            ),
+            patch.object(b, "note_settlement_skipped") as mock_skip,
+        ):
+            calls = self._deliver_calls(b, [exp, seq])
+        callables = [c["contract_callable"] for c in calls]
+        assert callables[0] == "get_offchain_deliver_data_with_cap"
+        assert ("get_offchain_deliver_data_with_nonces" in callables) is expect_explicit
+        mock_skip.assert_not_called()
+
+    def test_explicit_group_keeps_the_requests_that_settle_alone(self) -> None:
+        """A failed explicit group is split per request; only the lone failures are skipped.
+
+        The group of three fails, each request is simulated alone, the one
+        that fails alone is noted as skipped, and the other two are rebuilt
+        into one call.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        tasks = [
+            self._offchain_task(f"e{i}", nonce=4240 + i, nonce_mode=NONCE_MODE_EXPLICIT)
+            for i in (1, 2, 3)
+        ]
+        for task in tasks:
+            task["actual_delivery_rate"] = 70
+
+        def _simulate(*_args: Any, **kwargs: Any) -> Any:
+            nonces = kwargs.get("nonces", [])
+            ok = not (len(nonces) == 3 or nonces == [4242])
+            return _gen_returning(
+                _state_contract_msg({"data": b"\xdd", "simulation_ok": ok})
+            )()
+
+        with (
+            self._patch_sd(b, tasks),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_simulate
+            ) as mock_call,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
+        ):
+            tx_list, included = _run_gen(b._get_offchain_tasks_deliver_data())
+
+        assert included == ["e1", "e3"]
+        assert len(tx_list) == 1
+        mock_skip.assert_called_once_with(
+            ["e2"], SOURCE_OFFCHAIN, "0xMECH", b.synchronized_data.period_count
+        )
+        assert mock_call.call_args_list[-1].kwargs["nonces"] == [4241, 4243]
+        assert mock_call.call_count == 5
 
     def test_explicit_nonce_tasks_are_skipped_when_the_flag_is_off(self) -> None:
         """Flag off: explicit tasks are not folded into the sequential call."""
