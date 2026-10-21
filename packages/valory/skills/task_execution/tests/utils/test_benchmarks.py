@@ -33,7 +33,7 @@ def _dummy_counter(prompt: str, model: str) -> int:
     return len(prompt.split())
 
 
-MODEL = "gpt-4"
+MODEL = "gpt-6.1-sol"
 INPUT_PRICE = TokenCounterCallback.TOKEN_PRICES[MODEL]["input"]
 OUTPUT_PRICE = TokenCounterCallback.TOKEN_PRICES[MODEL]["output"]
 
@@ -117,8 +117,8 @@ class TestTokenCounterCallbackCall:
     def test_self_hosted_model_is_supported_and_priced(self) -> None:
         """The self-hosted model must deliver and accrue cost, not raise.
 
-        `__call__` raises AFTER the LLM call has already been paid for, so a
-        missing key fails every delivery of a tool that serves the model.
+        A missing key would leave the self-hosted tokens uncounted, so the
+        request would fall back to the floor or the cap.
         """
         cb = TokenCounterCallback()
         cb("olas-predict-r1-14b", _dummy_counter, input_tokens=1000, output_tokens=500)
@@ -142,10 +142,11 @@ class TestTokenCounterCallbackCall:
     def test_every_jury_voter_model_is_priced(self) -> None:
         """resolve_market_jury's voter models must all be keys in the table."""
         jury_models = (
-            "openai/gpt-4.1:online",
+            "openai/gpt-6.1-sol:online",
             "x-ai/grok-4.3:online",
             "google/gemini-2.5-flash:online",
             "anthropic/claude-haiku-4.5:online",
+            "anthropic/claude-sonnet-5.5:online",
         )
         missing = [m for m in jury_models if m not in TokenCounterCallback.TOKEN_PRICES]
         assert not missing, f"unpriced jury voter models: {missing}"
@@ -180,11 +181,37 @@ class TestTokenCounterCallbackCall:
             input_price + output_price
         )
 
-    def test_unsupported_model_raises_value_error(self) -> None:
-        """Test __call__ raises ValueError for unsupported model."""
+    def test_unpriced_model_counts_nothing_and_warns(self, caplog) -> None:  # type: ignore
+        """An unpriced model never raises; without a reported cost it leaves the tally at zero."""
         cb = TokenCounterCallback()
-        with pytest.raises(ValueError, match="not supported"):
+        with caplog.at_level(logging.WARNING):
             cb("unknown-model-xyz", _dummy_counter, input_tokens=10, output_tokens=10)
+        assert cb.actual_model == "unknown-model-xyz"
+        assert cb.cost_dict["total_cost"] == 0
+        assert cb.cost_dict["total_tokens"] == 0
+        assert "not in the price table" in caplog.text
+
+    def test_unpriced_model_counts_only_its_reported_cost(self) -> None:
+        """An unpriced model with a provider-reported cost adds exactly that cost, no tokens."""
+        cb = TokenCounterCallback()
+        cb(
+            "unknown-model-xyz",
+            _dummy_counter,
+            input_tokens=10,
+            output_tokens=10,
+            call_cost=0.02,
+        )
+        assert cb.cost_dict["extra_cost"] == pytest.approx(0.02)
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.02)
+        assert cb.cost_dict["total_tokens"] == 0
+
+    def test_unpriced_model_with_a_bad_cost_is_logged_not_raised(self, caplog) -> None:  # type: ignore
+        """A non-numeric reported cost on an unpriced model is caught like any other callback error."""
+        cb = TokenCounterCallback()
+        with caplog.at_level(logging.ERROR):
+            cb("unknown-model-xyz", _dummy_counter, input_tokens=10, call_cost="free")
+        assert cb.cost_dict["total_cost"] == 0
+        assert "Error in TokenCounterCallback" in caplog.text
 
     def test_exception_in_calculate_cost_is_caught(self, caplog) -> None:  # type: ignore
         """If calculate_cost raises internally, the error is logged, not re-raised."""
