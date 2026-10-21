@@ -74,7 +74,6 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     ZERO_IPFS_HASH,
 )
 from packages.valory.skills.task_submission_abci.rounds import decode_tx_payload
-
 from packages.valory.skills.task_submission_abci.tests.conftest import (
     _error_contract_msg,
     _error_ledger_msg,
