@@ -7,20 +7,20 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeibcsowgldrgy2rvnzre6l3iamzbbghe47hlk3zylnunljdj6evpxi
+  behaviours.py: bafybeie7mm7m6vk3usn3fewdeiiueusvnqj7ri5tyxzcaudl7ejb34fww4
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
   handlers.py: bafybeibaraxm56t56vgr6k6ypatbfhmdlwho2reeau4qlic3deyt5hccgu
   models.py: bafybeia4obhfai5sr7thqekr7vbzlnoxscrtjaaaomyyxzvczlfp7vhqxy
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeib7yqov5ch5o2zzgriv3gvqn6pmp2fwwx75ns646a4dnsodtqoeoa
-  tests/test_behaviours.py: bafybeic6akipyoqshwtd2flwent6vfrdqv4v7ehldzzzv2n4v252w2lgb4
+  tests/test_behaviours.py: bafybeibyvrqm7yfhbvvqzw2lrogdwvzkvioot7jokjkfxehyzfowmmkq2a
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
   tests/test_handlers.py: bafybeiazeh7iyjmasn4dxwhc3kk2efyfllubnyafh25fxgpwsoccft6wee
   tests/test_models.py: bafybeiawmd5tkiuzzdcsnopnvscney6eptnotddi4njgz3jz2lausf4vn4
   tests/test_preimage_buffer.py: bafybeifazhvm45fujuccedti3qm2thrwt4fp5hcbk3zar2nw4jqnlxnfae
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
-  tests/utils/test_benchmarks.py: bafybeifgmiift4mzeolgdjwx4jxckv7lg2n3pzistpav3k3bfnjhu4amzy
+  tests/utils/test_benchmarks.py: bafybeicn2ah4h4ee7ttudsd6nqn6uyv2wcxsjpo3jthqqpd5afkj4y4h2u
   tests/utils/test_eip1271.py: bafybeieat4o4umh6kgxg3qfxkj55xjrd4maz4bgyzh6f233pgyjetgxqiu
   tests/utils/test_ipfs.py: bafybeie6mkn7wbtd6yjwakwhm6qbqsfqrnhuxmxmnk3ysd63vko6amwfoa
   tests/utils/test_local_cid.py: bafybeia6zbo4g6n6ypkccuywmnytvx6scyiw2pjn6eva6d6edg6hb6tmke
@@ -29,7 +29,7 @@ fingerprint:
   tests/utils/test_task.py: bafybeigdfi37m5taw6jecd7t2bg54ctcv4u3js5u3xd2lyckoazy4efpv4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
-  utils/benchmarks.py: bafybeig6qio6umghxwupgjvgyp3gepacq7snkfnxl5cg2qagknbvebblg4
+  utils/benchmarks.py: bafybeici3l3apbka44cy7auefsvo4covapijs67kq6obczhmj2xggejz7i
   utils/eip1271.py: bafybeidmlhsfwzkf3fkccwufqf4qen3ijuz2aiiyrluuqonqzagez6qau4
   utils/ipfs.py: bafybeieuj6ysgmrgtpkxr4peuzjqmbih7q64c5fmins5o6nbhwd7nroi74
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq

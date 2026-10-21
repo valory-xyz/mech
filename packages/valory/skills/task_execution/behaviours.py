@@ -1966,6 +1966,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # dict; that is "not measured", not a free run.
         if total_cost == 0 and not cost_dict.get("total_tokens"):
             return None
+        # A call the table could not price, and that reported no cost of its
+        # own, leaves the sum short: treat the whole measurement as missing.
+        if cost_dict.get("unpriced_calls"):
+            self.context.logger.warning(
+                f"Cost for request {done_task.get('request_id')} is incomplete: "
+                f"{cost_dict['unpriced_calls']} call(s) to an unpriced model; "
+                "charging the floor or the cap."
+            )
+            return None
         usd = Decimal(str(total_cost))
         scaled = usd * (10**self.params.payment_token_decimals)
         return int(scaled.to_integral_value(rounding=ROUND_CEILING))

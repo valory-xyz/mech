@@ -27,40 +27,33 @@ PRICE_NUM_TOKENS = 1000
 class TokenCounterCallback:
     """Callback to count the number of tokens used in a generation."""
 
+    # USD per 1k tokens, from each vendor's price page. Every entry is sent
+    # by a bundled tool, on the current tools or on a release still deployed;
+    # a model must be added here before a tool starts sending it, or its
+    # tokens are not counted.
     TOKEN_PRICES = {
+        # OpenAI list prices, developers.openai.com/api/docs/pricing
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
         "gpt-3.5-turbo-0125": {"input": 0.0005, "output": 0.0015},
-        "gpt-3.5-turbo-1106": {"input": 0.001, "output": 0.002},
-        "gpt-4": {"input": 0.03, "output": 0.06},
-        "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
-        "gpt-4-0125-preview": {"input": 0.01, "output": 0.03},
         "gpt-4-1106-preview": {"input": 0.01, "output": 0.03},
         "gpt-4o-2024-08-06": {"input": 0.0025, "output": 0.01},
         "gpt-4.1-2025-04-14": {"input": 0.002, "output": 0.008},
         "gpt-4.1-mini-2025-04-14": {"input": 0.0004, "output": 0.0016},
         "gpt-6.1-sol": {"input": 0.002, "output": 0.010},
         "gpt-6-luna": {"input": 0.0001, "output": 0.0005},
-        "claude-2": {"input": 0.008, "output": 0.024},
-        "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
-        "claude-3-5-sonnet-20240620": {"input": 0.003, "output": 0.015},
-        "claude-4-sonnet-20250514": {"input": 0.003, "output": 0.015},
-        "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
-        "claude-fable-5": {"input": 0.01, "output": 0.05},
+        # Anthropic list prices, claude.com/pricing
         "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
+        "claude-fable-5": {"input": 0.01, "output": 0.05},
         "claude-sonnet-5-5": {"input": 0.002, "output": 0.010},
-        "cohere/command-r-plus": {"input": 0.003, "output": 0.015},
-        "databricks/dbrx-instruct:nitro": {"input": 0.0009, "output": 0.0009},
-        "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
-            "input": 0.00054,
-            "output": 0.00054,
-        },
+        # OpenRouter passes the provider list price through. The ":online" web
+        # search is billed per request on top of the tokens and reaches the
+        # mech through ``call_cost``, not through this table.
         "openai/gpt-4.1:online": {"input": 0.002, "output": 0.008},
         "openai/gpt-6.1-sol:online": {"input": 0.002, "output": 0.010},
-        "x-ai/grok-4.1-fast:online": {"input": 0.0002, "output": 0.0005},
         "x-ai/grok-4.3:online": {"input": 0.00125, "output": 0.0025},
         "google/gemini-2.5-flash:online": {"input": 0.0003, "output": 0.0025},
-        "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
+        "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-5.5:online": {"input": 0.002, "output": 0.010},
         # Self-hosted, so this is not a provider list price: it is the hosted
         # market rate for a 14B model, used as the per-token stand-in for a
@@ -79,6 +72,9 @@ class TokenCounterCallback:
             "output_cost": 0,
             "extra_cost": 0,
             "total_cost": 0,
+            # Calls to a model outside the table that reported no cost of
+            # their own. While above zero the tally is incomplete.
+            "unpriced_calls": 0,
         }
 
     @staticmethod
@@ -108,6 +104,35 @@ class TokenCounterCallback:
         self.cost_dict[token_key] += tokens
         self.cost_dict[f"{tokens_type}_cost"] += cost
 
+    def _record_unpriced_model(self, model: str, call_cost: Any) -> None:
+        """Account for a call to a model the price table does not carry.
+
+        Only the provider-reported ``call_cost`` is counted; the tokens are
+        not. A call that reports no cost is counted in ``unpriced_calls``
+        instead, which marks the whole tally as incomplete so the request
+        is charged the tool floor or the cap rather than the partial sum.
+
+        :param model: the unpriced model identifier.
+        :param call_cost: the provider-reported cost in USD, if any.
+        """
+        if call_cost is not None and float(call_cost) > 0:
+            self.cost_dict["extra_cost"] += float(call_cost)
+            self.cost_dict["total_cost"] = (
+                self.cost_dict["input_cost"]
+                + self.cost_dict["output_cost"]
+                + self.cost_dict["extra_cost"]
+            )
+            logging.warning(
+                f"Model {model} is not in the price table; counting only its "
+                f"reported cost of {float(call_cost)} USD."
+            )
+            return
+        self.cost_dict["unpriced_calls"] += 1
+        logging.warning(
+            f"Model {model} is not in the price table and reported no cost; "
+            "its tokens are not counted and the request's cost is incomplete."
+        )
+
     def __call__(self, model: str, token_counter: Callable, **kwargs: Any) -> None:
         """Callback to count the number of tokens used in a generation.
 
@@ -116,9 +141,10 @@ class TokenCounterCallback:
         :param kwargs: token counting params plus optional ``call_cost`` (gross provider cost in USD).
         """
         self.actual_model = model
-        if model not in list(TokenCounterCallback.TOKEN_PRICES.keys()):
-            raise ValueError(f"Model {model} not supported.")
         try:
+            if model not in TokenCounterCallback.TOKEN_PRICES:
+                self._record_unpriced_model(model, kwargs.get("call_cost"))
+                return
             # Snapshot token costs before adding this call, so we can
             # compute the delta and derive extra_cost from call_cost.
             input_cost_before = self.cost_dict["input_cost"]
