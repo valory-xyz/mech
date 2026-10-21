@@ -5127,9 +5127,6 @@ def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
 ) -> None:
     """Flag off: the stored rate and the poll envelope carry the signed cap, not the price.
 
-    The legacy settlement call charges the signed value, so that is what the
-    buyer must be told. The computed price only goes to the log.
-
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
     :param shared_state: shared_state fixture.
@@ -5154,40 +5151,47 @@ def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
     assert envelope["delivery_rate"] == 10**16
 
 
+NVM_TOKEN_PAYMENT_TYPE = bytes.fromhex(beh_mod.PAYMENT_TYPE_TOKEN_NVM)
+FIXED_PRICE_PAYMENT_TYPE = bytes(32)
+
+
+@pytest.mark.parametrize("flag", [True, False])
 @pytest.mark.parametrize(
-    "tools_to_pricing, max_rates, expected",
+    "payment_type, tools_to_pricing, max_rates, expected",
     [
-        ({"prediction-offline": 123}, {"0xmech": 777}, 123),
-        ({}, {"0xmech": 777}, 777),
-        ({}, {}, 10**16),
+        (NVM_TOKEN_PAYMENT_TYPE, {"prediction-offline": 123}, {"0xmech": 777}, 123),
+        (NVM_TOKEN_PAYMENT_TYPE, {}, {"0xmech": 777}, 777),
+        (FIXED_PRICE_PAYMENT_TYPE, {"prediction-offline": 123}, {"0xmech": 777}, 777),
+        (FIXED_PRICE_PAYMENT_TYPE, {}, {}, 10**16),
     ],
 )
-def test_finalize_done_task_reports_floor_or_mech_max_rate_on_chain(
+def test_finalize_done_task_reports_what_the_onchain_deliver_charges(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
+    flag: bool,
+    payment_type: bytes,
     tools_to_pricing: Dict[str, int],
     max_rates: Dict[str, int],
     expected: int,
 ) -> None:
-    """On-chain: the stored rate is the tool floor, else the mech's max delivery rate.
-
-    That mirrors what the marketplace deliver charges, regardless of the
-    cap-and-actual flag; only without a configured max rate is the request's
-    recorded rate reported.
+    """On-chain: NVM mechs report the tool floor, every other mech its max rate.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
     :param shared_state: shared_state fixture.
     :param monkeypatch: pytest monkeypatch fixture.
+    :param flag: the cap-and-actual flag, which must not matter on-chain.
+    :param payment_type: the mech payment type published at boot.
     :param tools_to_pricing: the per-tool floors the behaviour is configured with.
     :param max_rates: the ``mech_to_max_delivery_rate`` param.
     :param expected: the rate settlement will charge.
     """
     params_stub.mech_to_max_delivery_rate = max_rates
     _set_price_params(params_stub, decimals=18, fee_bp=1500)
-    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = flag
+    shared_state[beh_mod.PAYMENT_MODEL] = payment_type
     _finalize_gate_setup(
         behaviour,
         shared_state,
@@ -5201,6 +5205,76 @@ def test_finalize_done_task_reports_floor_or_mech_max_rate_on_chain(
         "bafycid", response={"cost_dict": {"total_cost": 0.005}}
     )
     assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == expected
+
+
+def test_finalize_done_task_treats_a_missing_flag_as_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Without the shared-state flag an off-chain task is charged the signed cap.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state.pop(beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED, None)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == 10**16
+
+
+@pytest.mark.parametrize("decimals, warns", [(18, True), (6, False)])
+def test_finalize_done_task_warns_once_on_default_decimals_with_the_flag_on(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    decimals: int,
+    warns: bool,
+) -> None:
+    """The first flag-on off-chain price with 18 decimals logs one warning.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param decimals: the configured ``payment_token_decimals``.
+    :param warns: whether the warning is expected.
+    """
+    _set_price_params(params_stub, decimals=decimals, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour.context.logger = MagicMock()
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    behaviour._warn_once_on_default_decimals(is_offchain=True)
+    calls = [
+        c
+        for c in behaviour.context.logger.warning.call_args_list
+        if "payment_token_decimals=18" in str(c)
+    ]
+    assert len(calls) == (1 if warns else 0)
 
 
 @pytest.mark.parametrize(

@@ -53,7 +53,11 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
-from packages.valory.contracts.olas_mech.contract import OlasMechContract
+from packages.valory.contracts.olas_mech.contract import (
+    OlasMechContract,
+    PAYMENT_TYPE_NATIVE_NVM,
+    PAYMENT_TYPE_TOKEN_NVM,
+)
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -593,6 +597,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash: Dict[str, str] = {}
         self._tools_to_pricing: Dict[str, int] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
+        self._decimals_warned: bool = False
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
@@ -1957,11 +1962,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _price_done_task(
         self, done_task: Dict[str, Any], cap: Optional[int]
     ) -> Optional[int]:
-        """Price for a done task, clamped to the signed cap.
-
-        The price is ``max(ceil((V + F) / (1 - fee)), tool floor)``: V the
-        measured cost, F the fixed share per request, the floor the tool's
-        ``tools_to_pricing`` entry.
+        """Price for a done task: the grossed-up cost or the tool floor, up to the cap.
 
         :param done_task: the done task, carrying ``cost_dict`` (V) and
             ``dynamic_tool_cost`` (the floor) when set.
@@ -2012,25 +2013,49 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param is_offchain: whether the task settles through a signed delivery.
         :param cap: the rate the requester signed, or None when unknown.
         :param price: the cap-and-actual price, already clamped to ``cap``.
-        :return: ``price`` for off-chain tasks with the cap-and-actual flag on;
-            ``cap`` for off-chain tasks with it off; for on-chain tasks the
-            ``tools_to_pricing`` floor when set, else the mech's max delivery
-            rate (what the marketplace deliver passes), else ``cap``.
+        :return: the amount the matching settlement path charges.
         """
         if cap is None:
             return None
         if is_offchain:
-            cap_and_actual = bool(
-                self.context.shared_state.get(
-                    preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
-                )
+            cap_and_actual = self.context.shared_state.get(
+                preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
             )
             return price if cap_and_actual and price is not None else cap
+        # On-chain, only the NVM deliver carries a per-request rate (the tool
+        # floor); every other mech is charged its own max delivery rate.
         floor = done_task.get("dynamic_tool_cost")
-        if floor is not None:
+        if floor is not None and self._mech_is_nvm():
             return int(floor)
         max_rates = self.params.mech_to_max_delivery_rate
         return int(next(iter(max_rates.values()))) if max_rates else cap
+
+    def _warn_once_on_default_decimals(self, is_offchain: bool) -> None:
+        """Warn once when cap-and-actual prices with the default 18 decimals.
+
+        18 is right for native and 18-decimal tokens and wrong for USDC-like
+        assets, so a deployment that never set ``PAYMENT_TOKEN_DECIMALS`` is
+        called out the first time the flag-on price path runs.
+
+        :param is_offchain: whether the task settles through a signed delivery.
+        """
+        if self._decimals_warned or not is_offchain:
+            return
+        if not self.context.shared_state.get(preimage_buffer.CAP_AND_ACTUAL_ENABLED):
+            return
+        self._decimals_warned = True
+        if self.params.payment_token_decimals == 18:
+            self.context.logger.warning(
+                "cap_and_actual_enabled is on with payment_token_decimals=18 (the "
+                "default); confirm this matches the mech's payment asset."
+            )
+
+    def _mech_is_nvm(self) -> bool:
+        """Whether the mech's payment type is one of the NVM subscription types."""
+        payment_model = self.payment_model
+        if not isinstance(payment_model, (bytes, bytearray)):
+            return False
+        return payment_model.hex() in (PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM)
 
     def _finalize_done_task(
         self, cid: str, response: Optional[Dict[str, Any]] = None
@@ -2094,6 +2119,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "request_delivery_rate", executing_task.get("delivery_rate")
         )
         cap = None if signed_rate is None else int(signed_rate)
+        self._warn_once_on_default_decimals(is_offchain)
         price = self._price_done_task(done_task, cap)
         actual_delivery_rate = self._charged_delivery_rate(
             done_task, is_offchain, cap, price

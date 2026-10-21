@@ -266,8 +266,8 @@ class Params(Model):
             )
         # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
         # scale by payment_token_decimals; the payment asset is assumed worth 1 USD.
-        self.payment_token_decimals: int = int(
-            self._ensure_get("payment_token_decimals", kwargs, int)
+        self.payment_token_decimals: int = self._ensure_get(
+            "payment_token_decimals", kwargs, int
         )
         enforce(
             self.payment_token_decimals >= USD_DECIMALS,
