@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiaomutgu5dwczhzyeq5j5oh2ndww6iabgz6ra4vc6wpuuqyngntsm
+agent: valory/mech:0.1.0:bafybeigvk72sis6iro3cgqlr2edsqkkgsmsj75e4aos472waisserpfbba
 number_of_agents: 4
 deployment:
   agent:
@@ -41,6 +41,8 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -87,6 +89,8 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -130,6 +134,8 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
@@ -173,6 +179,8 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}

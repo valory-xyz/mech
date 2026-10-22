@@ -32,7 +32,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/task_execution:0.1.0:bafybeicfom2sw4gky7w7wk3x4rtniyxrkc6fxqjyuioyuqjpcfzlakfx2m
-- valory/task_submission_abci:0.1.0:bafybeia6ifi4ynkqfb3fx7fa57kfwk3rgtx234blduytancmyfasgh5oa4
+- valory/task_submission_abci:0.1.0:bafybeicrnwfgrgvy3cpyry7hldeqiu25ypbkbvqokwkiwddnofq45stg3y
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
@@ -155,6 +155,8 @@ models:
       service_id: mech
       service_owner_share: 1000
       service_registry_address: null
+      settlement_base_gas: 300000
+      settlement_gas_per_request: 150000
       setup:
         all_participants: []
         safe_contract_address: '0x0000000000000000000000000000000000000000'
