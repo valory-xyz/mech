@@ -159,7 +159,8 @@ class Params(BaseParams):
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
         self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
-        # Off-chain settlement via the 5-arg cap-and-actual overload; off by default.
+        # Off-chain settlement via the cap-and-actual overload; off until the
+        # marketplace contracts that carry it are live.
         self.cap_and_actual_enabled: bool = bool(
             kwargs.get("cap_and_actual_enabled", False)
         )
