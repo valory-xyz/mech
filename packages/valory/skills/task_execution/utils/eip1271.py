@@ -157,6 +157,20 @@ _EXPLICIT_DOMAIN_SEPARATOR_ABI: Dict[str, Any] = {
 }
 
 
+def get_account_code(ledger_api: EthereumApi, address: str) -> bytes:
+    """Return the code stored at ``address`` (empty for an account without code).
+
+    An EOA with an EIP-7702 delegation returns its ``0xef0100`` designator.
+
+    :param ledger_api: the ledger API object.
+    :param address: the account to read.
+    :return: the code bytes.
+    """
+    return bytes(
+        ledger_api.api.eth.get_code(ledger_api.api.to_checksum_address(address))
+    )
+
+
 def check_eip1271_signature(
     ledger_api: EthereumApi,
     contract_address: str,

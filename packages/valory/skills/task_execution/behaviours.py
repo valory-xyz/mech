@@ -66,7 +66,6 @@ from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import (
-    BASIS_POINTS,
     FAILED_RUN_MIN_RATE,
     PRICING_CAP_AND_ACTUAL,
     PRICING_FAILED_FLOOR,
@@ -74,7 +73,8 @@ from packages.valory.skills.task_execution.models import (
     PRICING_ONCHAIN_MAX,
     PRICING_SIGNED_CAP,
     Params,
-    USD_DECIMALS,
+    fixed_share_in_asset_units,
+    gross_up_for_fee,
     offchain_metric_labels,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
@@ -2017,7 +2017,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         candidates: List[int] = []
         measured = None if failed else self._measured_cost_in_asset_units(done_task)
         decimals = self.params.payment_token_decimals
-        fixed = self.params.fixed_cost_per_request * 10 ** (decimals - USD_DECIMALS)
+        fixed = fixed_share_in_asset_units(self.params)
         fee_bp = self.params.marketplace_fee_bp
         floor = done_task.get("dynamic_tool_cost")
         done_task["pricing"] = {
@@ -2028,10 +2028,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "payment_token_decimals": decimals,
         }
         if measured is not None or failed:
-            net_bp = BASIS_POINTS - fee_bp
-            candidates.append(
-                (((measured or 0) + fixed) * BASIS_POINTS + net_bp - 1) // net_bp
-            )
+            candidates.append(gross_up_for_fee((measured or 0) + fixed, fee_bp))
         if floor is not None:
             candidates.append(int(floor))
         if not candidates:
