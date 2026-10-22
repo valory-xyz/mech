@@ -5111,41 +5111,6 @@ def test_price_ignores_unusable_total_cost(
     behaviour.context.logger.warning.assert_called_once()
 
 
-def test_failed_run_is_priced_at_the_floor_not_the_spend(
-    behaviour: Any, params_stub: Any
-) -> None:
-    """A failed delivery with a floor charges the floor even when a spend was reported."""
-    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
-    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=20_000)
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC, failed=True) == 20_000
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 602_353
-
-
-def test_failed_run_without_a_floor_charges_the_fixed_share(
-    behaviour: Any, params_stub: Any
-) -> None:
-    """Without a floor only the grossed-up fixed share is charged: 12_000 / 0.85."""
-    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
-    task = _priced_task(cost_dict={"total_cost": 0.5})
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC, failed=True) == 14_118
-
-
-def test_failed_run_is_never_priced_at_zero(behaviour: Any, params_stub: Any) -> None:
-    """No floor and no fixed share still settles at the minimum rate, not zero."""
-    _set_price_params(params_stub)
-    task = _priced_task(cost_dict={"total_cost": 0.5})
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC, failed=True) == 1
-
-
-def test_failed_run_price_is_still_clamped_to_the_cap(
-    behaviour: Any, params_stub: Any
-) -> None:
-    """A floor above the signed cap is clamped for a failed run as for any other."""
-    _set_price_params(params_stub)
-    task = _priced_task(dynamic_tool_cost=5_000_000)
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC, failed=True) == 1_000_000
-
-
 PRICING_EVENT_FIELDS = (
     "measured_cost",
     "fixed_cost",
@@ -5183,25 +5148,24 @@ def test_onchain_charge_and_mode(
 
 
 @pytest.mark.parametrize(
-    "pricing, failed, expected_mode",
+    "pricing, expected_mode",
     [
-        ({"measured_cost": None, "tool_floor": None}, False, "signed_cap"),
-        ({"measured_cost": 5_000, "tool_floor": None}, False, "cap_and_actual"),
-        ({"measured_cost": None, "tool_floor": 20_000}, False, "cap_and_actual"),
-        ({"measured_cost": None, "tool_floor": None}, True, "failed_floor"),
+        ({"measured_cost": None, "tool_floor": None}, "signed_cap"),
+        ({"measured_cost": 5_000, "tool_floor": None}, "cap_and_actual"),
+        ({"measured_cost": None, "tool_floor": 20_000}, "cap_and_actual"),
+        ({}, "signed_cap"),
     ],
 )
 def test_offchain_mode_names_where_the_rate_came_from(
     behaviour: Any,
     shared_state: Dict[str, Any],
     pricing: Dict[str, Any],
-    failed: bool,
     expected_mode: str,
 ) -> None:
     """With the flag on, a price that fell back to the cap is labelled ``signed_cap``."""
     shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
     task = _priced_task(pricing=pricing)
-    _, mode = behaviour._charged_delivery_rate(task, True, 10_000, 9_000, failed=failed)
+    _, mode = behaviour._charged_delivery_rate(task, True, 10_000, 9_000)
     assert mode == expected_mode
 
 
@@ -5268,50 +5232,6 @@ def test_finalize_done_task_stores_price_and_reports_it(
         "pricing_mode": "cap_and_actual",
         "settled_at": None,
     }
-
-
-def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-    monkeypatch: Any,
-) -> None:
-    """An off-chain delivery without a result is charged the tool floor.
-
-    The reported 0.005 USD spend would price at 5.9e15; the floor of 1e15 is
-    charged instead, on the done task, the poll envelope and the event.
-
-    :param behaviour: TaskExecutionBehaviour fixture.
-    :param params_stub: params fixture with ``use_offchain=True``.
-    :param shared_state: shared_state fixture.
-    :param monkeypatch: pytest monkeypatch fixture.
-    """
-    params_stub.use_offchain = True
-    _set_price_params(params_stub, decimals=18, fee_bp=1500)
-    params_stub.tools_to_pricing = {"prediction-offline": 10**15}
-    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
-    _finalize_gate_setup(
-        behaviour,
-        shared_state,
-        params_stub,
-        monkeypatch,
-        is_offchain=True,
-        is_marketplace_mech=True,
-    )
-    behaviour._tools_to_pricing = params_stub.tools_to_pricing
-    behaviour._finalize_done_task(
-        "bafycid", response={"result": None, "cost_dict": {"total_cost": 0.005}}
-    )
-    done_task = shared_state[beh_mod.DONE_TASKS][0]
-    assert done_task["actual_delivery_rate"] == 10**15
-    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
-    assert envelope["delivery_rate"] == 10**15
-    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
-    response = event["event"]["response"]
-    assert response["actual_delivery_rate"] == str(10**15)
-    assert response["pricing_mode"] == "failed_floor"
-    assert response["measured_cost"] is None
-    assert response["tool_floor"] == str(10**15)
 
 
 def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
@@ -6025,6 +5945,118 @@ def test_handle_done_task_invalid_request_uses_bounded_failure_reason(
         {"reason": beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED, **_OFFCHAIN_LABELS}
     ]
     assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+
+
+OFFCHAIN_RUN_COST_USD = 0.005
+# 0.005 USD at 6 decimals is 5_000 units; grossed up for a 15% fee, rounded up.
+OFFCHAIN_RUN_PRICE = 5_883
+
+
+def _tool_result(deliver_msg: Optional[str]) -> Tuple[Any, ...]:
+    """A 5-tuple tool result carrying ``deliver_msg`` and a measured spend."""
+    token_cb = SimpleNamespace(
+        cost_dict={"total_cost": OFFCHAIN_RUN_COST_USD}, actual_model="gpt-4o"
+    )
+    return (deliver_msg, "Will BTC hit $100k?", {"tx": "0xabc"}, token_cb, object())
+
+
+def _run_priced_offchain_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    deliver_msg: Optional[str],
+) -> Tuple[list, MagicMock]:
+    """Run ``_handle_done_task`` for a signed off-chain request with pricing on.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param deliver_msg: the tool's answer, or None for a run with no answer.
+    :return: the captured ``send_message`` calls and the ``inc_counter`` mock.
+    """
+    params_stub.use_offchain = True
+    _set_price_params(params_stub, decimals=6, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-31")
+    behaviour._executing_task["request_delivery_rate"] = CAP_ONE_USD_6DEC
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    behaviour._handle_done_task(task_result=_tool_result(deliver_msg))
+    return send_calls, inc
+
+
+def test_offchain_run_with_no_answer_is_rejected_and_never_settled(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A run with no answer is rejected: nothing reaches settlement or is charged."""
+    send_calls, inc = _run_priced_offchain_task(
+        behaviour, params_stub, shared_state, monkeypatch, deliver_msg=None
+    )
+
+    assert send_calls == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task is None
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-31"]
+    assert envelope == {
+        "request_id": "req-31",
+        "status": "rejected",
+        "reason": "tool returned no result",
+    }
+    m = behaviour.mech_metrics
+    assert _metric_calls(inc, m.mech_offchain_failures_total) == [
+        {"reason": beh_mod.OFFCHAIN_FAILURE_NO_RESULT, **_OFFCHAIN_LABELS}
+    ]
+    assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+
+
+def test_offchain_run_with_an_answer_is_priced_from_its_spend(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A run with an answer settles at its grossed-up spend, below the signed cap."""
+    _run_priced_offchain_task(
+        behaviour, params_stub, shared_state, monkeypatch, deliver_msg="yes"
+    )
+
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["actual_delivery_rate"] == OFFCHAIN_RUN_PRICE
+    assert done_tasks[0]["pricing"]["pricing_mode"] == beh_mod.PRICING_CAP_AND_ACTUAL
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-31"]
+    assert envelope["status"] == "ok"
+    assert envelope["delivery_rate"] == OFFCHAIN_RUN_PRICE
+
+
+def test_onchain_run_with_no_answer_is_still_delivered(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain requests are paid up front, so a run with no answer is still delivered."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=32)
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._handle_done_task(task_result=_tool_result(None))
+
+    assert len(captured_callback) == 1
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["request_id"] == 32
+    assert "32" not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
 
 
 @pytest.mark.parametrize(
