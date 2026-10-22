@@ -67,6 +67,7 @@ from packages.valory.skills.task_execution.behaviours import (
     NONCE_MODE_EXPLICIT,
     NONCE_MODE_SEQUENTIAL,
     PREDICT_API_EVENTS,
+    RESERVED_CAPS_BY_SENDER,
     _release_outstanding_nonce,
     is_explicit_nonce_task,
 )
@@ -139,12 +140,6 @@ SETTLING_NONCES_BY_SENDER = "settling_nonces_by_sender"
 # so a shared-state seed against the old key still populates the
 # accepted-half of the admission gate.
 OUTSTANDING_NONCES_BY_SENDER = ACCEPTED_NONCES_BY_SENDER
-# Signed caps of the off-chain requests each sender has not paid for yet,
-# keyed by lowercase sender then by request id. An entry counts while its
-# request is pending, executing (``in_memory_requests``) or done but not yet
-# settled (``DONE_TASKS``); entries for requests in neither are dropped on
-# read, so settlement, rejection and eviction free the amount by construction.
-RESERVED_CAPS_BY_SENDER = "reserved_caps_by_sender"
 JSON_CONTENT_HEADER = "Content-Type: application/json\n"
 ENCODING_UTF8 = "utf-8"
 
@@ -533,8 +528,8 @@ def unsettled_signed_caps(shared_state: Dict[str, Any], sender: str) -> int:
     """Return the sum of the signed caps ``sender`` has not paid for yet.
 
     A request counts while it is pending or executing (``in_memory_requests``)
-    or done and awaiting settlement (``DONE_TASKS``). Entries for requests in
-    neither place are dropped here.
+    or done and awaiting settlement (``DONE_TASKS``), until its settlement is
+    confirmed. Entries for requests in neither place are dropped here.
 
     :param shared_state: the AEA shared-state dict.
     :param sender: the requester address, any case.

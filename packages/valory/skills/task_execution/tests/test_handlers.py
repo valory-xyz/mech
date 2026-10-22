@@ -33,6 +33,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
+from packages.valory.skills.task_execution.behaviours import release_signed_caps
 from packages.valory.skills.task_execution.handlers import (
     ContractHandler,
     HttpCode,
@@ -7425,6 +7426,89 @@ def test_reservation_lasts_until_settlement(
     assert ss[hmod.RESERVED_CAPS_BY_SENDER] == {
         _RESERVATION_SENDER: {"9222": _RESERVATION_CAP}
     }
+
+
+def test_confirmed_settlement_frees_the_cap_before_done_task_cleanup(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Once settlement is confirmed, the next request covered by the balance is accepted.
+
+    The settled request is still in done tasks (it is pruned next period), but
+    it no longer holds its cap. Releasing an unrelated id frees nothing.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    ss = handler_context.shared_state
+    mh = _handler_with_balance(handler_context, monkeypatch, _RESERVATION_CAP)
+    assert (
+        _post_cap(
+            mh, http_dialogue, _RESERVATION_CAP, "9230", sender=_RESERVATION_SENDER
+        )
+    ).status_code == 200
+    ss["pending_tasks"].clear()
+    ss["in_memory_requests"].pop("9230")
+    ss[hmod.DONE_TASKS].append({"request_id": 9230, "is_offchain": True})
+
+    release_signed_caps(ss, ["9999"])
+    held = _post_cap(
+        mh, http_dialogue, _RESERVATION_CAP, "9231", sender=_RESERVATION_SENDER
+    )
+    assert held.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+
+    release_signed_caps(ss, ["9230"])
+    accepted = _post_cap(
+        mh, http_dialogue, _RESERVATION_CAP, "9232", sender=_RESERVATION_SENDER
+    )
+    assert accepted.status_code == HttpCode.OK_CODE.value
+    assert ss[hmod.DONE_TASKS] == [{"request_id": 9230, "is_offchain": True}]
+    assert ss[hmod.RESERVED_CAPS_BY_SENDER] == {
+        _RESERVATION_SENDER: {"9232": _RESERVATION_CAP}
+    }
+
+
+@pytest.mark.parametrize(
+    "request_ids, expected",
+    [
+        pytest.param(["1", "3"], {"0xa": {"2": 20}}, id="drops_settled_across_senders"),
+        pytest.param(["1", "2"], {"0xb": {"3": 30}}, id="drops_emptied_sender"),
+        pytest.param(
+            ["7"],
+            {"0xa": {"1": 10, "2": 20}, "0xb": {"3": 30}},
+            id="unknown_id_is_a_no_op",
+        ),
+        pytest.param(
+            [],
+            {"0xa": {"1": 10, "2": 20}, "0xb": {"3": 30}},
+            id="empty_list",
+        ),
+    ],
+)
+def test_release_signed_caps(request_ids: List[str], expected: Dict[str, Any]) -> None:
+    """Only the given ids leave the reservation; a sender with none left is removed.
+
+    :param request_ids: the ids whose settlement is confirmed.
+    :param expected: the reservation left afterwards.
+    """
+    shared_state: Dict[str, Any] = {}
+    for sender, request_id, cap in (
+        ("0xA", "1", 10),
+        ("0xA", "2", 20),
+        ("0xB", "3", 30),
+    ):
+        hmod.reserve_signed_cap(shared_state, sender, request_id, cap)
+
+    release_signed_caps(shared_state, request_ids)
+
+    assert shared_state[hmod.RESERVED_CAPS_BY_SENDER] == expected
+
+
+def test_release_signed_caps_without_a_reservation_is_a_no_op() -> None:
+    """A shared state that never reserved anything is left untouched."""
+    shared_state: Dict[str, Any] = {}
+    release_signed_caps(shared_state, ["1"])
+    assert shared_state == {}
 
 
 def test_reservation_counts_sequential_and_explicit_requests(

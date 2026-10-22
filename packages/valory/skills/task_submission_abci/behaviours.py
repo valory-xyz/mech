@@ -79,6 +79,7 @@ from packages.valory.skills.task_execution.behaviours import (
     SOURCE_ONCHAIN,
     Source,
     _discard_settling_nonce,
+    release_signed_caps,
 )
 from packages.valory.skills.task_execution.models import (
     metrics_mech_address,
@@ -2832,8 +2833,12 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     matching_round: Type[AbstractRound] = PostTxSettlementRound
 
     def async_act(self) -> Generator:
-        """Count settled deliveries, POST the offchain-events batch, then advance."""
+        """Release settled caps, count settled deliveries, POST the events, then advance."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            release_signed_caps(
+                self.context.shared_state,
+                self.synchronized_data.tx_included_request_ids,
+            )
             self.count_settled_from_synced_data()
             yield from self._do_predict_api_write_best_effort()
             payload = PostTxSettlementPayload(

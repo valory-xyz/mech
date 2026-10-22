@@ -120,6 +120,12 @@ ACCEPTED_NONCES_BY_SENDER = "accepted_nonces_by_sender"
 SETTLING_NONCES_BY_SENDER = "settling_nonces_by_sender"
 # Kept as an alias for consumers still referring to the pre-split name.
 OUTSTANDING_NONCES_BY_SENDER = ACCEPTED_NONCES_BY_SENDER
+# Signed caps of the off-chain requests each sender has not paid for yet,
+# keyed by lowercase sender then by request id. Written by the handler at
+# acceptance; an entry is dropped as soon as its settlement is confirmed
+# (``release_signed_caps``), and on read once its request is neither in
+# ``in_memory_requests`` nor in ``DONE_TASKS`` (rejection, eviction).
+RESERVED_CAPS_BY_SENDER = "reserved_caps_by_sender"
 # Wire-body keys copied through into the pending task dict at accept time.
 # Kept as literals here (rather than importing from handlers) so the
 # behaviour does not add a cross-module import for a handful of string
@@ -347,6 +353,27 @@ def _discard_settling_nonce(
     entries.discard(wire_nonce)
     if not entries:
         target.pop(sender_key, None)
+
+
+def release_signed_caps(shared_state: Dict[str, Any], request_ids: List[str]) -> None:
+    """Drop the reserved caps of ``request_ids``, whose settlement is confirmed.
+
+    A settled request is paid, so it no longer counts against its sender's
+    balance at acceptance.
+
+    :param shared_state: the AEA shared-state dict.
+    :param request_ids: ``str`` request ids included in a confirmed tx.
+    """
+    reserved = shared_state.get(RESERVED_CAPS_BY_SENDER)
+    settled = {str(request_id) for request_id in request_ids}
+    if not reserved or not settled:
+        return
+    for sender in list(reserved):
+        entries = reserved[sender]
+        for request_id in settled.intersection(entries):
+            del entries[request_id]
+        if not entries:
+            del reserved[sender]
 
 
 def _opt_int_str(value: Any) -> Optional[str]:

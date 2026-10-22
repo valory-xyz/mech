@@ -23,7 +23,7 @@ import json
 import time
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type, cast
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, PropertyMock, call, patch
 
 import pytest
 from aea_ledger_ethereum import EthereumApi
@@ -37,6 +37,7 @@ from packages.valory.skills.task_execution.behaviours import (
     NONCE_MODE_EXPLICIT,
     NONCE_MODE_KEY,
     PREDICT_API_EVENTS,
+    RESERVED_CAPS_BY_SENDER,
     SETTLING_NONCES_BY_SENDER,
 )
 from packages.valory.skills.task_submission_abci import behaviours as beh_mod
@@ -56,6 +57,7 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     OffchainDataValue,
     OffchainKeys,
     PAYMENT_MODEL,
+    PostTxSettlementBehaviour,
     SENDER,
     SETTLED_COUNTED_TX_KEY,
     SETTLEMENT_ATTEMPTS_KEY,
@@ -4808,6 +4810,40 @@ class TestTaskPoolingBehaviourAsyncAct:
             _run_gen(b.async_act())
 
         assert b.is_done()
+
+
+class TestPostTxSettlementBehaviourAsyncAct:
+    """Drive PostTxSettlementBehaviour.async_act through the real generator body."""
+
+    def test_confirmed_tx_releases_the_caps_of_its_requests(self) -> None:
+        """Requests in the confirmed tx stop holding their caps; others keep theirs."""
+        ctx = _make_benchmark_ctx()
+        ctx.shared_state[RESERVED_CAPS_BY_SENDER] = {
+            "0xa": {"r-settled": 100, "r-waiting": 200},
+            "0xb": {"r-settled-b": 300},
+        }
+        b = PostTxSettlementBehaviour(name="b", skill_context=ctx)
+        synced = SimpleNamespace(
+            done_tasks=[],
+            tx_included_request_ids=["r-settled", "r-settled-b"],
+            final_tx_hash="0xTX",
+        )
+
+        with (
+            patch.object(
+                PostTxSettlementBehaviour,
+                "synchronized_data",
+                new_callable=PropertyMock,
+                return_value=synced,
+            ),
+            patch.object(b, "_do_predict_api_write_best_effort", side_effect=_noop_gen),
+            patch.object(b, "send_a2a_transaction", side_effect=_noop_gen_with_args),
+            patch.object(b, "wait_until_round_end", side_effect=_noop_gen),
+        ):
+            _run_gen(b.async_act())
+
+        assert b.is_done()
+        assert ctx.shared_state[RESERVED_CAPS_BY_SENDER] == {"0xa": {"r-waiting": 200}}
 
 
 class TestTransactionPreparationBehaviourAsyncAct:
