@@ -995,6 +995,9 @@ def test_enricher_stamps_delivery_tx_hash_on_every_delivered_event() -> None:
     assert all(
         e["response"]["delivery_tx_hash"] == hash_value for e in delivered_events
     )
+    # The settlement time rides along, one value for the whole batch.
+    settled = {e["response"]["settled_at"] for e in delivered_events}
+    assert len(settled) == 1 and settled.pop().endswith("Z")
     assert len(self_._post_calls) == 1  # type: ignore[attr-defined]
     assert self_._post_calls[0]["events"] is delivered_events  # type: ignore[attr-defined]
 

@@ -701,6 +701,14 @@ def _nonce_order(task: Dict[str, Any]) -> int:
         return sys.maxsize
 
 
+def _utc_now_iso() -> str:
+    """The current UTC time as an ISO 8601 string with a ``Z`` suffix.
+
+    :return: for example ``2026-10-22T10:00:00.123456Z``.
+    """
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     """TaskPoolingBehaviour"""
 
@@ -2757,6 +2765,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                     self.context.shared_state,
                     str(task.get("request_id")),
                     settled_tx_hash=tx_hash,
+                    settled_tx_at=_utc_now_iso(),
                 )
 
     # Note on the two ``mech_events_chain_id`` params: task_execution's
@@ -2940,10 +2949,12 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                     final_tx_hash,
                 )
             else:
+                settled_at = _utc_now_iso()
                 for event in delivered_events:
                     response = event.get("response")
                     if isinstance(response, dict):
                         response["delivery_tx_hash"] = final_tx_hash
+                        response["settled_at"] = settled_at
                     else:
                         # Non-dict ``response`` is a shape bug upstream:
                         # ``_build_predict_api_event`` always emits a
@@ -3368,6 +3379,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             response = replayed.get("response")
             if isinstance(response, dict):
                 response["delivery_tx_hash"] = tx_hash
+                record = self.context.shared_state.get(
+                    preimage_buffer.PREIMAGE_RECORDS, {}
+                ).get(request_id, {})
+                response["settled_at"] = record.get(preimage_buffer.FIELD_SETTLED_TX_AT)
             events.append(replayed)
         if events:
             self.context.logger.info(

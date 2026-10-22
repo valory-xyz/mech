@@ -5146,6 +5146,52 @@ def test_failed_run_price_is_still_clamped_to_the_cap(
     assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC, failed=True) == 1_000_000
 
 
+PRICING_EVENT_FIELDS = (
+    "measured_cost",
+    "fixed_cost",
+    "marketplace_fee_bp",
+    "tool_floor",
+    "payment_token_decimals",
+    "pricing_mode",
+    "settled_at",
+)
+
+
+@pytest.mark.parametrize(
+    "is_nvm, max_rates, expected",
+    [
+        (True, {}, (20_000, "nvm_floor")),
+        (False, {"0xmech": 7_000}, (7_000, "onchain_max")),
+        (False, {}, (CAP_ONE_USD_6DEC, "onchain_max")),
+    ],
+)
+def test_onchain_charge_and_mode(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+    is_nvm: bool,
+    max_rates: Dict[str, int],
+    expected: Any,
+) -> None:
+    """On-chain, an NVM mech charges the floor and any other mech its own max."""
+    monkeypatch.setattr(behaviour, "_mech_is_nvm", lambda: is_nvm)
+    params_stub.mech_to_max_delivery_rate = max_rates
+    task = _priced_task(dynamic_tool_cost=20_000)
+    assert (
+        behaviour._charged_delivery_rate(task, False, CAP_ONE_USD_6DEC, 1) == expected
+    )
+
+
+def test_charge_is_unknown_without_a_signed_rate(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """No signed rate means no charge and no pricing mode."""
+    assert behaviour._charged_delivery_rate(_priced_task(), True, None, None) == (
+        None,
+        None,
+    )
+
+
 def test_price_is_none_without_a_signed_rate(behaviour: Any, params_stub: Any) -> None:
     """Without a signed rate there is no cap to price against."""
     _set_price_params(params_stub)
@@ -5188,7 +5234,17 @@ def test_finalize_done_task_stores_price_and_reports_it(
     envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert envelope["delivery_rate"] == 5_882_352_941_176_471
     event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
-    assert event["event"]["response"]["actual_delivery_rate"] == "5882352941176471"
+    response = event["event"]["response"]
+    assert response["actual_delivery_rate"] == "5882352941176471"
+    assert {k: response[k] for k in PRICING_EVENT_FIELDS} == {
+        "measured_cost": str(5 * 10**15),
+        "fixed_cost": "0",
+        "marketplace_fee_bp": 1500,
+        "tool_floor": None,
+        "payment_token_decimals": 18,
+        "pricing_mode": "cap_and_actual",
+        "settled_at": None,
+    }
 
 
 def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
@@ -5228,7 +5284,11 @@ def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
     envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert envelope["delivery_rate"] == 10**15
     event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
-    assert event["event"]["response"]["actual_delivery_rate"] == str(10**15)
+    response = event["event"]["response"]
+    assert response["actual_delivery_rate"] == str(10**15)
+    assert response["pricing_mode"] == "failed_floor"
+    assert response["measured_cost"] is None
+    assert response["tool_floor"] == str(10**15)
 
 
 def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
@@ -5259,6 +5319,7 @@ def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
     )
     done_task = shared_state[beh_mod.DONE_TASKS][0]
     assert done_task["actual_delivery_rate"] == 10**16
+    assert done_task["pricing"]["pricing_mode"] == "signed_cap"
     envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert envelope["delivery_rate"] == 10**16
 

@@ -216,6 +216,17 @@ class TestComputeBatchHash:
         h_missing = compute_batch_hash([{"response": {"result": "r"}}])
         assert h_present == h_null == h_missing
 
+    def test_hash_excludes_nested_settled_at(self) -> None:
+        """``response.settled_at`` is stamped after signing, so it is outside the hash."""
+        with_stamp = compute_batch_hash(
+            [{"response": {"result": "r", "settled_at": "2026-10-22T10:00:00Z"}}]
+        )
+        without = compute_batch_hash(
+            [{"response": {"result": "r", "settled_at": None}}]
+        )
+        absent = compute_batch_hash([{"response": {"result": "r"}}])
+        assert with_stamp == without == absent
+
     def test_hash_still_changes_on_non_excluded_nested_fields(self) -> None:
         """The nested-field exclusion is targeted; siblings still count.
 

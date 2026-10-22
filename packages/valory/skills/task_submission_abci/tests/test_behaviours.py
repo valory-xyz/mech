@@ -4988,6 +4988,7 @@ from packages.valory.skills.task_execution.utils import preimage  # noqa: E402
 
 STAMP_REQUEST_ID = "r1"
 STAMP_TX_HASH = "0x" + "cd" * 32
+STAMP_SETTLED_AT = "2026-10-22T10:00:00.000000Z"
 STAMP_SENDER = "0xSENDER"
 STAMP_NONCE = 7
 
@@ -5324,6 +5325,7 @@ class TestReplayEventsFromPreimage:
         _delivered_preimage_state(shared_state)
         record = shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
         record[preimage.FIELD_SETTLED_TX_HASH] = STAMP_TX_HASH
+        record[preimage.FIELD_SETTLED_TX_AT] = STAMP_SETTLED_AT
         record[preimage.FIELD_PREDICT_API_EVENT] = {
             "response": {"request_id": STAMP_REQUEST_ID, "delivery_tx_hash": None}
         }
@@ -5336,6 +5338,7 @@ class TestReplayEventsFromPreimage:
                 "response": {
                     "request_id": STAMP_REQUEST_ID,
                     "delivery_tx_hash": STAMP_TX_HASH,
+                    "settled_at": STAMP_SETTLED_AT,
                 }
             }
         ]
@@ -5477,9 +5480,13 @@ class TestCountSettledStampsSettlement:
             IS_OFFCHAIN: True,
         }
         self_ = self._make_self([task], included=["r-late"])
-        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        with patch.object(beh_mod, "_utc_now_iso", return_value=STAMP_SETTLED_AT):
+            beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
         assert self_.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {
-            "r-late": {preimage.FIELD_SETTLED_TX_HASH: STAMP_TX_HASH}
+            "r-late": {
+                preimage.FIELD_SETTLED_TX_HASH: STAMP_TX_HASH,
+                preimage.FIELD_SETTLED_TX_AT: STAMP_SETTLED_AT,
+            }
         }
 
 

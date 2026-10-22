@@ -91,8 +91,8 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
     the mech's own EOA already signed for; the mech owner is trusted
     for the origin of their own rows.
 
-    The nested ``request.request_tx_hash`` and
-    ``response.delivery_tx_hash`` fields are excluded on the same
+    The nested ``request.request_tx_hash``, ``response.delivery_tx_hash``
+    and ``response.settled_at`` fields are excluded on the same
     principle. predict-api adds those columns nullable in an ordered
     rollout (server first, mech second), so the server mirrors the
     exclusion at ``routes/mech.py`` for the same batch-hash-parity
@@ -132,6 +132,7 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
         for nested_key, drop_field in (
             ("request", "request_tx_hash"),
             ("response", "delivery_tx_hash"),
+            ("response", "settled_at"),
         ):
             nested = stripped.get(nested_key)
             if isinstance(nested, dict):

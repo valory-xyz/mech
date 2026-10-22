@@ -66,6 +66,7 @@ Stored value (a JSON string, under key ``f"{prefix}{request_id}"``)::
       # ``fetched_at`` is visibility only; ``abandoned_at`` marks a
       # deliver the settlement retry cap gave up on.
       "settled_tx_hash": str | None,
+      "settled_tx_at": str | None,   # ISO 8601 UTC time the tx was confirmed
       "fetched_at": int | None,
       "posted_at": int | None,
       "abandoned_at": int | None,
@@ -169,11 +170,13 @@ PREIMAGE_SWEEP_INCOMPLETE_COUNT = "preimage_sweep_incomplete_count"  # int
 FIELD_DONE_TASK = "done_task"
 FIELD_PREDICT_API_EVENT = "predict_api_event"
 FIELD_SETTLED_TX_HASH = "settled_tx_hash"
+FIELD_SETTLED_TX_AT = "settled_tx_at"
 FIELD_FETCHED_AT = "fetched_at"
 FIELD_POSTED_AT = "posted_at"
 FIELD_ABANDONED_AT = "abandoned_at"
 STAMP_FIELDS = (
     FIELD_SETTLED_TX_HASH,
+    FIELD_SETTLED_TX_AT,
     FIELD_FETCHED_AT,
     FIELD_POSTED_AT,
     FIELD_ABANDONED_AT,
@@ -181,7 +184,12 @@ STAMP_FIELDS = (
 # Stamps worth remembering for a row that is not in memory. ``fetched_at``
 # is visibility only, so a fetch of an already-popped row is dropped rather
 # than parked forever in ``PREIMAGE_PENDING_STAMPS``.
-DURABLE_STAMP_FIELDS = (FIELD_SETTLED_TX_HASH, FIELD_POSTED_AT, FIELD_ABANDONED_AT)
+DURABLE_STAMP_FIELDS = (
+    FIELD_SETTLED_TX_HASH,
+    FIELD_SETTLED_TX_AT,
+    FIELD_POSTED_AT,
+    FIELD_ABANDONED_AT,
+)
 
 # settlement_status values.
 STATUS_PROCESSING = "processing"
@@ -279,6 +287,7 @@ def _empty_replay_fields() -> Dict[str, Any]:
         FIELD_DONE_TASK: None,
         FIELD_PREDICT_API_EVENT: None,
         FIELD_SETTLED_TX_HASH: None,
+        FIELD_SETTLED_TX_AT: None,
         FIELD_FETCHED_AT: None,
         FIELD_POSTED_AT: None,
         FIELD_ABANDONED_AT: None,
