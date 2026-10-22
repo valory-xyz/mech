@@ -2004,9 +2004,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         not, and the result is at least ``FAILED_RUN_MIN_RATE`` before the
         cap clamp.
 
-        The inputs are recorded on the done task under ``pricing`` so the
-        predict-api event can carry them.
-
         :param done_task: the done task, carrying ``cost_dict`` (V) and
             ``dynamic_tool_cost`` (the floor) when set.
         :param cap: the rate the requester signed, or None when unknown.
@@ -2079,9 +2076,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
             )
             if cap_and_actual and price is not None:
-                return price, (
-                    PRICING_FAILED_FLOOR if failed else PRICING_CAP_AND_ACTUAL
-                )
+                if failed:
+                    return price, PRICING_FAILED_FLOOR
+                pricing = done_task.get("pricing") or {}
+                if (
+                    pricing.get("measured_cost") is None
+                    and pricing.get("tool_floor") is None
+                ):
+                    # Neither a measured cost nor a floor: the price is the cap.
+                    return price, PRICING_SIGNED_CAP
+                return price, PRICING_CAP_AND_ACTUAL
             return cap, PRICING_SIGNED_CAP
         # On-chain, only the NVM deliver carries a per-request rate (the tool
         # floor); every other mech is charged its own max delivery rate.
@@ -2194,7 +2198,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         if actual_delivery_rate is not None:
             done_task["actual_delivery_rate"] = actual_delivery_rate
-            done_task.setdefault("pricing", {})["pricing_mode"] = pricing_mode
+            done_task["pricing"]["pricing_mode"] = pricing_mode
             if failed and is_offchain and actual_delivery_rate == price:
                 self.context.logger.info(
                     f"Request {req_id} delivered no answer; charging {price} "
@@ -2589,8 +2593,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     if done_task.get("actual_delivery_rate") is not None
                     else None
                 ),
-                # The inputs behind the charge, so the lake can tell margin
-                # per request; integers travel as strings like the rates.
+                # Integers travel as strings, like the rates.
                 "measured_cost": _opt_int_str(pricing.get("measured_cost")),
                 "fixed_cost": _opt_int_str(pricing.get("fixed_cost")),
                 "marketplace_fee_bp": pricing.get("marketplace_fee_bp"),
@@ -2618,7 +2621,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # ``None`` so pydantic on the server side accepts the
                 # payload if the enricher never ran (retry-safe).
                 "delivery_tx_hash": None,
-                # Stamped with ``delivery_tx_hash`` by the post-tx behaviour.
                 "settled_at": None,
                 "delivered_at": now_iso,
             },

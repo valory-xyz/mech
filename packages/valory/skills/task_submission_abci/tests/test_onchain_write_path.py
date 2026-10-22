@@ -49,7 +49,9 @@ from __future__ import annotations
 import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, cast
+from unittest.mock import patch
 
+import packages.valory.skills.task_submission_abci.behaviours as beh_mod
 from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_submission_abci.behaviours import (
     PENDING_TASKS,
@@ -965,6 +967,50 @@ def _make_egress_self_for_enricher(
     self_._post_calls = post_calls  # type: ignore[attr-defined]
     self_._replay_exclude = replay_exclude  # type: ignore[attr-defined]
     return self_
+
+
+def test_settled_at_is_one_value_per_tx_hash() -> None:
+    """Re-running the round for the same tx reuses the first time; a new tx gets a new one."""
+    shared_state: Dict[str, Any] = {}
+    with patch.object(
+        beh_mod,
+        "_utc_now_iso",
+        side_effect=["2026-10-22T10:00:00Z", "2026-10-22T11:00:00Z"],
+    ):
+        first = beh_mod._settled_at_for(shared_state, "0xaa")
+        again = beh_mod._settled_at_for(shared_state, "0xaa")
+        other = beh_mod._settled_at_for(shared_state, "0xbb")
+    assert first == again == "2026-10-22T10:00:00Z"
+    assert other == "2026-10-22T11:00:00Z"
+    assert shared_state[beh_mod.SETTLED_AT_BY_TX_KEY] == {"0xbb": other}
+
+
+def test_enricher_prefers_the_time_on_the_preimage_record() -> None:
+    """An off-chain row is posted with the time its record holds, the one a replay sends."""
+    hash_value = "0x" + "ab" * 32
+    delivered_events: List[Dict[str, Any]] = [
+        {"request": {"request_id": "req-0"}, "response": {"delivery_tx_hash": None}},
+        {"request": {"request_id": "req-1"}, "response": {"delivery_tx_hash": None}},
+    ]
+    shared_state: Dict[str, Any] = {
+        beh_mod.preimage_buffer.PREIMAGE_RECORDS: {
+            "req-0": {
+                beh_mod.preimage_buffer.FIELD_SETTLED_TX_AT: "2026-10-22T09:00:00Z"
+            }
+        }
+    }
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered_events,
+        final_tx_hash=hash_value,
+        shared_state=shared_state,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert delivered_events[0]["response"]["settled_at"] == "2026-10-22T09:00:00Z"
+    assert delivered_events[1]["response"]["settled_at"] == (
+        self_.context.shared_state[beh_mod.SETTLED_AT_BY_TX_KEY][hash_value]
+    )
 
 
 def test_enricher_stamps_delivery_tx_hash_on_every_delivered_event() -> None:

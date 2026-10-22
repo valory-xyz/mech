@@ -5182,6 +5182,29 @@ def test_onchain_charge_and_mode(
     )
 
 
+@pytest.mark.parametrize(
+    "pricing, failed, expected_mode",
+    [
+        ({"measured_cost": None, "tool_floor": None}, False, "signed_cap"),
+        ({"measured_cost": 5_000, "tool_floor": None}, False, "cap_and_actual"),
+        ({"measured_cost": None, "tool_floor": 20_000}, False, "cap_and_actual"),
+        ({"measured_cost": None, "tool_floor": None}, True, "failed_floor"),
+    ],
+)
+def test_offchain_mode_names_where_the_rate_came_from(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    pricing: Dict[str, Any],
+    failed: bool,
+    expected_mode: str,
+) -> None:
+    """With the flag on, a price that fell back to the cap is labelled ``signed_cap``."""
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    task = _priced_task(pricing=pricing)
+    _, mode = behaviour._charged_delivery_rate(task, True, 10_000, 9_000, failed=failed)
+    assert mode == expected_mode
+
+
 def test_charge_is_unknown_without_a_signed_rate(
     behaviour: Any, params_stub: Any
 ) -> None:

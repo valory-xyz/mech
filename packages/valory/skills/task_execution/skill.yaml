@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeifpfqyxaompi6ruwqh3qydyoyfzlroonqufokwne3ygcejona2vui
+  behaviours.py: bafybeigze4ef75lklejq2bb3jsyev7mr4czxruzmxj3gpx7wlxuxw2pj7a
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
   handlers.py: bafybeibaraxm56t56vgr6k6ypatbfhmdlwho2reeau4qlic3deyt5hccgu
   models.py: bafybeigev3k3iy3iesrlnbve76yapsadho5mvqcniwgz2cc3xzh4e3s3du
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeib7yqov5ch5o2zzgriv3gvqn6pmp2fwwx75ns646a4dnsodtqoeoa
-  tests/test_behaviours.py: bafybeid2n7syji4ob3pmyx4kxcu3456wqid7d4sag4mngxh7dvezzs7m4m
+  tests/test_behaviours.py: bafybeibkxflneb7uz7fhy5oa6jv73njnxnj5phfwzqwocsvkkyxjw3yp3e
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
   tests/test_handlers.py: bafybeiazeh7iyjmasn4dxwhc3kk2efyfllubnyafh25fxgpwsoccft6wee
   tests/test_models.py: bafybeiawmd5tkiuzzdcsnopnvscney6eptnotddi4njgz3jz2lausf4vn4
