@@ -31,8 +31,8 @@ skills:
 - valory/delivery_rate_abci:0.1.0:bafybeihp55ry2ttct4x37n5qbhloom6dpzgarx3d2xz6zjthm22jc4fmua
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeiaupqg6aso6aynyln6pwmfjqbyshyeay4glvviadqffz7uw7nxpji
-- valory/task_submission_abci:0.1.0:bafybeifwlnc35ermkzp5p6wjhgnurjxsdphd5lbewfbikzx3a7q573gvu4
+- valory/task_execution:0.1.0:bafybeifg26jivpjfrfxmlizwj5xxqr6v6xqm5cbiv5njb43m6xjwrl4pkq
+- valory/task_submission_abci:0.1.0:bafybeiaalp4tqwxy4762wmsgmrltpff4hopglrqrpywejf57bqjbc566eq
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
