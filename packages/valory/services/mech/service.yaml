@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeibgee2jvraerrn3bqvpn3bu3fvzvecqts76awo2ugetyhd7olmzkm
+agent: valory/mech:0.1.0:bafybeibaiwhn2zlgur7htcdwi4wvqkqx2idkxejmu2ywcrzmcexwwqk6ki
 number_of_agents: 4
 deployment:
   agent:
@@ -39,7 +39,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:true}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -85,7 +85,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:true}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
@@ -128,7 +128,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:true}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -171,7 +171,7 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:true}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}

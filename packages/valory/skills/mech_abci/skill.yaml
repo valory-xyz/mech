@@ -31,8 +31,8 @@ skills:
 - valory/delivery_rate_abci:0.1.0:bafybeihp55ry2ttct4x37n5qbhloom6dpzgarx3d2xz6zjthm22jc4fmua
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeia33ci4fbqqd676zor6k6zvzf32xn6qgxtpvbsgp6fluec5wzef2m
-- valory/task_submission_abci:0.1.0:bafybeignc65sdwsw7tiixk27sjrjmqvvzymwpn5qvxpkg3m5654padw6x4
+- valory/task_execution:0.1.0:bafybeiho5fyfrxncafz7322srkdoth2gfnr4f2427hqb7gaupjbybihxn4
+- valory/task_submission_abci:0.1.0:bafybeihcutjppqsatyzb35cwe6skqwuy2klo3tijwqu5ulu6runwchdo5q
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
@@ -88,7 +88,7 @@ models:
     args:
       agent_funding_amount: 200000000000000000
       api_keys: {}
-      cap_and_actual_enabled: false
+      cap_and_actual_enabled: true
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
