@@ -5191,15 +5191,13 @@ def test_finalize_done_task_stores_price_and_reports_it(
     assert event["event"]["response"]["actual_delivery_rate"] == "5882352941176471"
 
 
-@pytest.mark.parametrize("via_invalid_flag", [False, True])
 def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
-    via_invalid_flag: bool,
 ) -> None:
-    """A delivery without a result, or of an invalid request, is charged the tool floor.
+    """An off-chain delivery without a result is charged the tool floor.
 
     The reported 0.005 USD spend would price at 5.9e15; the floor of 1e15 is
     charged instead, on the done task, the poll envelope and the event.
@@ -5208,8 +5206,6 @@ def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
     :param params_stub: params fixture with ``use_offchain=True``.
     :param shared_state: shared_state fixture.
     :param monkeypatch: pytest monkeypatch fixture.
-    :param via_invalid_flag: fail through ``_invalid_request`` rather than a
-        missing result.
     """
     params_stub.use_offchain = True
     _set_price_params(params_stub, decimals=18, fee_bp=1500)
@@ -5224,11 +5220,9 @@ def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
         is_marketplace_mech=True,
     )
     behaviour._tools_to_pricing = params_stub.tools_to_pricing
-    behaviour._invalid_request = via_invalid_flag
-    response: Dict[str, Any] = {"cost_dict": {"total_cost": 0.005}}
-    if not via_invalid_flag:
-        response["result"] = None
-    behaviour._finalize_done_task("bafycid", response=response)
+    behaviour._finalize_done_task(
+        "bafycid", response={"result": None, "cost_dict": {"total_cost": 0.005}}
+    )
     done_task = shared_state[beh_mod.DONE_TASKS][0]
     assert done_task["actual_delivery_rate"] == 10**15
     envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]

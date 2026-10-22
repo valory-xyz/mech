@@ -32,9 +32,10 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 BASIS_POINTS = 10_000
 # fixed_cost_per_request is expressed in USD with this many decimals.
 USD_DECIMALS = 6
-# A failed run is never settled at zero: the balance tracker rejects a batch
-# whose delivery rates sum to zero.
-MIN_DELIVERY_RATE = 1
+# The least a failed run is priced at before the cap clamp, so a batch made of
+# failed runs never sums to zero, which BalanceTrackerBase.sol:269 rejects. A
+# requester who signed a cap of 0 is still clamped to 0.
+FAILED_RUN_MIN_RATE = 1
 
 
 @dataclasses.dataclass

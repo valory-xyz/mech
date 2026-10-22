@@ -67,7 +67,7 @@ from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import (
     BASIS_POINTS,
-    MIN_DELIVERY_RATE,
+    FAILED_RUN_MIN_RATE,
     Params,
     USD_DECIMALS,
     offchain_metric_labels,
@@ -1987,7 +1987,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         A failed run is priced as a run with no provider spend: the fixed share
         and the tool floor still apply, what the tool reported spending does
-        not, and the result is at least ``MIN_DELIVERY_RATE``.
+        not, and the result is at least ``FAILED_RUN_MIN_RATE`` before the
+        cap clamp.
 
         :param done_task: the done task, carrying ``cost_dict`` (V) and
             ``dynamic_tool_cost`` (the floor) when set.
@@ -2019,11 +2020,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return cap
         price = max(candidates)
         if failed:
-            price = max(price, MIN_DELIVERY_RATE)
-            self.context.logger.info(
-                f"Request {request_id} failed; charging {price} (floor or fixed "
-                f"share), not the reported spend."
-            )
+            price = max(price, FAILED_RUN_MIN_RATE)
         if price > cap:
             self.context.logger.warning(
                 f"Price {price} for request {request_id} exceeds the signed cap "
@@ -2153,8 +2150,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         cap = None if signed_rate is None else int(signed_rate)
         self._warn_once_on_default_decimals(is_offchain)
         # The tool response always carries ``result``; None means the run
-        # produced no answer.
-        failed = bool(self._invalid_request) or (
+        # produced no answer. Off-chain, every other failure is rejected
+        # before it gets here and never settles.
+        failed = (
             response is not None and "result" in response and response["result"] is None
         )
         price = self._price_done_task(done_task, cap, failed=failed)
@@ -2163,6 +2161,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         if actual_delivery_rate is not None:
             done_task["actual_delivery_rate"] = actual_delivery_rate
+            if failed and is_offchain and actual_delivery_rate == price:
+                self.context.logger.info(
+                    f"Request {req_id} delivered no answer; charging {price} "
+                    "(floor or fixed share), not the reported spend."
+                )
             computed = (
                 "" if price == actual_delivery_rate else f" (computed price {price})"
             )
