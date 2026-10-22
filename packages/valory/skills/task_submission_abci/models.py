@@ -159,9 +159,10 @@ class Params(BaseParams):
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
         self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
-        # Off-chain settlement via the cap-and-actual overload; on by default.
+        # Off-chain settlement via the cap-and-actual overload; off until the
+        # marketplace contracts that carry it are live.
         self.cap_and_actual_enabled: bool = bool(
-            kwargs.get("cap_and_actual_enabled", True)
+            kwargs.get("cap_and_actual_enabled", False)
         )
         # An explicit-nonce task closer than this to its signed deadline when a
         # batch is built is dropped rather than risked: the batch still goes

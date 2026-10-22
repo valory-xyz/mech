@@ -32,7 +32,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/task_execution:0.1.0:bafybeicsv5lrbzmb73pqymb4x7xw6p4suvzpiq3ubthjoo5yvn4tffdai4
-- valory/task_submission_abci:0.1.0:bafybeic6vpsrljg7x4xixs5bvcsdq7aoswwypfulpyrki3hnlwqdaeo3xm
+- valory/task_submission_abci:0.1.0:bafybeie2oqabqynmp4w63dhfhi5zeea534cp7v7ms6p7ecehhxyhucpr7m
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
@@ -88,7 +88,7 @@ models:
     args:
       agent_funding_amount: 200000000000000000
       api_keys: {}
-      cap_and_actual_enabled: true
+      cap_and_actual_enabled: false
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'

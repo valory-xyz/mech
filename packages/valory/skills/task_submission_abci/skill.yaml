@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeicikzxjwmvnrsovb4rm33ia547xdkcp5c3m27h2x5f2mhj5wmz3gy
+  models.py: bafybeifg5zdzdqsdkatobvk66vkrr24sngy2ob53jlbskdiojltzxkyxd4
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeie7yu4ygy4gnpc6yekhnhbtdgtferzzaoyzj4nhenyune7hnhswvm
   rounds.py: bafybeigl6ph55gkcme4edpj4zhyb6ksm67ssr6lmftyqzx4hnllfu4dn5y
@@ -174,7 +174,7 @@ models:
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
       use_offchain: false
-      cap_and_actual_enabled: true
+      cap_and_actual_enabled: false
       explicit_deadline_settlement_margin_seconds: 180
       use_slashing: false
       use_termination: false
