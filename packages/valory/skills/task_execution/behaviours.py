@@ -462,6 +462,37 @@ def _cap_raw_content(blob: Dict[str, Any]) -> Dict[str, Any]:
     return {"truncated": True, "size_bytes": size, "cap_bytes": MAX_RAW_CONTENT_BYTES}
 
 
+# Cap on the tool error text a requester sees. Room for a provider's own error
+# message; a tool that echoes a whole response body into its exception cannot
+# grow the rejection envelope or the delivered result past it.
+MAX_TOOL_ERROR_CHARS = 500
+TOOL_ERROR_REDACTED = "[redacted]"
+
+
+def _tool_error_reason(exc: BaseException, keychain: Optional[KeyChain]) -> str:
+    """Describe a tool exception for the requester: its type and message only.
+
+    No traceback and no call arguments. Any configured API key that appears in
+    the message is replaced before the text is cut to MAX_TOOL_ERROR_CHARS.
+
+    :param exc: the exception the tool raised.
+    :param keychain: the configured API keys, or ``None`` when not loaded.
+    :return: ``"<ExceptionType>: <message>"``, redacted and capped.
+    """
+    try:
+        message = str(exc)
+    except Exception:  # pylint: disable=W0718
+        message = ""
+    services = keychain.services if keychain is not None else {}
+    for keys in services.values():
+        for key in keys:
+            if isinstance(key, str) and key:
+                message = message.replace(key, TOOL_ERROR_REDACTED)
+    name = type(exc).__name__
+    reason = f"{name}: {message}" if message else name
+    return reason[:MAX_TOOL_ERROR_CHARS]
+
+
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 # Reset PREIMAGE_KV_IN_FLIGHT if no kv_store reply arrives within this many
 # seconds. Without this watchdog a lost SUCCESS/ERROR (connection drop, dropped
@@ -633,6 +664,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
         self._ipfs_error_reason: Optional[str] = None
+        # Message of the exception the current task's tool raised, if any.
+        self._tool_error_reason: Optional[str] = None
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
@@ -1155,6 +1188,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         self._request_handling_deadline = None
+        self._tool_error_reason = None
 
         # Off-chain path: prompt JSON is already inline in ``task_data["ipfs_data"]``
         # (set by the handler in ``_enqueue_offchain_request`` and mirrored to
@@ -1336,7 +1370,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        result_msg = self._ipfs_error_reason or "Invalid response"
+        result_msg = (
+            self._ipfs_error_reason or self._tool_error_reason or "Invalid response"
+        )
         response = {
             "schema_version": RESPONSE_SCHEMA_VERSION,
             "requestId": req_id,
@@ -1570,6 +1606,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.is_cold_start = False
         self._request_handling_deadline = None
         self._ipfs_error_reason = None
+        self._tool_error_reason = None
         # reset all times
         self.tool_preparation_start_time = 0.0
         self.tool_execution_start_time = 0.0
@@ -1861,6 +1898,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(f"Task expired: {e}")
         except Exception as e:
             self.context.logger.error(f"Exception during task: {e}")
+            self._tool_error_reason = _tool_error_reason(e, self._keychain)
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
@@ -2462,7 +2500,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         prompt_bytes = prompt.encode("utf-8")
         if len(prompt_bytes) > MAX_PROMPT_BYTES:
             prompt = prompt_bytes[:MAX_PROMPT_BYTES].decode("utf-8", errors="ignore")
-        invalid = bool(self._invalid_request)
+        invalid = bool(self._invalid_request) or self._tool_error_reason is not None
         result_text = response_data.get("result") if response_data else None
         status = "failed" if invalid or result_text is None else "complete"
         # Failed-row ``error`` carries the available diagnostic, regardless
@@ -2643,6 +2681,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task = None
         self._invalid_request = False
         self._ipfs_error_reason = None
+        self._tool_error_reason = None
         self._request_handling_deadline = None
         self._async_result = None
 

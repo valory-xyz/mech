@@ -6299,6 +6299,197 @@ def test_onchain_tool_exception_still_delivers(
     assert stored.get("status") != "rejected"
 
 
+TOOL_ERROR = ValueError("Gemini API error: model not available")
+TOOL_ERROR_REASON = "ValueError: Gemini API error: model not available"
+CONFIGURED_API_KEY = "AIzaSy-configured-test-key"
+
+
+def _failed_future(exc: BaseException) -> Future:
+    """A completed tool future that raises ``exc`` from ``result()``."""
+    fut: Future = Future()
+    fut.set_exception(exc)
+    return fut
+
+
+def _finish_tool_run(
+    behaviour: Any, params_stub: Any, is_offchain: bool, req_id: Any, future: Future
+) -> None:
+    """Seed an executing task whose tool future is done, then run one execute step.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param is_offchain: whether the task came through the off-chain path.
+    :param req_id: the request id of the task.
+    :param future: the executor future the tool run produced.
+    """
+    _seed_executing_task(behaviour, params_stub, is_offchain=is_offchain, req_id=req_id)
+    behaviour._async_result = future
+    params_stub.in_flight_req = False
+    behaviour._execute_task()
+
+
+def _stub_offchain_io(behaviour: Any, monkeypatch: Any) -> Tuple[list, MagicMock]:
+    """Capture ``send_message`` and the counters; silence gauges and histograms.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :return: the captured ``send_message`` calls and the ``inc_counter`` mock.
+    """
+    sent: list = []
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    return sent, inc
+
+
+def test_offchain_tool_error_message_is_the_rejection_reason(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A tool that raises is rejected with its own message; nothing settles or is charged."""
+    sent, inc = _stub_offchain_io(behaviour, monkeypatch)
+
+    _finish_tool_run(behaviour, params_stub, True, "req-41", _failed_future(TOOL_ERROR))
+
+    assert shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-41"] == {
+        "request_id": "req-41",
+        "status": "rejected",
+        "reason": TOOL_ERROR_REASON,
+    }
+    assert sent == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task is None
+    m = behaviour.mech_metrics
+    assert _metric_calls(inc, m.mech_offchain_failures_total) == [
+        {"reason": beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED, **_OFFCHAIN_LABELS}
+    ]
+    assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+
+
+def test_offchain_tool_error_message_hides_configured_api_keys(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """An API key the tool echoes into its error never reaches the requester."""
+    _stub_offchain_io(behaviour, monkeypatch)
+    behaviour._keychain = beh_mod.KeyChain({"google_api_key": [CONFIGURED_API_KEY]})
+    exc = RuntimeError(
+        f"403 Forbidden for url: https://x.test/v1?key={CONFIGURED_API_KEY}"
+    )
+
+    _finish_tool_run(behaviour, params_stub, True, "req-42", _failed_future(exc))
+
+    reason = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-42"]["reason"]
+    assert (
+        reason
+        == "RuntimeError: 403 Forbidden for url: https://x.test/v1?key=[redacted]"
+    )
+
+
+@pytest.mark.parametrize(
+    "exc, expected",
+    [
+        (ValueError(""), "ValueError"),
+        (ValueError("x" * (500 - len("ValueError: "))), "ValueError: " + "x" * 488),
+        (ValueError("x" * 489), "ValueError: " + "x" * 488),
+        (ValueError("x" * 5_000), "ValueError: " + "x" * 488),
+    ],
+    ids=["empty_message", "exactly_at_cap", "one_over_cap", "far_over_cap"],
+)
+def test_tool_error_reason_is_cut_to_the_cap(exc: Exception, expected: str) -> None:
+    """The requester-facing text never exceeds MAX_TOOL_ERROR_CHARS."""
+    assert beh_mod.MAX_TOOL_ERROR_CHARS == 500
+    assert beh_mod._tool_error_reason(exc, None) == expected
+
+
+def test_onchain_tool_error_message_is_delivered_and_marked_failed(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain still delivers, carrying the tool's message; the event row is failed."""
+    params_stub.use_offchain = True
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+
+    _finish_tool_run(behaviour, params_stub, False, 43, _failed_future(TOOL_ERROR))
+
+    assert captured_callback[0].keywords["response"]["result"] == TOOL_ERROR_REASON
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["43"]["event"]["response"]
+    assert (event["status"], event["error"], event["result"]) == (
+        "failed",
+        TOOL_ERROR_REASON,
+        None,
+    )
+    assert behaviour._tool_error_reason is None
+
+
+def test_tool_error_message_does_not_carry_over_to_the_next_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The next run that fails without raising gets its own reason, not the last error."""
+    _stub_offchain_io(behaviour, monkeypatch)
+    _finish_tool_run(behaviour, params_stub, True, "req-44", _failed_future(TOOL_ERROR))
+
+    _finish_tool_run(
+        behaviour, params_stub, True, "req-45", _failed_future(TimeoutError())
+    )
+
+    responses = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]
+    assert responses["req-44"]["reason"] == TOOL_ERROR_REASON
+    assert responses["req-45"]["reason"] == "Invalid response"
+
+
+def test_new_task_starts_without_a_tool_error_message(
+    behaviour: Any, shared_state: Dict[str, Any], monkeypatch: Any
+) -> None:
+    """Picking up the next pending task clears any message left in the slot."""
+    _stub_offchain_io(behaviour, monkeypatch)
+    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req", lambda *a: (None, None))
+    behaviour._tool_error_reason = TOOL_ERROR_REASON
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {"requestId": 46, "request_delivery_rate": 100, "data": b"fake-ipfs-pointer"}
+    )
+
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 46
+    assert behaviour._tool_error_reason is None
+
+
+def test_timeout_after_a_tool_error_reports_the_timeout_reason(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A run that reaches the timeout limit is rejected with the timeout message."""
+    sent, _ = _stub_offchain_io(behaviour, monkeypatch)
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    params_stub.request_id_to_num_timeouts[47] = 0
+    params_stub.timeout_limit = 1
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=47)
+    behaviour._tool_error_reason = TOOL_ERROR_REASON
+
+    behaviour._handle_timeout_task()
+
+    reason = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["47"]["reason"]
+    assert reason == "Task timed out 1 times during execution. "
+    assert sent == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+
+
 @pytest.mark.parametrize(
     "helper, state_key",
     [
