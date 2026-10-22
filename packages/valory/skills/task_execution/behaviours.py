@@ -68,6 +68,11 @@ from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import (
     BASIS_POINTS,
     FAILED_RUN_MIN_RATE,
+    PRICING_CAP_AND_ACTUAL,
+    PRICING_FAILED_FLOOR,
+    PRICING_NVM_FLOOR,
+    PRICING_ONCHAIN_MAX,
+    PRICING_SIGNED_CAP,
     Params,
     USD_DECIMALS,
     offchain_metric_labels,
@@ -342,6 +347,15 @@ def _discard_settling_nonce(
     entries.discard(wire_nonce)
     if not entries:
         target.pop(sender_key, None)
+
+
+def _opt_int_str(value: Any) -> Optional[str]:
+    """An integer as the decimal string the predict-api wire carries, or None.
+
+    :param value: an int, or None.
+    :return: ``str(value)`` or None.
+    """
+    return None if value is None else str(int(value))
 
 
 def _source_label(task: Optional[Dict[str, Any]]) -> Source:
@@ -2002,14 +2016,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         request_id = done_task.get("request_id")
         candidates: List[int] = []
         measured = None if failed else self._measured_cost_in_asset_units(done_task)
+        decimals = self.params.payment_token_decimals
+        fixed = self.params.fixed_cost_per_request * 10 ** (decimals - USD_DECIMALS)
+        fee_bp = self.params.marketplace_fee_bp
+        floor = done_task.get("dynamic_tool_cost")
+        done_task["pricing"] = {
+            "measured_cost": measured,
+            "fixed_cost": fixed,
+            "marketplace_fee_bp": fee_bp,
+            "tool_floor": None if floor is None else int(floor),
+            "payment_token_decimals": decimals,
+        }
         if measured is not None or failed:
-            decimals = self.params.payment_token_decimals
-            fixed = self.params.fixed_cost_per_request * 10 ** (decimals - USD_DECIMALS)
-            net_bp = BASIS_POINTS - self.params.marketplace_fee_bp
+            net_bp = BASIS_POINTS - fee_bp
             candidates.append(
                 (((measured or 0) + fixed) * BASIS_POINTS + net_bp - 1) // net_bp
             )
-        floor = done_task.get("dynamic_tool_cost")
         if floor is not None:
             candidates.append(int(floor))
         if not candidates:
@@ -2035,29 +2057,44 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         is_offchain: bool,
         cap: Optional[int],
         price: Optional[int],
-    ) -> Optional[int]:
-        """The rate settlement will charge for this task; None without a signed rate.
+        failed: bool = False,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """The rate settlement will charge for this task, and the rule that set it.
 
         :param done_task: the done task, carrying ``dynamic_tool_cost`` when set.
         :param is_offchain: whether the task settles through a signed delivery.
         :param cap: the rate the requester signed, or None when unknown.
         :param price: the cap-and-actual price, already clamped to ``cap``.
-        :return: the amount the matching settlement path charges.
+        :param failed: whether the delivery carries an error rather than an answer.
+        :return: the amount the matching settlement path charges and its
+            ``pricing_mode`` label; ``(None, None)`` without a signed rate.
         """
         if cap is None:
-            return None
+            return None, None
         if is_offchain:
             cap_and_actual = self.context.shared_state.get(
                 preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
             )
-            return price if cap_and_actual and price is not None else cap
+            if cap_and_actual and price is not None:
+                if failed:
+                    return price, PRICING_FAILED_FLOOR
+                pricing = done_task.get("pricing") or {}
+                if (
+                    pricing.get("measured_cost") is None
+                    and pricing.get("tool_floor") is None
+                ):
+                    # Neither a measured cost nor a floor: the price is the cap.
+                    return price, PRICING_SIGNED_CAP
+                return price, PRICING_CAP_AND_ACTUAL
+            return cap, PRICING_SIGNED_CAP
         # On-chain, only the NVM deliver carries a per-request rate (the tool
         # floor); every other mech is charged its own max delivery rate.
         floor = done_task.get("dynamic_tool_cost")
         if floor is not None and self._mech_is_nvm():
-            return int(floor)
+            return int(floor), PRICING_NVM_FLOOR
         max_rates = self.params.mech_to_max_delivery_rate
-        return int(next(iter(max_rates.values()))) if max_rates else cap
+        rate = int(next(iter(max_rates.values()))) if max_rates else cap
+        return rate, PRICING_ONCHAIN_MAX
 
     def _warn_once_on_default_decimals(self, is_offchain: bool) -> None:
         """Warn once when cap-and-actual prices with the default 18 decimals.
@@ -2156,11 +2193,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             response is not None and "result" in response and response["result"] is None
         )
         price = self._price_done_task(done_task, cap, failed=failed)
-        actual_delivery_rate = self._charged_delivery_rate(
-            done_task, is_offchain, cap, price
+        actual_delivery_rate, pricing_mode = self._charged_delivery_rate(
+            done_task, is_offchain, cap, price, failed=failed
         )
         if actual_delivery_rate is not None:
             done_task["actual_delivery_rate"] = actual_delivery_rate
+            done_task["pricing"]["pricing_mode"] = pricing_mode
             if failed and is_offchain and actual_delivery_rate == price:
                 self.context.logger.info(
                     f"Request {req_id} delivered no answer; charging {price} "
@@ -2298,6 +2336,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             replication and downstream signing in the post-tx behaviour.
         """
         req_id = done_task["request_id"]
+        pricing = done_task.get("pricing") or {}
         request_id_str = str(req_id)
         # ``IN_MEMORY_REQUESTS`` is ``str``-keyed by the handler; ``req_id``
         # is ``int`` for off-chain tasks (see ingress coercion in
@@ -2554,6 +2593,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     if done_task.get("actual_delivery_rate") is not None
                     else None
                 ),
+                # Integers travel as strings, like the rates.
+                "measured_cost": _opt_int_str(pricing.get("measured_cost")),
+                "fixed_cost": _opt_int_str(pricing.get("fixed_cost")),
+                "marketplace_fee_bp": pricing.get("marketplace_fee_bp"),
+                "tool_floor": _opt_int_str(pricing.get("tool_floor")),
+                "payment_token_decimals": pricing.get("payment_token_decimals"),
+                "pricing_mode": pricing.get("pricing_mode"),
                 "is_offchain": is_offchain_task,
                 "tool_hash": tool_hash,
                 "execution_latency_ms": execution_latency_ms,
@@ -2575,6 +2621,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # ``None`` so pydantic on the server side accepts the
                 # payload if the enricher never ran (retry-safe).
                 "delivery_tx_hash": None,
+                "settled_at": None,
                 "delivered_at": now_iso,
             },
             "source": predict_api_source,

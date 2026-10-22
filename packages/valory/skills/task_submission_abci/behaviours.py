@@ -250,6 +250,9 @@ MAX_SETTLEMENT_ATTEMPTS = 3
 # Shared-state key holding the tx hash whose settled tasks were last
 # counted, so a re-entered post-settlement round does not count twice.
 SETTLED_COUNTED_TX_KEY = "settled_counted_tx_hash"
+# The time this agent saw the latest settlement tx confirm, as
+# ``{tx_hash: iso}``: one value per tx, however often the round re-runs.
+SETTLED_AT_BY_TX_KEY = "settled_at_by_tx_hash"
 # Grouping-dict key for the raw ``str`` request ids of a deliver group.
 REQUEST_IDS_KEY = "request_ids"
 MECH_ADDRESS = "mech_address"
@@ -699,6 +702,30 @@ def _nonce_order(task: Dict[str, Any]) -> int:
         return int(task[NONCE])
     except (KeyError, TypeError, ValueError):
         return sys.maxsize
+
+
+def _utc_now_iso() -> str:
+    """The current UTC time as an ISO 8601 string with a ``Z`` suffix.
+
+    :return: for example ``2026-10-22T10:00:00.123456Z``.
+    """
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _settled_at_for(shared_state: Dict[str, Any], tx_hash: str) -> str:
+    """The confirmation time for ``tx_hash``, taken once and reused after.
+
+    Only the latest tx is kept: a new hash replaces it.
+
+    :param shared_state: the skill's shared state dict.
+    :param tx_hash: the confirmed settlement tx hash.
+    :return: the ISO 8601 UTC time first recorded for that hash.
+    """
+    stamps = shared_state.get(SETTLED_AT_BY_TX_KEY) or {}
+    if tx_hash not in stamps:
+        stamps = {tx_hash: _utc_now_iso()}
+        shared_state[SETTLED_AT_BY_TX_KEY] = stamps
+    return stamps[tx_hash]
 
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
@@ -2757,6 +2784,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                     self.context.shared_state,
                     str(task.get("request_id")),
                     settled_tx_hash=tx_hash,
+                    settled_tx_at=_settled_at_for(self.context.shared_state, tx_hash),
                 )
 
     # Note on the two ``mech_events_chain_id`` params: task_execution's
@@ -2940,10 +2968,20 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                     final_tx_hash,
                 )
             else:
+                shared_state = self.context.shared_state
+                settled_at = _settled_at_for(shared_state, final_tx_hash)
+                records = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {})
                 for event in delivered_events:
                     response = event.get("response")
                     if isinstance(response, dict):
                         response["delivery_tx_hash"] = final_tx_hash
+                        # An off-chain row's record holds the time its replay
+                        # will carry; live and replayed posts send the same.
+                        record = records.get(_event_request_id(event) or "", {})
+                        response["settled_at"] = (
+                            record.get(preimage_buffer.FIELD_SETTLED_TX_AT)
+                            or settled_at
+                        )
                     else:
                         # Non-dict ``response`` is a shape bug upstream:
                         # ``_build_predict_api_event`` always emits a
@@ -3368,6 +3406,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             response = replayed.get("response")
             if isinstance(response, dict):
                 response["delivery_tx_hash"] = tx_hash
+                record = self.context.shared_state.get(
+                    preimage_buffer.PREIMAGE_RECORDS, {}
+                ).get(request_id, {})
+                response["settled_at"] = record.get(preimage_buffer.FIELD_SETTLED_TX_AT)
             events.append(replayed)
         if events:
             self.context.logger.info(

@@ -36,6 +36,12 @@ USD_DECIMALS = 6
 # failed runs never sums to zero, which BalanceTrackerBase.sol:269 rejects. A
 # requester who signed a cap of 0 is still clamped to 0.
 FAILED_RUN_MIN_RATE = 1
+# ``pricing_mode`` on the predict-api event: the rule that set the charge.
+PRICING_CAP_AND_ACTUAL = "cap_and_actual"
+PRICING_FAILED_FLOOR = "failed_floor"
+PRICING_SIGNED_CAP = "signed_cap"
+PRICING_NVM_FLOOR = "nvm_floor"
+PRICING_ONCHAIN_MAX = "onchain_max"
 
 
 @dataclasses.dataclass
