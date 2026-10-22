@@ -36,6 +36,7 @@ bit-for-bit. These tests pin the contract:
 """
 
 import json
+from pathlib import Path
 
 from packages.valory.skills.task_submission_abci.predict_api_events_client import (
     EVENTS_DOMAIN_NAME,
@@ -350,3 +351,25 @@ class TestBuildTypedData:
             {"name": "mech_address", "type": "address"},
             {"name": "batch_hash", "type": "bytes32"},
         ]
+
+
+GOLDEN_EVENT = Path(__file__).parent / "golden_mech_event.json"
+# Pinned in predict-api too (server/tests/test_golden_batch_hash.py); a change
+# to either side's exclusion list or encoding breaks one of the two tests.
+GOLDEN_HASH = "0xc12091d8f064d3f2b5f6c5347e4a8da6c1d72ee1fecdc5143fa40dbbe0f6ded6"
+
+
+class TestGoldenBatchHash:
+    """The mech's batch hash of a fixed event matches the value the server pins."""
+
+    def test_golden_event_hashes_to_the_pinned_value(self) -> None:
+        """The fixed event hashes to the value predict-api recomputes."""
+        event = json.loads(GOLDEN_EVENT.read_text(encoding="utf-8"))
+        assert compute_batch_hash([event]) == GOLDEN_HASH
+
+    def test_post_signing_stamps_do_not_move_the_hash(self) -> None:
+        """The settlement stamps added after signing leave the hash as is."""
+        event = json.loads(GOLDEN_EVENT.read_text(encoding="utf-8"))
+        event["response"]["settled_at"] = "2027-01-01T00:00:00Z"
+        event["response"]["delivery_tx_hash"] = "0x" + "cd" * 32
+        assert compute_batch_hash([event]) == GOLDEN_HASH
