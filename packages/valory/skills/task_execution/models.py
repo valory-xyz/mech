@@ -32,9 +32,9 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 BASIS_POINTS = 10_000
 # fixed_cost_per_request is expressed in USD with this many decimals.
 USD_DECIMALS = 6
-# The least a failed run is priced at before the cap clamp, so a batch made of
-# failed runs never sums to zero, which BalanceTrackerBase.sol:269 rejects. A
-# requester who signed a cap of 0 is still clamped to 0.
+# The least any run is priced at, answered or failed, so a batch never sums to
+# zero, which BalanceTrackerBase.sol:269 rejects. An off-chain request whose
+# signed cap is below the minimum charge (any cap of 0) is refused at acceptance.
 FAILED_RUN_MIN_RATE = 1
 # ``pricing_mode`` on the predict-api event: the rule that set the charge.
 PRICING_CAP_AND_ACTUAL = "cap_and_actual"

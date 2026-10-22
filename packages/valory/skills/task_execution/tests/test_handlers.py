@@ -40,6 +40,9 @@ from packages.valory.skills.task_execution.handlers import (
     LedgerHandler,
     MechHttpHandler,
 )
+from packages.valory.skills.task_execution.tests.utils.test_eip1271 import (
+    _make_ledger_api as _make_eip1271_ledger_api,
+)
 from packages.valory.skills.task_execution.utils.eip1271 import (
     Eip1271Verdict as _Eip1271Verdict,
 )
@@ -7621,6 +7624,86 @@ def test_sender_with_code_is_verified_by_eip1271_only(
     _record_eip1271(monkeypatch, _Eip1271Verdict.VALID)
     _post_eoa_signed(mh, http_dialogue)
     assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+
+
+def _eip1271_call_outcome(monkeypatch: Any, outcome: Any) -> None:
+    """Run the real ``isValidSignature`` check against a call that returns or raises ``outcome``.
+
+    Only the ledger boundary is replaced, so the verdict comes from the real
+    classification in ``check_eip1271_signature``.
+
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
+    :param outcome: the value the contract call returns, or the exception it raises.
+    """
+    real_check = hmod.check_eip1271_signature
+    fake_ledger = _make_eip1271_ledger_api("isValidSignature", outcome)
+
+    def _check(**kwargs: Any) -> Any:
+        return real_check(**{**kwargs, "ledger_api": fake_ledger})
+
+    monkeypatch.setattr(hmod, "check_eip1271_signature", _check)
+
+
+@pytest.mark.parametrize(
+    "code",
+    [
+        pytest.param(_CONTRACT_CODE, id="contract"),
+        pytest.param(_DELEGATED_EOA_CODE, id="eip7702_delegated"),
+    ],
+)
+def test_sender_whose_code_has_no_isvalidsignature_is_declined_with_401(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, code: bytes
+) -> None:
+    """Empty return data from a sender with code is a final 401, not a retryable 503.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param code: the code the sender carries.
+    """
+    mh = _sig_handler(handler_context, monkeypatch)
+    _install_sender_code(monkeypatch, code)
+    _eip1271_call_outcome(
+        monkeypatch,
+        _Web3BadFunctionCallOutput(
+            "Could not decode contract function call to isValidSignature "
+            "with return data: b'', output_types: ['bytes4']"
+        ),
+    )
+    _post_eoa_signed(mh, http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert json.loads(resp.body.decode("utf-8"))["reason"] == (
+        "signature verification failed"
+    )
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(_Web3RPCError("rpc"), id="rpc_error"),
+        pytest.param(_requests_for_sigverify.ConnectionError("reset"), id="transport"),
+    ],
+)
+def test_isvalidsignature_rpc_failure_for_sender_with_code_replies_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, error: Exception
+) -> None:
+    """An RPC or transport failure on ``isValidSignature`` stays a retryable 503.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param error: the exception the contract call raises.
+    """
+    mh = _sig_handler(handler_context, monkeypatch)
+    _install_sender_code(monkeypatch, _CONTRACT_CODE)
+    _eip1271_call_outcome(monkeypatch, error)
+    _post_eoa_signed(mh, http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert json.loads(resp.body.decode("utf-8"))["reason"] == hmod.EIP1271_CALL_FAILED
+    assert handler_context.shared_state["pending_tasks"] == []
 
 
 def test_sender_code_read_is_cached_until_the_ttl(

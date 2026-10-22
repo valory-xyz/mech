@@ -312,8 +312,9 @@ REQUEST_INFO_READ_FAILED = "on-chain mapRequestIdInfos read failed"
 # the wall-clock deadline). ``is_infra=True`` at the caller so the
 # client sees 503 with a "try again later" verdict rather than 401
 # "unauthorized" during an infra failure. A revert, an out-of-gas,
-# or a codeless target still returns the ``DECLINED`` verdict below
-# and stays 401.
+# or return data that does not decode as ``bytes4`` (code without an
+# ``isValidSignature`` function) returns the ``DECLINED`` verdict and
+# stays 401.
 EIP1271_CALL_FAILED = "eip1271 isValidSignature call failed"
 
 # Timeout applied to the sender's ``isValidSignature`` view via the
@@ -4044,6 +4045,7 @@ class MechHttpHandler(AbstractResponseHandler):
                     message_hash=derived,
                     signature=signature_bytes,
                     gas=_EIP1271_CALL_GAS_CAP,
+                    has_code=has_code,
                     logger=self.context.logger,
                 ),
                 deadline_seconds=_RPC_WALL_CLOCK_DEADLINE_SECONDS,
@@ -4090,8 +4092,8 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return SignatureVerdict(ok=True, reason="", is_infra=False)
         if eip1271_verdict == Eip1271Verdict.CALL_FAILED:
-            # Infra-side failure inside ``isValidSignature`` (RPC error,
-            # transport error, ABI decode failure). Route to 503 with a
+            # Infra-side failure inside ``isValidSignature`` (RPC or
+            # transport error). Route to 503 with a
             # dedicated reason so a legitimate Safe requester is not
             # 401'd during an RPC outage.
             self.context.logger.warning(
