@@ -5225,7 +5225,7 @@ def test_finalize_done_task_charges_the_floor_for_a_failed_delivery(
     )
     behaviour._tools_to_pricing = params_stub.tools_to_pricing
     behaviour._invalid_request = via_invalid_flag
-    response = {"cost_dict": {"total_cost": 0.005}}
+    response: Dict[str, Any] = {"cost_dict": {"total_cost": 0.005}}
     if not via_invalid_flag:
         response["result"] = None
     behaviour._finalize_done_task("bafycid", response=response)
