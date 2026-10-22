@@ -44,10 +44,21 @@ SECP256K1_HALF_ORDER: int = int(
     16,
 )
 
-# ``MechMarketplace.EXPLICIT_NONCE_TAG``: the first word of the explicit-nonce
-# request id, so a signature for that path can never be replayed on the
-# sequential-nonce path and vice versa.
-EXPLICIT_NONCE_TAG: bytes = keccak(b"ExplicitNonceDelivery")
+# Explicit-nonce requests are standard EIP-712 typed data under the
+# marketplace's second signing domain (``getDomainSeparatorWithNonce``), so a
+# signature for that path can never be replayed on the sequential-nonce path
+# and vice versa. ``MechMarketplace.EXPLICIT_NONCE_TYPE_HASH``.
+EXPLICIT_NONCE_TYPE_HASH: bytes = keccak(
+    b"ExplicitNonceDelivery(address mech,address requester,bytes data,"
+    b"uint256 maxDeliveryRate,bytes32 paymentType,uint256 nonce,uint256 deadline)"
+)
+# ``MechMarketplace.DOMAIN_SEPARATOR_TYPE_HASH`` and the name / version the
+# explicit-nonce domain is built from (``getDomainSeparatorWithNonce``).
+EIP712_DOMAIN_TYPE_HASH: bytes = keccak(
+    b"EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+)
+EXPLICIT_NONCE_DOMAIN_NAME: bytes = b"MechMarketplace"
+EXPLICIT_NONCE_DOMAIN_VERSION: bytes = b"2"
 
 
 def _encode_address(address: str) -> bytes:
@@ -138,37 +149,75 @@ def compute_request_id(
     return _digest(domain_separator, inner)
 
 
-def compute_request_id_with_nonce(
-    marketplace: str,
+def compute_explicit_nonce_domain_separator(chain_id: int, marketplace: str) -> bytes:
+    """Compute the explicit-nonce signing domain, mirroring ``getDomainSeparatorWithNonce``.
+
+    ``keccak256(abi.encode(DOMAIN_SEPARATOR_TYPE_HASH, keccak256("MechMarketplace"),
+    keccak256("2"), block.chainid, address(this)))``. Independent of the
+    sequential path's ``getDomainSeparator``.
+
+    :param chain_id: the chain id the marketplace is deployed on.
+    :param marketplace: mech marketplace contract address (0x-prefixed).
+    :return: the 32-byte domain separator.
+    """
+    return keccak(
+        EIP712_DOMAIN_TYPE_HASH
+        + keccak(EXPLICIT_NONCE_DOMAIN_NAME)
+        + keccak(EXPLICIT_NONCE_DOMAIN_VERSION)
+        + _encode_uint256(chain_id)
+        + _encode_address(marketplace)
+    )
+
+
+def compute_request_id_with_nonce(  # pylint: disable=too-many-arguments
     mech: str,
     requester: str,
     request_data: bytes,
     delivery_rate: int,
     payment_type: bytes,
     nonce: int,
+    deadline: int,
     domain_separator: bytes,
 ) -> bytes:
-    """Compute the explicit-nonce request_id, mirroring ``getRequestIdWithNonce``.
+    r"""Compute the explicit-nonce request_id, mirroring ``getRequestIdWithNonce``.
 
-    Same layout as :func:`compute_request_id` with ``EXPLICIT_NONCE_TAG`` as
-    the first encoded word. ``delivery_rate`` is the signed cap and ``nonce``
-    is the requester-chosen per-request value.
+    Standard EIP-712 typed data::
 
-    :param marketplace: mech marketplace contract address (0x-prefixed).
+        structHash = keccak256(abi.encode(
+            EXPLICIT_NONCE_TYPE_HASH, mech, requester, keccak256(data),
+            maxDeliveryRate, paymentType, nonce, deadline))
+        requestId = keccak256(abi.encodePacked(
+            "\x19\x01", getDomainSeparatorWithNonce(), structHash))
+
+    ``delivery_rate`` is the signed cap, ``nonce`` the requester-chosen
+    per-request value and ``deadline`` the last Unix timestamp at which the
+    marketplace settles the request. The marketplace address enters through
+    the domain separator, not the struct.
+
     :param mech: mech contract address (0x-prefixed).
     :param requester: requester address, EOA or Safe (0x-prefixed).
     :param request_data: raw request data blob signed on-chain.
     :param delivery_rate: uint256 signed cap for the request.
     :param payment_type: bytes32 payment type identifier.
     :param nonce: uint256 requester-chosen nonce for this request.
-    :param domain_separator: 32-byte EIP-712 domain separator.
+    :param deadline: uint256 last settlement timestamp, in seconds.
+    :param domain_separator: 32-byte explicit-nonce domain separator, as
+        returned by ``getDomainSeparatorWithNonce()`` or computed by
+        :func:`compute_explicit_nonce_domain_separator`.
     :return: 32-byte request_id.
     """
     _check_lengths(domain_separator, payment_type)
-    inner = _encode_bytes32(EXPLICIT_NONCE_TAG) + _request_fields(
-        marketplace, mech, requester, request_data, delivery_rate, payment_type, nonce
+    struct = (
+        EXPLICIT_NONCE_TYPE_HASH
+        + _encode_address(mech)
+        + _encode_address(requester)
+        + keccak(request_data)
+        + _encode_uint256(delivery_rate)
+        + _encode_bytes32(payment_type)
+        + _encode_uint256(nonce)
+        + _encode_uint256(deadline)
     )
-    return _digest(domain_separator, inner)
+    return _digest(domain_separator, struct)
 
 
 def _check_lengths(domain_separator: bytes, payment_type: bytes) -> None:
@@ -192,7 +241,7 @@ def _request_fields(
     payment_type: bytes,
     nonce: int,
 ) -> bytes:
-    """The ``abi.encode`` body shared by ``getRequestId`` and ``getRequestIdWithNonce``."""
+    """The ``abi.encode`` body of ``getRequestId``."""
     return (
         _encode_address(marketplace)
         + _encode_address(mech)

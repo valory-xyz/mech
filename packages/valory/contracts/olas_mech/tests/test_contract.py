@@ -41,7 +41,7 @@ _LEGACY_OVERLOAD_SIGNATURE = (
 )
 _NONCES_OVERLOAD_SIGNATURE = (
     "deliverMarketplaceWithSignatures("
-    "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],bytes)"
+    "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],uint256[],bytes)"
 )
 
 
@@ -145,7 +145,7 @@ class TestGetOffchainDeliverDataLegacy:
 
 
 class TestGetOffchainDeliverDataWithNonces:
-    """`get_offchain_deliver_data_with_nonces` encodes the explicit-nonce 6-arg overload."""
+    """`get_offchain_deliver_data_with_nonces` encodes the explicit-nonce overload with deadlines."""
 
     def _call(self) -> dict:
         """Invoke the wrapper with a two-request batch, patching simulate_tx."""
@@ -176,11 +176,12 @@ class TestGetOffchainDeliverDataWithNonces:
                 deliveryRates=[99, 150],
                 maxRates=[100, 200],
                 nonces=[4243, 4242],
+                deadlines=[1_900_000_000, 1_900_000_060],
                 paymentData=b"",
             )
 
-    def test_calldata_selects_the_six_arg_overload(self) -> None:
-        """First 4 bytes match the explicit-nonce 6-arg signature's selector."""
+    def test_calldata_selects_the_explicit_nonce_overload(self) -> None:
+        """First 4 bytes match the explicit-nonce (nonces + deadlines) signature's selector."""
         result = self._call()
         expected = Web3().keccak(text=_NONCES_OVERLOAD_SIGNATURE).hex()[:8]
         assert result["data"][:4].hex() == expected
@@ -194,6 +195,7 @@ class TestGetOffchainDeliverDataWithNonces:
             "uint256[]",
             "uint256[]",
             "uint256[]",
+            "uint256[]",
             "bytes",
         ]
         decoded = abi_decode(types, result["data"][4:])
@@ -201,3 +203,4 @@ class TestGetOffchainDeliverDataWithNonces:
         assert list(decoded[2]) == [99, 150]
         assert list(decoded[3]) == [100, 200]
         assert list(decoded[4]) == [4243, 4242]
+        assert list(decoded[5]) == [1_900_000_000, 1_900_000_060]

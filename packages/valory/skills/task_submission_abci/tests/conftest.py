@@ -21,6 +21,7 @@
 
 import contextlib
 import threading
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from typing import Any, Generator
 from unittest.mock import MagicMock, patch
@@ -84,6 +85,9 @@ def _make_ctx(
     )
 
 
+CONSENSUS_TIMESTAMP = 1_700_000_000
+
+
 def _make_full_ctx(
     done_tasks: Any = None,
     payment_model: Any = None,
@@ -127,6 +131,7 @@ def _make_full_ctx(
         mech_staking_instance_address="0xSTAKE",
         mech_max_delivery_rate=10,
         cap_and_actual_enabled=False,
+        explicit_deadline_settlement_margin_seconds=180,
     )
     defaults.update(overrides)
     for attr, val in defaults.items():
@@ -137,6 +142,13 @@ def _make_full_ctx(
         mech_agent_balance=MagicMock(),
         tool_delivery_time=MagicMock(),
         synchronized_data=SimpleNamespace(safe_contract_address="0xSAFE"),
+        # Tendermint's time of the last round transition, the same on every
+        # agent; batches are built against it.
+        round_sequence=SimpleNamespace(
+            last_round_transition_timestamp=datetime.fromtimestamp(
+                CONSENSUS_TIMESTAMP, tz=timezone.utc
+            )
+        ),
     )
     return ctx
 

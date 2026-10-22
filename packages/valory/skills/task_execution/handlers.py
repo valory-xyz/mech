@@ -80,6 +80,7 @@ from packages.valory.skills.task_execution.utils.eip1271 import (
     Eip1271Verdict,
     check_eip1271_signature,
     get_marketplace_domain_separator,
+    get_marketplace_explicit_domain_separator,
     get_marketplace_request_id_view,
     get_marketplace_request_id_with_nonce_view,
 )
@@ -284,6 +285,12 @@ SENDER_INFLIGHT_LIMIT = "sender in-flight request limit reached"
 # flag is on and the boot self-check found ``getRequestIdWithNonce`` on the
 # marketplace; replay protection is the per-request-id record on chain.
 EXPLICIT_NONCE_DISABLED = "explicit-nonce requests are not enabled on this mech"
+# An explicit-nonce authorisation that would expire before the mech can
+# execute and settle it. The requester sets the deadline; the mech's floor is
+# ``explicit_nonce_min_deadline_seconds``.
+EXPLICIT_NONCE_DEADLINE_TOO_SOON = (
+    "explicit-nonce deadline is too close for the mech to settle"
+)
 REQUEST_ID_ALREADY_RECORDED = "request id already recorded on-chain"
 REQUEST_INFO_READ_FAILED = "on-chain mapRequestIdInfos read failed"
 # Reason surfaced when the EIP-1271 ``isValidSignature`` view call
@@ -441,6 +448,7 @@ _SELFCHECK_REQUESTER = "0x0000000000000000000000000000000000000001"
 _SELFCHECK_REQUEST_DATA = b"\x00" * 32
 _SELFCHECK_DELIVERY_RATE = 1
 _SELFCHECK_NONCE = 0
+_SELFCHECK_DEADLINE = 2**32
 
 # Rejection reason for a body whose local CID does not match the
 # posted ``ipfs_hash``: the request would enqueue arbitrary work under
@@ -528,6 +536,7 @@ class RequestKey(str, Enum):
     SIGNATURE = "signature"
     NONCE = "nonce"
     NONCE_MODE = "nonce_mode"
+    DEADLINE = "deadline"
 
 
 class ResponseKey(str, Enum):
@@ -1537,6 +1546,9 @@ class MechHttpHandler(AbstractResponseHandler):
         self._domain_separator: Optional[bytes] = None
         self._payment_type: Optional[bytes] = None
         self._explicit_nonce_ready: bool = False
+        # The explicit-nonce signing domain (``getDomainSeparatorWithNonce``),
+        # distinct from ``_domain_separator``; loaded by the explicit self-check.
+        self._explicit_domain_separator: Optional[bytes] = None
         self._marketplace_mech_address: Optional[str] = (
             self._resolve_marketplace_mech_address()
         )
@@ -2017,7 +2029,8 @@ class MechHttpHandler(AbstractResponseHandler):
         """Open the explicit-nonce path only if the marketplace serves its view.
 
         Compares ``getRequestIdWithNonce`` with the local reimplementation on
-        the same dummy inputs as the sequential self-check. Unlike that check
+        the same dummy inputs as the sequential self-check, under the
+        explicit-nonce signing domain read from the marketplace. Unlike that check
         this one never disables anything: a marketplace that is not upgraded
         yet, a mismatch or a transport failure all leave
         ``_explicit_nonce_ready`` False, so explicit requests get a 503 while
@@ -2026,11 +2039,15 @@ class MechHttpHandler(AbstractResponseHandler):
         :param ledger_api: the ledger API object used for the view call.
         """
         self._explicit_nonce_ready = False
+        self._explicit_domain_separator = None
         if self._domain_separator is None or self._payment_type is None:
             return
         marketplace_address = self.params.mech_marketplace_address
         mech_address = cast(str, self._marketplace_mech_address)
         try:
+            explicit_domain_separator = get_marketplace_explicit_domain_separator(
+                ledger_api=ledger_api, marketplace_address=marketplace_address
+            )
             onchain_request_id = get_marketplace_request_id_with_nonce_view(
                 ledger_api=ledger_api,
                 marketplace_address=marketplace_address,
@@ -2040,16 +2057,17 @@ class MechHttpHandler(AbstractResponseHandler):
                 delivery_rate=_SELFCHECK_DELIVERY_RATE,
                 payment_type=self._payment_type,
                 nonce=_SELFCHECK_NONCE,
+                deadline=_SELFCHECK_DEADLINE,
             )
             local_request_id = compute_request_id_with_nonce(
-                marketplace=marketplace_address,
                 mech=mech_address,
                 requester=_SELFCHECK_REQUESTER,
                 request_data=_SELFCHECK_REQUEST_DATA,
                 delivery_rate=_SELFCHECK_DELIVERY_RATE,
                 payment_type=self._payment_type,
                 nonce=_SELFCHECK_NONCE,
-                domain_separator=self._domain_separator,
+                deadline=_SELFCHECK_DEADLINE,
+                domain_separator=explicit_domain_separator,
             )
         except (RequestException, TimeoutError, Web3RPCError):
             self.context.logger.warning(
@@ -2074,6 +2092,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 local_request_id.hex(),
             )
             return
+        self._explicit_domain_separator = explicit_domain_separator
         self._explicit_nonce_ready = True
         self.context.logger.info("Explicit-nonce self-check passed.")
 
@@ -2083,6 +2102,17 @@ class MechHttpHandler(AbstractResponseHandler):
             self.context.shared_state.get(preimage_buffer.CAP_AND_ACTUAL_ENABLED, False)
         )
         return flag and self._explicit_nonce_ready
+
+    def _deadline_leaves_room_to_settle(self, deadline: int) -> bool:
+        """Whether an explicit-nonce deadline is at least the configured floor away.
+
+        :param deadline: the requester-signed last settlement timestamp.
+        :return: True when the mech has at least
+            ``explicit_nonce_min_deadline_seconds`` to execute and settle.
+        """
+        return deadline >= int(time.time()) + int(
+            self.params.explicit_nonce_min_deadline_seconds
+        )
 
     def start_prometheus_server(self) -> None:
         """Starts the prometheus server"""
@@ -2198,6 +2228,11 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             if nonce_mode not in (NONCE_MODE_SEQUENTIAL, NONCE_MODE_EXPLICIT):
                 raise ValueError(f"unsupported nonce_mode {nonce_mode!r}")
+            # The settlement deadline is part of every explicit-nonce signature
+            # and carries no meaning on the sequential path.
+            wire_deadline: Optional[str] = None
+            if nonce_mode == NONCE_MODE_EXPLICIT:
+                wire_deadline = str(data[RequestKey.DEADLINE.value])
         except Exception as e:
             self.context.logger.error(
                 f"Error processing signed request. body_len={len(http_msg.body)} "
@@ -2226,6 +2261,14 @@ class MechHttpHandler(AbstractResponseHandler):
                 http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
             )
             return
+        request_deadline: Optional[int] = None
+        if wire_deadline is not None:
+            if not self._reject_unless_uint256_decimal(wire_deadline, "deadline"):
+                self._handle_bad_request(
+                    http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+                )
+                return
+            request_deadline = int(wire_deadline)
         if (
             nonce_mode == NONCE_MODE_EXPLICIT
             and not self._explicit_nonce_accepts_enabled()
@@ -2242,6 +2285,25 @@ class MechHttpHandler(AbstractResponseHandler):
                 status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                 status_text="Service unavailable",
                 outcome=REQUEST_OUTCOME_DISABLED,
+            )
+            return
+        if request_deadline is not None and not self._deadline_leaves_room_to_settle(
+            request_deadline
+        ):
+            self.context.logger.info(
+                "Explicit-nonce request %s refused: deadline %d is under %d s away.",
+                request_id,
+                request_deadline,
+                self.params.explicit_nonce_min_deadline_seconds,
+            )
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason=EXPLICIT_NONCE_DEADLINE_TOO_SOON,
+                status_code=HttpCode.UNAUTHORIZED_CODE.value,
+                status_text="Unauthorized",
+                outcome=REQUEST_OUTCOME_NONCE_REJECTED,
             )
             return
 
@@ -2317,6 +2379,7 @@ class MechHttpHandler(AbstractResponseHandler):
             wire_request_id=request_id,
             signature_hex=signature_hex,
             nonce_mode=nonce_mode,
+            deadline=request_deadline,
         )
         if not sig_verdict.ok:
             # Route infra-side failures (boot constants unset, ledger
@@ -2545,6 +2608,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 sender_checksum=sender_checksum,
                 wire_nonce=request_nonce,
                 nonce_mode=nonce_mode,
+                deadline=request_deadline,
             )
         except Exception as e:
             self.context.logger.error(
@@ -3186,6 +3250,7 @@ class MechHttpHandler(AbstractResponseHandler):
         sender_checksum: str,
         wire_nonce: int,
         nonce_mode: str = NONCE_MODE_SEQUENTIAL,
+        deadline: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Enqueue the off-chain task and buffer its request metadata locally.
 
@@ -3206,6 +3271,8 @@ class MechHttpHandler(AbstractResponseHandler):
             the outstanding set alongside the pending task.
         :param nonce_mode: ``sequential`` or ``explicit``; explicit tasks are
             kept out of the sequential accepted/settling nonce sets.
+        :param deadline: the signed settlement deadline of an explicit-nonce
+            request; ignored on the sequential path.
         :return: the queued task dict.
         :raises Exception: if either queue write fails; partial state is rolled back.
         """
@@ -3266,6 +3333,7 @@ class MechHttpHandler(AbstractResponseHandler):
             "request_id_nonce",
             "requestIdWithNonce",
             RequestKey.NONCE_MODE.value,
+            RequestKey.DEADLINE.value,
             "tool",
             "enqueued_at_local",
         }
@@ -3276,7 +3344,11 @@ class MechHttpHandler(AbstractResponseHandler):
         # ``request_id`` and ``nonce_mode`` are legitimately on every body (the
         # validated values are applied from the parameters), so they are not
         # anomalies worth a log line.
-        expected_on_body = {RequestKey.REQUEST_ID.value, RequestKey.NONCE_MODE.value}
+        expected_on_body = {
+            RequestKey.REQUEST_ID.value,
+            RequestKey.NONCE_MODE.value,
+            RequestKey.DEADLINE.value,
+        }
         dropped_keys = [
             k for k in data.keys() if k in reserved_keys and k not in expected_on_body
         ]
@@ -3296,6 +3368,11 @@ class MechHttpHandler(AbstractResponseHandler):
             RequestKey.IS_OFFCHAIN.value: True,
             RequestKey.NONCE_MODE.value: nonce_mode,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
+            **(
+                {RequestKey.DEADLINE.value: deadline}
+                if nonce_mode == NONCE_MODE_EXPLICIT and deadline is not None
+                else {}
+            ),
             **{k: v for k, v in data.items() if k not in reserved_keys},
             # Receipt time; kept last so it also wins if the filter above lapses.
             "enqueued_at_local": time.time(),
@@ -3563,6 +3640,7 @@ class MechHttpHandler(AbstractResponseHandler):
         wire_request_id: str,
         signature_hex: str,
         nonce_mode: str = NONCE_MODE_SEQUENTIAL,
+        deadline: Optional[int] = None,
     ) -> SignatureVerdict:
         """Verify the caller signed the marketplace-derived request_id.
 
@@ -3606,6 +3684,8 @@ class MechHttpHandler(AbstractResponseHandler):
             a leading ``0x``.
         :param nonce_mode: ``sequential`` (default) or ``explicit``; selects
             the marketplace request-id layout the signature is checked against.
+        :param deadline: the signed settlement deadline; required on the
+            explicit path, ignored on the sequential one.
         :return: a :class:`SignatureVerdict`. ``ok=True`` on a valid
             signature whose wire nonce sits inside the accepted
             on-chain window; ``ok=False`` with ``is_infra=True`` on
@@ -3688,21 +3768,39 @@ class MechHttpHandler(AbstractResponseHandler):
             )
 
         try:
-            derive = (
-                compute_request_id_with_nonce
-                if nonce_mode == NONCE_MODE_EXPLICIT
-                else compute_request_id
-            )
-            derived = derive(
-                marketplace=marketplace_address,
-                mech=mech_address,
-                requester=sender_checksum,
-                request_data=request_data,
-                delivery_rate=delivery_rate,
-                payment_type=self._payment_type,
-                nonce=nonce,
-                domain_separator=self._domain_separator,
-            )
+            if nonce_mode == NONCE_MODE_EXPLICIT:
+                if self._explicit_domain_separator is None or deadline is None:
+                    self.context.logger.error(
+                        "Cannot verify explicit-nonce signature for request %s: "
+                        "explicit domain unavailable or deadline missing.",
+                        wire_request_id,
+                    )
+                    return SignatureVerdict(
+                        ok=False,
+                        reason="explicit-nonce verification constants unavailable",
+                        is_infra=self._explicit_domain_separator is None,
+                    )
+                derived = compute_request_id_with_nonce(
+                    mech=mech_address,
+                    requester=sender_checksum,
+                    request_data=request_data,
+                    delivery_rate=delivery_rate,
+                    payment_type=self._payment_type,
+                    nonce=nonce,
+                    deadline=deadline,
+                    domain_separator=self._explicit_domain_separator,
+                )
+            else:
+                derived = compute_request_id(
+                    marketplace=marketplace_address,
+                    mech=mech_address,
+                    requester=sender_checksum,
+                    request_data=request_data,
+                    delivery_rate=delivery_rate,
+                    payment_type=self._payment_type,
+                    nonce=nonce,
+                    domain_separator=self._domain_separator,
+                )
         except ValueError as e:
             self.context.logger.error(
                 "Request-id derivation failed for %s: %s.", wire_request_id, e

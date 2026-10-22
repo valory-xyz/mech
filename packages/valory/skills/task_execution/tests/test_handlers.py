@@ -2732,6 +2732,9 @@ from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E4
 _SIGVERIFY_MARKETPLACE = "0xdEaDbeefdEaDbeefdEadbEefdeADBeEfDeAdBeEf"
 _SIGVERIFY_MECH = "0xCAFECAFECAFECAFECAFECAFECAFECAFECAFECAFE"
 _SIGVERIFY_DOMAIN_SEPARATOR = b"\xab" * 32
+_SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR = b"\xba" * 32
+# Far enough away that every test's floor check passes.
+_EXPLICIT_DEADLINE = 2**32
 _SIGVERIFY_PAYMENT_TYPE = b"\xcd" * 32
 _SIGVERIFY_PRIVATE_KEY = "0x" + "42" * 32
 
@@ -6682,26 +6685,27 @@ _ZERO_MECH = "0x" + "00" * 20
 
 
 def _make_explicit_eoa_scenario(
-    delivery_rate: int = 123, nonce: int = 4242
+    delivery_rate: int = 123, nonce: int = 4242, deadline: int = _EXPLICIT_DEADLINE
 ) -> Dict[str, Any]:
-    """Sign an explicit-nonce request id (``getRequestIdWithNonce`` layout).
+    """Sign an explicit-nonce request id (``getRequestIdWithNonce`` typed data).
 
     :param delivery_rate: the signed cap embedded in the request id.
     :param nonce: the requester-chosen nonce embedded in the request id.
+    :param deadline: the signed settlement deadline embedded in the request id.
     :return: dict with the fields ``_sig_body`` needs.
     """
     account = _Account.from_key(_SIGVERIFY_PRIVATE_KEY)
     sender = _to_checksum(account.address)
     request_data = bytes.fromhex(_DEFAULT_IPFS_HASH[2:])
     request_id_bytes = _compute_request_id_with_nonce(
-        marketplace=_SIGVERIFY_MARKETPLACE,
         mech=_SIGVERIFY_MECH,
         requester=sender,
         request_data=request_data,
         delivery_rate=delivery_rate,
         payment_type=_SIGVERIFY_PAYMENT_TYPE,
         nonce=nonce,
-        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+        deadline=deadline,
+        domain_separator=_SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR,
     )
     signature = account.unsafe_sign_hash(request_id_bytes).signature
     return {
@@ -6710,6 +6714,7 @@ def _make_explicit_eoa_scenario(
         "ipfs_hash": _DEFAULT_IPFS_HASH,
         "delivery_rate": delivery_rate,
         "nonce": nonce,
+        "deadline": deadline,
         "signature_hex": "0x" + signature.hex(),
     }
 
@@ -6735,7 +6740,9 @@ def _explicit_path_handler(
     mh.setup()
     _seed_verification_constants(mh, handler_context.params, monkeypatch)
     handler_context.shared_state[hmod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = flag
+    handler_context.params.explicit_nonce_min_deadline_seconds = 600
     mh._explicit_nonce_ready = ready
+    mh._explicit_domain_separator = _SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR
     monkeypatch.setattr(
         mh,
         "_check_offchain_requester_balance",
@@ -6772,6 +6779,8 @@ def _post_with_mode(
         ipfs_hash=scenario["ipfs_hash"],
     )
     body[hmod.RequestKey.NONCE_MODE.value] = nonce_mode
+    if "deadline" in scenario:
+        body[hmod.RequestKey.DEADLINE.value] = str(scenario["deadline"])
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
 
@@ -6886,7 +6895,8 @@ def test_explicit_nonce_request_rejects_a_sequential_layout_signature(
     """
     mh = _explicit_path_handler(handler_context, monkeypatch)
     stored = _capture_rejections(mh, monkeypatch)
-    _post_with_mode(mh, http_dialogue, _make_eoa_scenario(nonce=4242), "explicit")
+    scenario = {**_make_eoa_scenario(nonce=4242), "deadline": _EXPLICIT_DEADLINE}
+    _post_with_mode(mh, http_dialogue, scenario, "explicit")
     assert stored["status_code"] == HttpCode.UNAUTHORIZED_CODE.value
     assert handler_context.shared_state["pending_tasks"] == []
 
@@ -6970,14 +6980,14 @@ def _local_explicit_selfcheck_id(mh: MechHttpHandler) -> bytes:
     :return: the 32-byte request id.
     """
     return _compute_request_id_with_nonce(
-        marketplace=_SIGVERIFY_MARKETPLACE,
         mech=_SIGVERIFY_MECH,
         requester=hmod._SELFCHECK_REQUESTER,
         request_data=hmod._SELFCHECK_REQUEST_DATA,
         delivery_rate=hmod._SELFCHECK_DELIVERY_RATE,
         payment_type=_SIGVERIFY_PAYMENT_TYPE,
         nonce=hmod._SELFCHECK_NONCE,
-        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+        deadline=hmod._SELFCHECK_DEADLINE,
+        domain_separator=_SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR,
     )
 
 
@@ -6992,16 +7002,23 @@ def test_explicit_nonce_selfcheck_opens_the_path_only_on_a_match(
     mh = _explicit_path_handler(handler_context, monkeypatch, ready=False)
     expected = _local_explicit_selfcheck_id(mh)
     monkeypatch.setattr(
+        hmod,
+        "get_marketplace_explicit_domain_separator",
+        lambda **_kw: _SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR,
+    )
+    monkeypatch.setattr(
         hmod, "get_marketplace_request_id_with_nonce_view", lambda **_kw: expected
     )
     mh._selfcheck_explicit_nonce_derivation(MagicMock())
     assert mh._explicit_nonce_ready is True
+    assert mh._explicit_domain_separator == _SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR
 
     monkeypatch.setattr(
         hmod, "get_marketplace_request_id_with_nonce_view", lambda **_kw: b"\x00" * 32
     )
     mh._selfcheck_explicit_nonce_derivation(MagicMock())
     assert mh._explicit_nonce_ready is False
+    assert mh._explicit_domain_separator is None
 
 
 def test_explicit_nonce_selfcheck_keeps_sequential_path_when_view_reverts(
@@ -7017,8 +7034,101 @@ def test_explicit_nonce_selfcheck_keeps_sequential_path_when_view_reverts(
     def _revert(**_kw: Any) -> bytes:
         raise hmod.ContractLogicError("execution reverted")
 
-    monkeypatch.setattr(hmod, "get_marketplace_request_id_with_nonce_view", _revert)
+    monkeypatch.setattr(hmod, "get_marketplace_explicit_domain_separator", _revert)
     mh._selfcheck_explicit_nonce_derivation(MagicMock())
     assert mh._explicit_nonce_ready is False
+    assert mh._explicit_domain_separator is None
     assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
     assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE
+
+
+def test_explicit_nonce_request_carries_its_deadline_into_the_queue(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The signed deadline is stored on the pending task for settlement.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    scenario = _make_explicit_eoa_scenario(deadline=_EXPLICIT_DEADLINE)
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+    (task,) = handler_context.shared_state["pending_tasks"]
+    assert task[hmod.RequestKey.DEADLINE.value] == _EXPLICIT_DEADLINE
+
+
+def test_explicit_nonce_request_refused_when_its_deadline_is_too_close(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A deadline under the configured floor is refused before any chain read.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    stored = _capture_rejections(mh, monkeypatch)
+    monkeypatch.setattr(hmod.time, "time", lambda: 1_700_000_000.0)
+    too_soon = 1_700_000_000 + 600 - 1
+    scenario = _make_explicit_eoa_scenario(deadline=too_soon)
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert stored["status_code"] == HttpCode.UNAUTHORIZED_CODE.value
+    assert stored["reason"] == hmod.EXPLICIT_NONCE_DEADLINE_TOO_SOON
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_explicit_nonce_request_with_exactly_the_floor_left_is_accepted(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The floor is inclusive: a deadline exactly the floor away is enough.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    monkeypatch.setattr(hmod.time, "time", lambda: 1_700_000_000.0)
+    scenario = _make_explicit_eoa_scenario(deadline=1_700_000_000 + 600)
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+    (task,) = handler_context.shared_state["pending_tasks"]
+    assert task[hmod.RequestKey.DEADLINE.value] == 1_700_000_000 + 600
+
+
+def test_explicit_nonce_request_without_a_deadline_is_a_bad_request(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """An explicit-nonce body must carry the deadline that is part of its signature.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    scenario = _make_explicit_eoa_scenario()
+    scenario.pop("deadline")
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert (
+        handler_context.outbox.sent[-1].status_code == HttpCode.BAD_REQUEST_CODE.value
+    )
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_explicit_nonce_signature_over_another_deadline_is_rejected(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The deadline on the wire must be the one that was signed.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _explicit_path_handler(handler_context, monkeypatch)
+    stored = _capture_rejections(mh, monkeypatch)
+    scenario = _make_explicit_eoa_scenario(deadline=_EXPLICIT_DEADLINE)
+    scenario["deadline"] = _EXPLICIT_DEADLINE + 1
+    _post_with_mode(mh, http_dialogue, scenario, hmod.NONCE_MODE_EXPLICIT)
+    assert stored["status_code"] == HttpCode.UNAUTHORIZED_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []

@@ -24,7 +24,7 @@ contracts:
 - valory/hash_checkpoint:0.1.0:bafybeih76qkq55amfkgqewmfzrqpffmgcg7aurgnpjhpzkhh6ek7i5mh3m
 - valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
 - valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
-- valory/olas_mech:0.1.0:bafybeic32y6pb5zdwwnnu5s26jjsibgdhepapfyrp4yxabrlamaialhpqy
+- valory/olas_mech:0.1.0:bafybeif7l4fdadg76ulxodjgkjwnpwkdvjykcvhe6576ppnhuxt77exzzu
 - valory/service_registry:0.1.0:bafybeicbfffywnaaehptzasxsdoyguuurpleirsnor5xf7rqk57isjkury
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
@@ -42,12 +42,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
-- valory/delivery_rate_abci:0.1.0:bafybeifc7ixpncwmraqy6aafbjgp6mlemf3wk7l65qm7kvkyt64qnoufbi
-- valory/mech_abci:0.1.0:bafybeiaa27qkihj77clsitdliywtdojzooqo2iotjrucnrnkrccltroxk4
+- valory/delivery_rate_abci:0.1.0:bafybeihp55ry2ttct4x37n5qbhloom6dpzgarx3d2xz6zjthm22jc4fmua
+- valory/mech_abci:0.1.0:bafybeibp6efthyqvjhhyiztxs3r2wt64ck4h66osyltnrpv3zvsmprzm3e
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeieqedkjdag4654jvm7pap7p56lrpi25yh4uxbvfmjensm72mvlpru
-- valory/task_submission_abci:0.1.0:bafybeib6smot7mlhuuuggxxc746pa4e7tdtf2l7qv3pt4n4dvujz32hv3y
+- valory/task_execution:0.1.0:bafybeia33ci4fbqqd676zor6k6zvzf32xn6qgxtpvbsgp6fluec5wzef2m
+- valory/task_submission_abci:0.1.0:bafybeignc65sdwsw7tiixk27sjrjmqvvzymwpn5qvxpkg3m5654padw6x4
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
@@ -215,6 +215,7 @@ models:
       mech_to_max_delivery_rate: ${dict:{}}
       mech_to_config: ${dict:{}}
       cap_and_actual_enabled: ${bool:false}
+      explicit_deadline_settlement_margin_seconds: ${int:180}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
@@ -242,6 +243,7 @@ models:
       fixed_cost_per_request: ${int:0}
       marketplace_fee_bp: ${int:1500}
       payment_token_decimals: ${int:18}
+      explicit_nonce_min_deadline_seconds: ${int:600}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
       default_chain_id: ${str:gnosis}

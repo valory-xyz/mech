@@ -40,8 +40,9 @@ from eth_account import Account
 from eth_utils import keccak
 
 from packages.valory.skills.task_execution.utils.request_id import (
-    EXPLICIT_NONCE_TAG,
+    EXPLICIT_NONCE_TYPE_HASH,
     SECP256K1_HALF_ORDER,
+    compute_explicit_nonce_domain_separator,
     compute_request_id,
     compute_request_id_with_nonce,
     recover_eoa_signer,
@@ -329,51 +330,109 @@ def test_recover_eoa_signer_wrong_signature_recovers_different_address() -> None
 # --- explicit-nonce request-id derivation ------------------------------------
 
 
-def _reference_request_id_with_nonce(
-    marketplace: str,
+def _reference_request_id_with_nonce(  # pylint: disable=too-many-arguments
     mech: str,
     requester: str,
     request_data: bytes,
     delivery_rate: int,
     payment_type: bytes,
     nonce: int,
+    deadline: int,
     domain_separator: bytes,
 ) -> bytes:
-    """Independent reference for ``getRequestIdWithNonce``: the tag word comes first."""
-    inner = abi_encode(
-        [
-            "bytes32",
-            "address",
-            "address",
-            "address",
-            "bytes32",
-            "uint256",
-            "bytes32",
-            "uint256",
-        ],
-        [
-            keccak(b"ExplicitNonceDelivery"),
-            marketplace,
-            mech,
-            requester,
-            keccak(request_data),
-            delivery_rate,
-            payment_type,
-            nonce,
-        ],
+    """Independent EIP-712 reference for ``getRequestIdWithNonce``.
+
+    Written from the marketplace's Solidity source: ``keccak256(abi.encode(
+    EXPLICIT_NONCE_TYPE_HASH, mech, requester, keccak256(data), maxDeliveryRate,
+    paymentType, nonce, deadline))`` under the explicit-nonce domain.
+
+    :param mech: mech contract address.
+    :param requester: requester address.
+    :param request_data: raw request data bytes.
+    :param delivery_rate: uint256 signed cap.
+    :param payment_type: bytes32 payment type identifier.
+    :param nonce: uint256 requester-chosen nonce.
+    :param deadline: uint256 last settlement timestamp.
+    :param domain_separator: 32-byte explicit-nonce domain separator.
+    :return: 32-byte reference request_id.
+    """
+    type_hash = keccak(
+        text=(
+            "ExplicitNonceDelivery(address mech,address requester,bytes data,"
+            "uint256 maxDeliveryRate,bytes32 paymentType,uint256 nonce,uint256 deadline)"
+        )
     )
-    return keccak(b"\x19\x01" + domain_separator + keccak(inner))
+    struct_hash = keccak(
+        abi_encode(
+            [
+                "bytes32",
+                "address",
+                "address",
+                "bytes32",
+                "uint256",
+                "bytes32",
+                "uint256",
+                "uint256",
+            ],
+            [
+                type_hash,
+                mech,
+                requester,
+                keccak(request_data),
+                delivery_rate,
+                payment_type,
+                nonce,
+                deadline,
+            ],
+        )
+    )
+    return keccak(b"\x19\x01" + domain_separator + struct_hash)
+
+
+def _reference_explicit_domain_separator(chain_id: int, marketplace: str) -> bytes:
+    """Independent reference for ``getDomainSeparatorWithNonce``.
+
+    :param chain_id: the chain id.
+    :param marketplace: the marketplace address.
+    :return: the 32-byte domain separator.
+    """
+    return keccak(
+        abi_encode(
+            ["bytes32", "bytes32", "bytes32", "uint256", "address"],
+            [
+                keccak(
+                    text=(
+                        "EIP712Domain(string name,string version,"
+                        "uint256 chainId,address verifyingContract)"
+                    )
+                ),
+                keccak(text="MechMarketplace"),
+                keccak(text="2"),
+                chain_id,
+                marketplace,
+            ],
+        )
+    )
 
 
 @pytest.mark.parametrize(
-    "request_data,delivery_rate,payment_type,nonce",
+    "request_data,delivery_rate,payment_type,nonce,deadline",
     [
-        pytest.param(b"", 0, b"\x00" * 32, 0, id="all_zero_edges"),
-        pytest.param(b"foo", 100, b"\xff" * 32, 4242, id="small_bytes"),
+        pytest.param(b"", 0, b"\x00" * 32, 0, 0, id="all_zero_edges"),
+        pytest.param(b"foo", 100, b"\xff" * 32, 5, 1_700_000_000, id="small_bytes"),
+        pytest.param(
+            bytes(range(32)),
+            2**200,
+            (42).to_bytes(32, "big"),
+            2**64,
+            2**40,
+            id="mid_range_values",
+        ),
         pytest.param(
             bytes(range(64)),
             2**256 - 1,
             b"\xaa" * 32,
+            2**256 - 1,
             2**256 - 1,
             id="uint256_upper_bound",
         ),
@@ -384,16 +443,17 @@ def test_compute_request_id_with_nonce_matches_abi_reference(
     delivery_rate: int,
     payment_type: bytes,
     nonce: int,
+    deadline: int,
 ) -> None:
-    """The explicit-nonce helper matches the independent reference byte-for-byte."""
+    """The explicit-nonce helper matches the independent EIP-712 reference byte-for-byte."""
     kwargs: Dict[str, Any] = dict(
-        marketplace="0x" + "11" * 20,
         mech="0x" + "22" * 20,
         requester="0x" + "33" * 20,
         request_data=request_data,
         delivery_rate=delivery_rate,
         payment_type=payment_type,
         nonce=nonce,
+        deadline=deadline,
         domain_separator=b"\xab" * 32,
     )
     assert compute_request_id_with_nonce(**kwargs) == _reference_request_id_with_nonce(
@@ -401,10 +461,43 @@ def test_compute_request_id_with_nonce_matches_abi_reference(
     )
 
 
+@pytest.mark.parametrize("chain_id", [1, 100, 137, 2**64])
+def test_explicit_nonce_domain_separator_matches_abi_reference(chain_id: int) -> None:
+    """The explicit-nonce domain is EIP712Domain(MechMarketplace, "2", chainId, marketplace)."""
+    marketplace = "0x" + "11" * 20
+    assert compute_explicit_nonce_domain_separator(
+        chain_id, marketplace
+    ) == _reference_explicit_domain_separator(chain_id, marketplace)
+
+
 def test_explicit_nonce_request_id_differs_from_sequential_for_same_inputs() -> None:
     """Domain separation: identical fields hash differently on the two paths."""
+    common: Dict[str, Any] = dict(
+        mech="0x" + "22" * 20,
+        requester="0x" + "33" * 20,
+        request_data=b"same",
+        delivery_rate=7,
+        payment_type=b"\x01" * 32,
+        nonce=7,
+    )
+    explicit = compute_request_id_with_nonce(
+        deadline=2**32, domain_separator=b"\xab" * 32, **common
+    )
+    sequential = compute_request_id(
+        marketplace="0x" + "11" * 20, domain_separator=b"\xab" * 32, **common
+    )
+    assert explicit != sequential
+    assert EXPLICIT_NONCE_TYPE_HASH == keccak(
+        text=(
+            "ExplicitNonceDelivery(address mech,address requester,bytes data,"
+            "uint256 maxDeliveryRate,bytes32 paymentType,uint256 nonce,uint256 deadline)"
+        )
+    )
+
+
+def test_explicit_nonce_request_id_changes_with_the_deadline() -> None:
+    """The deadline is part of the signed digest."""
     kwargs: Dict[str, Any] = dict(
-        marketplace="0x" + "11" * 20,
         mech="0x" + "22" * 20,
         requester="0x" + "33" * 20,
         request_data=b"same",
@@ -413,5 +506,6 @@ def test_explicit_nonce_request_id_differs_from_sequential_for_same_inputs() -> 
         nonce=7,
         domain_separator=b"\xab" * 32,
     )
-    assert compute_request_id_with_nonce(**kwargs) != compute_request_id(**kwargs)
-    assert EXPLICIT_NONCE_TAG == keccak(b"ExplicitNonceDelivery")
+    assert compute_request_id_with_nonce(
+        deadline=1_000, **kwargs
+    ) != compute_request_id_with_nonce(deadline=1_001, **kwargs)
