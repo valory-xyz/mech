@@ -703,6 +703,37 @@ def _first_of_group(details: Dict[str, Any], count: int) -> Dict[str, Any]:
     return {key: value[:count] for key, value in details.items()}
 
 
+def _order_groups_for_settlement(
+    groups: Dict[Tuple[str, str], Dict[str, Any]],
+) -> List[Tuple[Tuple[str, str], Dict[str, Any]]]:
+    """Order off-chain requester groups for filling the settlement tx.
+
+    Requesters go by their earliest signed deadline, then by address; a
+    requester with no explicit-nonce request goes after every deadline.
+    Within a requester the sequential group goes first.
+
+    :param groups: ``{(sender, nonce_mode): details}`` with aligned lists.
+    :return: the groups as ``((sender, nonce_mode), details)`` pairs, in order.
+    """
+    earliest: Dict[str, int] = {}
+    for (sender, _), details in groups.items():
+        for deadline in details[OffchainKeys.DEADLINES.value]:
+            earliest[sender] = min(earliest.get(sender, deadline), deadline)
+
+    def _key(
+        item: Tuple[Tuple[str, str], Dict[str, Any]],
+    ) -> Tuple[bool, int, str, bool]:
+        sender, nonce_mode = item[0]
+        return (
+            sender not in earliest,
+            earliest.get(sender, 0),
+            sender,
+            nonce_mode != NONCE_MODE_SEQUENTIAL,
+        )
+
+    return sorted(groups.items(), key=_key)
+
+
 def _nonce_order(task: Dict[str, Any]) -> int:
     """Return the task's wire nonce for drop ordering, or a sentinel when absent.
 
@@ -2285,13 +2316,11 @@ class TransactionPreparationBehaviour(
                     else max_rate
                 )
 
-            # A requester's sequential group goes first. Each deliver is
+            # Requesters fill the tx by earliest signed deadline, and a
+            # requester's sequential group goes first. Each deliver is
             # simulated alone against the live balance, so a second group of
             # the same requester joins only when both charges fit together.
-            ordered_groups = sorted(
-                offchain_list_by_sender.items(),
-                key=lambda item: (item[0][0], item[0][1] != NONCE_MODE_SEQUENTIAL),
-            )
+            ordered_groups = _order_groups_for_settlement(offchain_list_by_sender)
             included_charge: Dict[str, int] = {}
             remaining = (
                 self._settlement_request_capacity() if capacity is None else capacity

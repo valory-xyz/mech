@@ -3427,6 +3427,24 @@ class TestSettlementFitsGasLimit:
         assert forward[0] == [f"0xA-{i}" for i in range(1, 5)]
         assert forward[1] == ["0xA-5", "0xB-1", "0xB-2", "0xB-3"]
 
+    def test_requesters_fill_the_tx_by_earliest_deadline(self) -> None:
+        """A requester whose deadline comes first is settled first, whatever its address."""
+        later = _explicit_tasks(4, sender="0xA")
+        sooner = _explicit_tasks(4, sender="0xB")
+        for task in sooner:
+            task[beh_mod.DEADLINE_KEY] = _FAR_DEADLINE - 1
+        sequential_only = [
+            TestGetOffchainTasksDeliverData._offchain_task("0x0-1", sender="0x0")
+        ]
+        batches = self._settle_over_periods(
+            self._make_b(), sequential_only + later + sooner
+        )
+        assert batches == [
+            [t["request_id"] for t in sooner],
+            [t["request_id"] for t in later],
+            ["0x0-1"],
+        ]
+
     @pytest.mark.parametrize("cap_and_actual_enabled", [True, False])
     def test_sequential_group_over_capacity_keeps_its_lowest_nonces(
         self, cap_and_actual_enabled: bool
