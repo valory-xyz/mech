@@ -87,6 +87,11 @@ def _make_ctx(
 
 CONSENSUS_TIMESTAMP = 1_700_000_000
 
+# The shipped settlement gas config: four requests fit in one tx.
+DEFAULT_MANUAL_GAS_LIMIT = 1_000_000
+DEFAULT_SETTLEMENT_BASE_GAS = 300_000
+DEFAULT_SETTLEMENT_GAS_PER_REQUEST = 150_000
+
 
 def _make_full_ctx(
     done_tasks: Any = None,
@@ -132,6 +137,9 @@ def _make_full_ctx(
         mech_max_delivery_rate=10,
         cap_and_actual_enabled=False,
         explicit_deadline_settlement_margin_seconds=180,
+        manual_gas_limit=DEFAULT_MANUAL_GAS_LIMIT,
+        settlement_base_gas=DEFAULT_SETTLEMENT_BASE_GAS,
+        settlement_gas_per_request=DEFAULT_SETTLEMENT_GAS_PER_REQUEST,
     )
     defaults.update(overrides)
     for attr, val in defaults.items():

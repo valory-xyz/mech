@@ -67,18 +67,21 @@ from packages.valory.skills.task_execution.behaviours import (
     NONCE_MODE_EXPLICIT,
     NONCE_MODE_SEQUENTIAL,
     PREDICT_API_EVENTS,
+    RESERVED_CAPS_BY_SENDER,
     _release_outstanding_nonce,
     is_explicit_nonce_task,
 )
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import (
     Params,
+    minimum_charge,
     offchain_metric_labels,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.eip1271 import (
     Eip1271Verdict,
     check_eip1271_signature,
+    get_account_code,
     get_marketplace_domain_separator,
     get_marketplace_explicit_domain_separator,
     get_marketplace_request_id_view,
@@ -165,6 +168,7 @@ RequestOutcome = Literal[
     "nonce_rejected",
     "balance_unavailable",
     "insufficient_balance",
+    "cap_below_minimum",
     "internal_error",
     "rejected_other",
 ]
@@ -180,6 +184,7 @@ REQUEST_OUTCOME_SENDER_UNRESOLVED: RequestOutcome = "sender_unresolved"  # 503
 REQUEST_OUTCOME_NONCE_REJECTED: RequestOutcome = "nonce_rejected"  # 401 / 503
 REQUEST_OUTCOME_BALANCE_UNAVAILABLE: RequestOutcome = "balance_unavailable"  # 503
 REQUEST_OUTCOME_INSUFFICIENT_BALANCE: RequestOutcome = "insufficient_balance"  # 402
+REQUEST_OUTCOME_CAP_BELOW_MINIMUM: RequestOutcome = "cap_below_minimum"  # 402
 REQUEST_OUTCOME_INTERNAL_ERROR: RequestOutcome = "internal_error"  # 500 / 503
 REQUEST_OUTCOME_REJECTED_OTHER: RequestOutcome = "rejected_other"  # untagged
 mech_offchain_requests_total = Counter(
@@ -220,7 +225,9 @@ mech_preimage_incomplete_rows = Gauge(
 
 # Off-chain HTTP hardening
 MAX_HTTP_BODY_BYTES = 1_048_576  # 1MB cap on inbound HTTP bodies
-MIN_DELIVERY_RATE = 0  # 0 allowed for free tasks; rejects only negatives
+# Body-shape bound only: rejects negatives. A cap below the mech's minimum
+# charge is refused with a 402 once the balance has been read.
+MIN_DELIVERY_RATE = 0
 MAX_DELIVERY_RATE = 2**256 - 1  # uint256 upper bound
 # 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
 IPFS_HASH_RE = re.compile(r"^0x([0-9a-fA-F]{64}|[0-9a-fA-F]{68})$")
@@ -300,8 +307,9 @@ REQUEST_INFO_READ_FAILED = "on-chain mapRequestIdInfos read failed"
 # the wall-clock deadline). ``is_infra=True`` at the caller so the
 # client sees 503 with a "try again later" verdict rather than 401
 # "unauthorized" during an infra failure. A revert, an out-of-gas,
-# or a codeless target still returns the ``DECLINED`` verdict below
-# and stays 401.
+# or return data that does not decode as ``bytes4`` (code without an
+# ``isValidSignature`` function) returns the ``DECLINED`` verdict and
+# stays 401.
 EIP1271_CALL_FAILED = "eip1271 isValidSignature call failed"
 
 # Timeout applied to the sender's ``isValidSignature`` view via the
@@ -482,7 +490,84 @@ REQUEST_ALREADY_ACCEPTED = "already accepted"
 # round-trip needed for the compare.
 IPFS_HASH_MULTIHASH_PREFIX = "1220"
 
+# 402 reasons. The signed cap must cover the mech's minimum charge, and the
+# sender's balance must cover this cap plus the caps of its unsettled requests.
+INSUFFICIENT_BALANCE = "insufficient balance"
+SIGNED_CAP_BELOW_MINIMUM = "signed cap below the mech's minimum charge"
+
+# The signature scheme follows the rule the marketplace applies at
+# settlement: a sender with code (a contract, or an EOA with an EIP-7702
+# delegation) is verified through EIP-1271 ``isValidSignature``, any other
+# sender through ``ecrecover``. The code read is cached per sender for
+# ``_SENDER_CODE_CACHE_TTL_SECONDS`` so repeat requests skip the RPC; the
+# TTL bounds how long a code change at the sender goes unseen. The cache is
+# capped at ``_SENDER_CODE_CACHE_MAX_ENTRIES``, oldest entry evicted first.
+_SENDER_CODE_CACHE_TTL_SECONDS = 60.0
+_SENDER_CODE_CACHE_MAX_ENTRIES = 10_000
+CODE_READ_FAILED = "sender code read failed"
+CODE_READ_UNRECOVERABLE = "sender code read unrecoverable"
+
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+
+
+def reserve_signed_cap(
+    shared_state: Dict[str, Any], sender: str, request_id: str, cap: int
+) -> None:
+    """Record ``cap`` as owed by ``sender`` until ``request_id`` settles.
+
+    :param shared_state: the AEA shared-state dict.
+    :param sender: the requester address, any case.
+    :param request_id: the off-chain request id (``str`` form).
+    :param cap: the signed cap of the request.
+    """
+    reserved = shared_state.setdefault(RESERVED_CAPS_BY_SENDER, {})
+    reserved.setdefault(str(sender).lower(), {})[str(request_id)] = int(cap)
+
+
+def unsettled_signed_caps(shared_state: Dict[str, Any], sender: str) -> int:
+    """Return the sum of the signed caps ``sender`` has not paid for yet.
+
+    A request counts while it is pending or executing (``in_memory_requests``)
+    or done and awaiting settlement (``DONE_TASKS``), until its settlement is
+    confirmed. Entries for requests in neither place are dropped here.
+
+    :param shared_state: the AEA shared-state dict.
+    :param sender: the requester address, any case.
+    :return: the reserved amount in payment-asset base units.
+    """
+    reserved = shared_state.setdefault(RESERVED_CAPS_BY_SENDER, {})
+    key = str(sender).lower()
+    entries = reserved.get(key)
+    if not entries:
+        return 0
+    in_memory = shared_state.get(IN_MEMORY_REQUESTS, {})
+    done_ids = {
+        str(task.get("request_id")) for task in shared_state.get(DONE_TASKS, [])
+    }
+    live = {
+        request_id: cap
+        for request_id, cap in entries.items()
+        if request_id in in_memory or request_id in done_ids
+    }
+    if live:
+        reserved[key] = live
+    else:
+        reserved.pop(key, None)
+    return sum(live.values())
+
+
+def requested_tool(ipfs_data: str) -> Optional[str]:
+    """Return the ``tool`` named in an off-chain request's metadata, if any.
+
+    :param ipfs_data: the request-metadata JSON carried in the body.
+    :return: the tool name, or None when the metadata names no tool.
+    """
+    try:
+        parsed = json.loads(ipfs_data)
+    except (TypeError, ValueError):
+        return None
+    tool = parsed.get("tool") if isinstance(parsed, dict) else None
+    return tool if isinstance(tool, str) else None
 
 
 class Route(str, Enum):
@@ -1310,10 +1395,14 @@ class KvStoreHandler(BaseHandler):
                 return False
             queued = copy.deepcopy(done_task)
             done_tasks.append(queued)
-        # Re-register the wire nonce in the settling set so the admission
-        # gate's next-expected slot counts it (the sets are in-memory and
-        # were wiped by the same restart that dropped the task).
+        # Re-register the wire nonce in the settling set and the signed cap
+        # in the sender's reservation so the admission gate and the balance
+        # check count it (both are in-memory and were wiped by the restart).
         _release_outstanding_nonce(shared_state, queued)
+        sender = queued.get(RequestKey.SENDER.value)
+        cap = queued.get(RequestKey.REQUEST_DELIVERY_RATE.value)
+        if sender is not None and cap is not None:
+            reserve_signed_cap(shared_state, str(sender), request_id, int(cap))
         return True
 
     def _require_posted(self) -> bool:
@@ -1526,6 +1615,7 @@ class MechHttpHandler(AbstractResponseHandler):
         # follow-up; the invariant + warning is the light insurance.
         self.context.shared_state[ACCEPTED_NONCES_BY_SENDER] = {}
         self.context.shared_state[SETTLING_NONCES_BY_SENDER] = {}
+        self.context.shared_state[RESERVED_CAPS_BY_SENDER] = {}
         self.json_content_header = JSON_CONTENT_HEADER
         # Deployment-scoped constants used by the offchain request-id
         # derivation: the marketplace EIP-712 ``domainSeparator`` and the
@@ -1565,6 +1655,9 @@ class MechHttpHandler(AbstractResponseHandler):
         # other's provider timeout.
         self._ledger_api_cache: Dict[Tuple[str, int, float], EthereumApi] = {}
         self._balance_tracker_asset_cache: Dict[str, str] = {}
+        # sender checksum -> (has code, monotonic expiry); see
+        # ``_SENDER_CODE_CACHE_TTL_SECONDS``.
+        self._sender_code_cache: Dict[str, Tuple[bool, float]] = {}
         # Executor for on-path RPCs whose wall-clock duration must be
         # capped independently of the per-HTTP-request provider timeout.
         # See ``_RPC_WALL_CLOCK_DEADLINE_SECONDS`` for the multiplication
@@ -2368,8 +2461,8 @@ class MechHttpHandler(AbstractResponseHandler):
             f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
         )
 
-        # Verify the request signature before charging the requester's balance.
-        # EIP-1271 for Safe senders, plain ecrecover for EOAs. Sequential by
+        # Verify the request signature before charging the requester's balance,
+        # by the rule the marketplace applies at settlement. Sequential by
         # design: a failure here rejects before the balance-check RPC runs.
         sig_verdict = self._verify_offchain_request_signature(
             sender=sender,
@@ -2543,41 +2636,51 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return
 
-        available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
-        if available_amount < request_delivery_rate:
-            try:
-                extra_headers = (
-                    self._build_www_authenticate_header()
-                    + self._build_terms_link_header()
-                )
-                challenge_body = self._build_402_challenge(
-                    balance_check, error_msg="insufficient balance"
-                )
-            except Exception:  # pylint: disable=broad-exception-caught
-                # The 402 / header builders raise on malformed internal state
-                # (missing balance-tracker address, mis-terminated header).
-                # Reply 500 rather than letting it escape with no HTTP response.
-                self.context.logger.exception(
-                    f"Failed to build 402 challenge for {request_id}."
-                )
-                self._send_internal_error(http_msg, http_dialogue, request_id)
-                return
-            # 402 is the one rejection path that DOES persist the
-            # response payload keyed by ``request_id``: the caller has
-            # authenticated (signature ownership proven) and needs the
-            # deposit challenge to be readable via the polling endpoint
-            # (``_handle_offchain_request_info``). Every other pre-auth
-            # rejection returns the HTTP response only.
-            self._send_rejection_response(
+        minimum = minimum_charge(
+            self.params, requested_tool(data.get(RequestKey.IPFS_DATA.value, ""))
+        )
+        if request_delivery_rate < minimum:
+            self.context.logger.info(
+                "Offchain request %s refused: signed cap %d is below the "
+                "minimum charge %d.",
+                request_id,
+                request_delivery_rate,
+                minimum,
+            )
+            self._send_payment_required(
                 http_msg,
                 http_dialogue,
                 request_id,
-                reason="insufficient balance",
-                status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
-                status_text="Payment required",
-                extra_headers=extra_headers,
-                body_extras=challenge_body,
-                record_response=True,
+                balance_check={
+                    **balance_check,
+                    ResponseKey.REQUIRED_AMOUNT.value: minimum,
+                },
+                reason=SIGNED_CAP_BELOW_MINIMUM,
+                outcome=REQUEST_OUTCOME_CAP_BELOW_MINIMUM,
+            )
+            return
+
+        available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
+        reserved = unsettled_signed_caps(self.context.shared_state, sender_checksum)
+        required = reserved + request_delivery_rate
+        if available_amount < required:
+            self.context.logger.info(
+                "Offchain request %s refused: balance %d does not cover cap %d "
+                "plus %d reserved by unsettled requests.",
+                request_id,
+                available_amount,
+                request_delivery_rate,
+                reserved,
+            )
+            self._send_payment_required(
+                http_msg,
+                http_dialogue,
+                request_id,
+                balance_check={
+                    **balance_check,
+                    ResponseKey.REQUIRED_AMOUNT.value: required,
+                },
+                reason=INSUFFICIENT_BALANCE,
                 outcome=REQUEST_OUTCOME_INSUFFICIENT_BALANCE,
             )
             return
@@ -2645,6 +2748,56 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"Failed to send OK response for {request_id}."
             )
             self._send_internal_error(http_msg, http_dialogue, request_id)
+
+    def _send_payment_required(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        request_id: str,
+        balance_check: Dict[str, Any],
+        reason: str,
+        outcome: RequestOutcome,
+    ) -> None:
+        """Reply 402 with the deposit challenge and record it for polling.
+
+        402 is the one rejection that persists its payload keyed by
+        ``request_id``: the caller has proven signature ownership and reads
+        the challenge through ``_handle_offchain_request_info``.
+
+        :param http_msg: the incoming HTTP request message.
+        :param http_dialogue: the HTTP dialogue used to reply.
+        :param request_id: the off-chain request id being refused.
+        :param balance_check: a successful balance-check result whose
+            ``required_amount`` is the amount the challenge names.
+        :param reason: the rejection reason, also the challenge ``error``.
+        :param outcome: the ``REQUEST_OUTCOME_*`` value to count.
+        """
+        try:
+            extra_headers = (
+                self._build_www_authenticate_header() + self._build_terms_link_header()
+            )
+            challenge_body = self._build_402_challenge(balance_check, error_msg=reason)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # The 402 / header builders raise on malformed internal state
+            # (missing balance-tracker address, mis-terminated header).
+            # Reply 500 rather than letting it escape with no HTTP response.
+            self.context.logger.exception(
+                f"Failed to build 402 challenge for {request_id}."
+            )
+            self._send_internal_error(http_msg, http_dialogue, request_id)
+            return
+        self._send_rejection_response(
+            http_msg,
+            http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
+            status_text="Payment required",
+            extra_headers=extra_headers,
+            body_extras=challenge_body,
+            record_response=True,
+            outcome=outcome,
+        )
 
     def _reject_unless_uint256_decimal(self, value: str, name: str) -> bool:
         """Return True iff ``value`` is a canonical ASCII decimal in uint256.
@@ -3388,6 +3541,12 @@ class MechHttpHandler(AbstractResponseHandler):
                 self.accepted_nonces_by_sender.setdefault(sender_checksum, set()).add(
                     wire_nonce
                 )
+            reserve_signed_cap(
+                self.context.shared_state,
+                sender_checksum,
+                request_id,
+                request_delivery_rate,
+            )
         except Exception:
             self._rollback_offchain_enqueue(
                 request_id,
@@ -3653,17 +3812,21 @@ class MechHttpHandler(AbstractResponseHandler):
            are malformed hex, if the derivation fails, or if the wire
            request_id disagrees with the locally-derived value. The
            caller replies 401.
-        3. Try local ``ecrecover`` against ``sender``. Match wins with
-           zero RPC for the sig-recover step.
-        4. Fall back to the sender's EIP-1271 ``isValidSignature`` view
-           via a cached short-timeout ``EthereumApi``. The view
+        3. Read whether the sender has code (cached per sender for
+           ``_SENDER_CODE_CACHE_TTL_SECONDS``); a failed read replies 503.
+           The scheme then follows the marketplace's settlement rule.
+        4. A sender without code is verified by local ``ecrecover``
+           only; a mismatch replies 401.
+        5. A sender with code (a contract, or an EOA with an EIP-7702
+           delegation) is verified by its EIP-1271 ``isValidSignature``
+           view only, via a cached short-timeout ``EthereumApi``. The view
            returns one of three verdicts: ``VALID`` (accept),
            ``DECLINED`` (401 signature verification failed), or
            ``CALL_FAILED`` (503 with the ``EIP1271_CALL_FAILED``
            reason so an infra failure is not mis-reported as a
            credential rejection). A transport timeout on the view
            surfaces as 503 with the ``EIP1271_CALL_TIMEOUT`` reason.
-        5. Bind the wire ``nonce`` to the sender's on-chain
+        6. Bind the wire ``nonce`` to the sender's on-chain
            ``MechMarketplace.mapNonces[sender]`` value combined with
            the sender's live ``accepted + settling`` sets. A wire
            value below that expected next-slot rejects 401; a wire
@@ -3827,38 +3990,43 @@ class MechHttpHandler(AbstractResponseHandler):
                 is_infra=False,
             )
 
-        recovered = recover_eoa_signer(derived, signature_bytes)
-        if recovered is not None and recovered == sender_checksum:
+        # Same rule as ``MechMarketplace._verifySignedHash``: a sender with
+        # code is verified only through EIP-1271, any other only through
+        # ``ecrecover``. Both RPCs use a separately-cached ``EthereumApi``
+        # with a short provider HTTP timeout so a slow read cannot pin the
+        # AEA main thread past the ``http_server`` reply budget.
+        eip1271_ledger_api = self._get_ledger_api(
+            rpc_address, chain_id, timeout_seconds=_EIP1271_CALL_TIMEOUT_SECONDS
+        )
+        has_code, code_failure = self._sender_has_code(
+            eip1271_ledger_api, sender_checksum, wire_request_id
+        )
+        if code_failure is not None:
+            return code_failure
+
+        if not has_code:
+            recovered = recover_eoa_signer(derived, signature_bytes)
+            if recovered is not None and recovered == sender_checksum:
+                self.context.logger.info(
+                    "offchain_auth accepted request %s sender=%s "
+                    "mechanism=ecrecover recovered=%s",
+                    wire_request_id,
+                    sender_checksum,
+                    recovered,
+                )
+                return SignatureVerdict(ok=True, reason="", is_infra=False)
             self.context.logger.info(
-                "offchain_auth accepted request %s sender=%s "
-                "mechanism=ecrecover recovered=%s",
+                "offchain_auth rejected request %s sender=%s mechanism=ecrecover "
+                "recovered=%s",
                 wire_request_id,
                 sender_checksum,
                 recovered,
             )
-            return SignatureVerdict(ok=True, reason="", is_infra=False)
-        # Log the EOA branch outcome for auditability: recovery either
-        # returned ``None`` (malformed / malleable / bad-v signature) or
-        # yielded an address other than the declared sender. The
-        # EIP-1271 fallback runs next.
-        self.context.logger.debug(
-            "offchain_auth eoa_recovery_failed request=%s sender=%s "
-            "recovered=%s (falls through to EIP-1271 branch)",
-            wire_request_id,
-            sender_checksum,
-            recovered,
-        )
-
-        # Sender is either a Safe or an EOA that produced an unrecognised
-        # signature. Defer to the sender's EIP-1271 view for the final call.
-        # Use a separately-cached ``EthereumApi`` with a short provider
-        # HTTP timeout so a slow ``isValidSignature`` view cannot pin the
-        # AEA main thread past the ``http_server`` reply budget; the
-        # balance-check path continues to run against the ledger-default
-        # ``EthereumApi`` cached above.
-        eip1271_ledger_api = self._get_ledger_api(
-            rpc_address, chain_id, timeout_seconds=_EIP1271_CALL_TIMEOUT_SECONDS
-        )
+            return SignatureVerdict(
+                ok=False,
+                reason="signature verification failed",
+                is_infra=False,
+            )
         try:
             # Wall-clock bound the call so a slow / hostile
             # ``isValidSignature`` combined with the multiplying
@@ -3872,6 +4040,7 @@ class MechHttpHandler(AbstractResponseHandler):
                     message_hash=derived,
                     signature=signature_bytes,
                     gas=_EIP1271_CALL_GAS_CAP,
+                    has_code=has_code,
                     logger=self.context.logger,
                 ),
                 deadline_seconds=_RPC_WALL_CLOCK_DEADLINE_SECONDS,
@@ -3918,8 +4087,8 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return SignatureVerdict(ok=True, reason="", is_infra=False)
         if eip1271_verdict == Eip1271Verdict.CALL_FAILED:
-            # Infra-side failure inside ``isValidSignature`` (RPC error,
-            # transport error, ABI decode failure). Route to 503 with a
+            # Infra-side failure inside ``isValidSignature`` (RPC or
+            # transport error). Route to 503 with a
             # dedicated reason so a legitimate Safe requester is not
             # 401'd during an RPC outage.
             self.context.logger.warning(
@@ -3938,6 +4107,84 @@ class MechHttpHandler(AbstractResponseHandler):
             reason="signature verification failed",
             is_infra=False,
         )
+
+    def _sender_has_code(
+        self, ledger_api: EthereumApi, sender_checksum: str, wire_request_id: str
+    ) -> Tuple[bool, Optional[SignatureVerdict]]:
+        """Return whether ``sender_checksum`` has code, reading through a short cache.
+
+        Any non-empty code counts, including an EIP-7702 delegation
+        designator, since the marketplace tests ``code.length > 0``. A read
+        failure is classified the same way as the ``mapNonces`` read and is
+        never cached.
+
+        :param ledger_api: the short-timeout ledger API for the read.
+        :param sender_checksum: the sender address in checksum form.
+        :param wire_request_id: the request id, for the log lines.
+        :return: ``(has_code, None)`` on a successful or cached read, or
+            ``(False, verdict)`` with an infra verdict when the read failed.
+        """
+        now = time.monotonic()
+        cached = self._sender_code_cache.get(sender_checksum)
+        if cached is not None and cached[1] > now:
+            return cached[0], None
+        try:
+            code = self._run_with_wall_clock_deadline(
+                lambda: get_account_code(ledger_api, sender_checksum),
+                deadline_seconds=_RPC_WALL_CLOCK_DEADLINE_SECONDS,
+                label="eth_getCode",
+            )
+        except concurrent.futures.TimeoutError as exc:
+            self.context.logger.warning(
+                "Code read timed out for sender %s on request %s: %s.",
+                sender_checksum,
+                wire_request_id,
+                exc,
+            )
+            return False, SignatureVerdict(
+                ok=False, reason=CODE_READ_FAILED, is_infra=True
+            )
+        except RuntimeError as exc:
+            self.context.logger.warning(
+                "Code read could not be dispatched for sender %s on request %s: %s.",
+                sender_checksum,
+                wire_request_id,
+                exc,
+            )
+            return False, SignatureVerdict(
+                ok=False, reason=RPC_QUEUE_SATURATED, is_infra=True
+            )
+        except (Web3RPCError, RequestException, ConnectionError, OSError) as exc:
+            self.context.logger.warning(
+                "Code read failed (transient) for sender %s on request %s: %r",
+                sender_checksum,
+                wire_request_id,
+                exc,
+                exc_info=True,
+            )
+            return False, SignatureVerdict(
+                ok=False, reason=CODE_READ_FAILED, is_infra=True
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            self.context.logger.warning(
+                "Code read failed unrecoverably for sender %s on request %s: %r",
+                sender_checksum,
+                wire_request_id,
+                exc,
+                exc_info=True,
+            )
+            return False, SignatureVerdict(
+                ok=False, reason=CODE_READ_UNRECOVERABLE, is_infra=True
+            )
+        has_code = len(code) > 0
+        self._sender_code_cache.pop(sender_checksum, None)
+        if len(self._sender_code_cache) >= _SENDER_CODE_CACHE_MAX_ENTRIES:
+            self._sender_code_cache.pop(next(iter(self._sender_code_cache)))
+        self._sender_code_cache[sender_checksum] = (
+            has_code,
+            now + _SENDER_CODE_CACHE_TTL_SECONDS,
+        )
+        return has_code, None
 
     def _reconcile_stale_accepted(
         self,

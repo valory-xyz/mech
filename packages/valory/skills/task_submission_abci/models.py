@@ -101,6 +101,23 @@ class Params(BaseParams):
         self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
         self.task_mutable_params = MutableParams()
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
+        # Gas reserved in every settlement tx for everything but the delivered
+        # requests, and gas budgeted per delivered request. A tx carries at
+        # most ``(manual_gas_limit - base) // per_request`` requests.
+        self.settlement_base_gas: int = int(kwargs.get("settlement_base_gas", 300_000))
+        self.settlement_gas_per_request: int = int(
+            kwargs.get("settlement_gas_per_request", 150_000)
+        )
+        if self.settlement_gas_per_request <= 0 or (
+            self.manual_gas_limit
+            < self.settlement_base_gas + self.settlement_gas_per_request
+        ):
+            raise ValueError(
+                f"manual_gas_limit {self.manual_gas_limit} must cover "
+                f"settlement_base_gas {self.settlement_base_gas} plus one "
+                f"request at settlement_gas_per_request "
+                f"{self.settlement_gas_per_request} (which must be positive)."
+            )
         # We are using 10_000 for 100% so 1000 == 0.1 for the service_owner_share
         self.service_owner_share = self._ensure("service_owner_share", kwargs, int)
         self.profit_split_balance = self._ensure("profit_split_balance", kwargs, int)

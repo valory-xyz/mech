@@ -32,6 +32,10 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 BASIS_POINTS = 10_000
 # fixed_cost_per_request is expressed in USD with this many decimals.
 USD_DECIMALS = 6
+# The least any run is priced at, answered or failed, so a batch never sums to
+# zero, which BalanceTrackerBase.sol:269 rejects. An off-chain request whose
+# signed cap is below the minimum charge (any cap of 0) is refused at acceptance.
+FAILED_RUN_MIN_RATE = 1
 # ``pricing_mode`` on the predict-api event: the rule that set the charge.
 PRICING_CAP_AND_ACTUAL = "cap_and_actual"
 PRICING_SIGNED_CAP = "signed_cap"
@@ -110,6 +114,54 @@ def offchain_metric_labels(params: MetricsParams) -> Dict[str, str]:
         "chain": str(params.default_chain_id),
         "mech_address": metrics_mech_address(params),
     }
+
+
+class PricingParams(Protocol):
+    """The subset of skill params the price helpers read."""
+
+    fixed_cost_per_request: int
+    payment_token_decimals: int
+    marketplace_fee_bp: int
+    tools_to_pricing: Dict[str, int]
+
+
+def gross_up_for_fee(amount: int, fee_bp: int) -> int:
+    """Return the smallest charge that leaves ``amount`` after the marketplace fee.
+
+    :param amount: what the mech must keep, in payment-asset base units.
+    :param fee_bp: the marketplace fee in basis points, below ``BASIS_POINTS``.
+    :return: ``ceil(amount * BASIS_POINTS / (BASIS_POINTS - fee_bp))``.
+    """
+    net_bp = BASIS_POINTS - fee_bp
+    return (amount * BASIS_POINTS + net_bp - 1) // net_bp
+
+
+def fixed_share_in_asset_units(params: PricingParams) -> int:
+    """Return ``fixed_cost_per_request`` scaled to payment-asset base units.
+
+    :param params: the skill params.
+    :return: the fixed share per request, before the marketplace fee.
+    """
+    return params.fixed_cost_per_request * 10 ** (
+        params.payment_token_decimals - USD_DECIMALS
+    )
+
+
+def minimum_charge(params: PricingParams, tool: Optional[str]) -> int:
+    """Return the least the mech charges for one run of ``tool``.
+
+    Any run, answered or failed, is charged at least the grossed-up fixed
+    share and the tool floor, and never less than one base unit.
+
+    :param params: the skill params.
+    :param tool: the requested tool, or None when unknown.
+    :return: the minimum charge in payment-asset base units.
+    """
+    fixed = gross_up_for_fee(
+        fixed_share_in_asset_units(params), params.marketplace_fee_bp
+    )
+    floor = params.tools_to_pricing.get(tool, 0) if tool is not None else 0
+    return max(FAILED_RUN_MIN_RATE, int(floor), fixed)
 
 
 class Params(Model):

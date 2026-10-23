@@ -189,6 +189,33 @@ class TestParamsInit:
         assert isinstance(p.task_mutable_params, MutableParams)
         assert p.task_mutable_params.latest_metadata_hash is None
 
+    @pytest.mark.parametrize(
+        "overrides, valid",
+        [
+            ({}, True),
+            ({"manual_gas_limit": 450_000}, True),
+            ({"manual_gas_limit": 449_999}, False),
+            ({"manual_gas_limit": 0}, False),
+            ({"settlement_gas_per_request": 0}, False),
+            ({"settlement_gas_per_request": -1}, False),
+            ({"settlement_base_gas": 400_000}, False),
+            ({"manual_gas_limit": 8_000_000, "settlement_base_gas": 0}, True),
+        ],
+    )
+    def test_gas_limit_must_fit_one_request(
+        self, overrides: Dict[str, Any], valid: bool
+    ) -> None:
+        """A gas config that cannot carry one request is refused at startup."""
+        kwargs = self._make_kwargs(**overrides)
+        with patch.object(BaseParams, "__init__", return_value=None):
+            p = Params.__new__(Params)
+            if valid:
+                Params.__init__(p, **kwargs)
+                assert p.manual_gas_limit == kwargs["manual_gas_limit"]
+            else:
+                with pytest.raises(ValueError, match="must cover settlement_base_gas"):
+                    Params.__init__(p, **kwargs)
+
     def test_calls_super_init(self) -> None:
         """Test Params.__init__ calls super().__init__."""
         kwargs = self._make_kwargs()
