@@ -113,6 +113,16 @@ class Params(BaseParams):
         self.settlement_gas_per_request: int = int(
             kwargs.get("settlement_gas_per_request", 150_000)
         )
+        # Each off-chain requester group past the first is its own deliver
+        # call with its own exec, karma, tracker and counter writes; the base
+        # covers the first. Gnosis fork, one-request groups from first-time
+        # requesters through the Safe multisend: 4 groups used 1,086,044 and
+        # ran out of gas at a 1M limit. Less the 4-item one-requester tx above
+        # that is about 117k per extra group, so the default sits at a
+        # first-time requester's cost with the per-request budget's margin.
+        self.settlement_gas_per_requester_group: int = int(
+            kwargs.get("settlement_gas_per_requester_group", 110_000)
+        )
         # Budgets for the other txs that can share the multisend, from
         # eth_estimateGas on the same fork (each includes the 21k a call inside
         # the multisend does not pay): processPaymentByMultisig 111,105; a
@@ -143,6 +153,7 @@ class Params(BaseParams):
             )
         for name in (
             "settlement_base_gas",
+            "settlement_gas_per_requester_group",
             "settlement_process_payment_gas",
             "settlement_profit_transfer_gas",
             "settlement_metadata_hash_gas",
