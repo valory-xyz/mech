@@ -704,6 +704,17 @@ class OlasMechContract(Contract):
         return {"mech_type": payment_type_bytes}
 
     @classmethod
+    def get_mech_marketplace(
+        cls, ledger_api: LedgerApi, contract_address: str
+    ) -> JSONLike:
+        """Get the marketplace the mech is bound to (checksummed)."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        marketplace = contract_instance.functions.mechMarketplace().call()
+        return {
+            "mech_marketplace": contract_instance.w3.to_checksum_address(marketplace)
+        }
+
+    @classmethod
     def get_mech_types(
         cls, ledger_api: LedgerApi, contract_address: str, mech_addresses: Set[str]
     ) -> Dict[str, Dict[str, Any]]:

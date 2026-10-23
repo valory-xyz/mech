@@ -2027,8 +2027,60 @@ class MechHttpHandler(AbstractResponseHandler):
                 "offchain requests will be refused until the next restart."
             )
             return
+        if not self._selfcheck_mechs_bound_to_marketplace(ledger_api):
+            return
         self._selfcheck_marketplace_request_id_derivation(ledger_api)
         self._selfcheck_explicit_nonce_derivation(ledger_api)
+
+    def _selfcheck_mechs_bound_to_marketplace(self, ledger_api: EthereumApi) -> bool:
+        """Open off-chain accepts only if every marketplace mech uses the configured marketplace.
+
+        Settlement calls the configured marketplace through each mech's
+        ``exec``, and the marketplace only credits a mech registered on it,
+        so the configured address must equal the mech's own
+        ``mechMarketplace()``. On a mismatch or a failed read the boot-cached
+        constants are cleared, so off-chain requests are refused until the
+        next restart and nothing is accepted that could not settle.
+
+        :param ledger_api: the ledger API object used for the view calls.
+        :return: True when every marketplace mech matches the configuration.
+        """
+        configured = ledger_api.api.to_checksum_address(
+            self.params.mech_marketplace_address
+        )
+        mechs = [
+            mech
+            for mech, config in self.params.mech_to_config.items()
+            if config.is_marketplace_mech
+        ]
+        for mech in mechs:
+            try:
+                bound = ledger_api.api.to_checksum_address(
+                    OlasMechContract.get_mech_marketplace(ledger_api, mech)[
+                        "mech_marketplace"
+                    ]
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                self.context.logger.exception(
+                    "Could not read mechMarketplace() of mech %s; off-chain "
+                    "requests disabled until the next restart.",
+                    mech,
+                )
+                bound = None
+            if bound != configured:
+                if bound is not None:
+                    self.context.logger.error(
+                        "Mech %s is bound to marketplace %s, but "
+                        "mech_marketplace_address is %s; off-chain requests "
+                        "disabled until the configuration is fixed.",
+                        mech,
+                        bound,
+                        configured,
+                    )
+                self._domain_separator = None
+                self._payment_type = None
+                return False
+        return True
 
     def _selfcheck_marketplace_request_id_derivation(
         self, ledger_api: EthereumApi

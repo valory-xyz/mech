@@ -40,6 +40,7 @@ _REQUESTER = "0x1111111111111111111111111111111111111111"
 _SENDER = "0x3333333333333333333333333333333333333333"
 _MECH = "0x2222222222222222222222222222222222222222"
 _MARKETPLACE = "0x4444444444444444444444444444444444444444"
+_MARKETPLACE_CHECKSUM_INPUT = "0x343f2b005cf6d70ba610cd9f1f1927049414b582"
 # Selectors of the marketplace's own settlement overloads (MechMarketplace ABI).
 _MARKETPLACE_CAP_SELECTOR = "c2ee2841"
 _MARKETPLACE_NONCES_SELECTOR = "39a6aac7"
@@ -265,3 +266,19 @@ class TestGetOffchainDeliverDataLegacy:
             )
         expected = Web3().keccak(text=_LEGACY_OVERLOAD_SIGNATURE).hex()[:8]
         assert result["data"][:4].hex() == expected
+
+
+def test_mech_marketplace_is_returned_checksummed() -> None:
+    """The mech's ``mechMarketplace()`` comes back in checksum form."""
+    instance = Web3().eth.contract(abi=_web3_contract().abi)
+    instance.functions = MagicMock()
+    instance.functions.mechMarketplace.return_value.call.return_value = (
+        _MARKETPLACE_CHECKSUM_INPUT
+    )
+    with patch.object(OlasMechContract, "get_instance", return_value=instance):
+        result = OlasMechContract.get_mech_marketplace(
+            ledger_api=_offline_ledger_api(), contract_address=_MECH
+        )
+    assert result == {
+        "mech_marketplace": Web3.to_checksum_address(_MARKETPLACE_CHECKSUM_INPUT)
+    }
