@@ -2048,7 +2048,7 @@ class TransactionPreparationBehaviour(
             offchain_deliver_txs,
             offchain_included_ids,
         ) = yield from self._get_offchain_tasks_deliver_data(
-            max(0, gas_left // per_request)
+            gas_left, follows_deliveries=bool(included_request_ids)
         )
         if offchain_deliver_txs is not None:
             # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
@@ -2287,16 +2287,21 @@ class TransactionPreparationBehaviour(
         return min(actual, max_rate)
 
     def _get_offchain_tasks_deliver_data(
-        self, capacity: Optional[int] = None
+        self, gas_budget: Optional[int] = None, follows_deliveries: bool = False
     ) -> Generator[None, None, Tuple[Optional[List[Dict[str, Any]]], List[str]]]:
         """Build the off-chain deliver txs, one per requester.
 
-        Groups are taken in order while they fit ``capacity``; a group that
-        does not fit whole is cut by :func:`_trim_group`. The rest are held
-        for a later period, not counted as failed attempts.
+        Groups are taken in order while they fit ``gas_budget``; a group costs
+        ``settlement_gas_per_request`` per request, plus
+        ``settlement_gas_per_requester_group`` unless it is the first
+        delivery call in the tx. A group that does not fit whole is cut by
+        :func:`_trim_group`. The rest are held for a later period, not
+        counted as failed attempts.
 
-        :param capacity: the most requests the txs may deliver; None for the
-            whole settlement capacity.
+        :param gas_budget: the gas the txs may use; None for a tx carrying
+            nothing but off-chain deliveries.
+        :param follows_deliveries: whether the tx already holds a delivery
+            call, so that even the first group pays its group budget.
         :return: ``(tx_list, included_request_ids)``. ``tx_list`` is ``None``
             when the deliver-data contract call failed (the whole off-chain
             batch is abandoned this period); ``included_request_ids`` holds
@@ -2310,7 +2315,7 @@ class TransactionPreparationBehaviour(
             for done_task in done_tasks_list
             if done_task.get(IS_OFFCHAIN) is True
         ]
-        tx_list = []
+        tx_list: List[Dict[str, Any]] = []
         included_request_ids: List[str] = []
         counted_request_ids: Set[str] = set()
 
@@ -2381,9 +2386,13 @@ class TransactionPreparationBehaviour(
             # the same requester joins only when both charges fit together.
             ordered_groups = _order_groups_for_settlement(offchain_list_by_sender)
             included_charge: Dict[str, int] = {}
-            remaining = (
-                self._settlement_request_capacity() if capacity is None else capacity
+            gas_left = (
+                self._settlement_gas_left(None, None)
+                if gas_budget is None
+                else gas_budget
             )
+            per_group = self.params.settlement_gas_per_requester_group
+            per_request = self.params.settlement_gas_per_request
             for (sender, nonce_mode), details in ordered_groups:
                 self.context.logger.info(
                     f"Preparing deliver data for requester: {sender} ({nonce_mode})"
@@ -2408,6 +2417,8 @@ class TransactionPreparationBehaviour(
                     )
                     counted_request_ids.update(group_request_ids)
                     continue
+                group_gas = per_group if tx_list or follows_deliveries else 0
+                remaining = max(0, (gas_left - group_gas) // per_request)
                 if len(group_request_ids) > remaining:
                     if remaining > 0:
                         details = _trim_group(details, nonce_mode, remaining)
@@ -2536,7 +2547,7 @@ class TransactionPreparationBehaviour(
                     continue
                 included_request_ids.extend(group_request_ids)
                 included_charge[sender] = included_charge.get(sender, 0) + group_charge
-                remaining -= len(group_request_ids)
+                gas_left -= group_gas + len(group_request_ids) * per_request
                 tx_list.append(
                     {
                         "to": mech_address,

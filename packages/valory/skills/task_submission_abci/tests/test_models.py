@@ -201,6 +201,11 @@ class TestParamsInit:
             ({"settlement_base_gas": 400_000}, "must cover settlement_base_gas"),
             ({"manual_gas_limit": 8_000_000, "settlement_base_gas": 0}, None),
             ({"settlement_base_gas": -1}, "settlement_base_gas must not be negative"),
+            ({"settlement_gas_per_requester_group": 0}, None),
+            (
+                {"settlement_gas_per_requester_group": -1},
+                "settlement_gas_per_requester_group must not be negative",
+            ),
             ({"settlement_metadata_hash_gas": 0}, None),
             (
                 {"settlement_metadata_hash_gas": -1},
@@ -240,11 +245,12 @@ class TestParamsInit:
             p = Params.__new__(Params)
             Params.__init__(p, **self._make_kwargs())
         assert (
+            p.settlement_gas_per_requester_group,
             p.settlement_process_payment_gas,
             p.settlement_profit_transfer_gas,
             p.settlement_metadata_hash_gas,
             p.settlement_legacy_response_gas,
-        ) == (120_000, 70_000, 40_000, 150_000)
+        ) == (110_000, 120_000, 70_000, 40_000, 150_000)
 
     def test_calls_super_init(self) -> None:
         """Test Params.__init__ calls super().__init__."""

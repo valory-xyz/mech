@@ -31,8 +31,8 @@ skills:
 - valory/delivery_rate_abci:0.1.0:bafybeic2qkl6k7wnbmyp2iuntxpnf6grohjt2w6te7vc54roiafgqs6yzm
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeiets4egs3ipvzksvlvrpgudvcd7qczkukm2pabuwbq3xypsg6x7n4
-- valory/task_submission_abci:0.1.0:bafybeidfg2qmxn5wevnsugrmfwpfttlx2re2vg5s7us4rp37wytmgtf5sm
+- valory/task_execution:0.1.0:bafybeifdhs6voqbrldtfwvsbjple62qp35q6cneaokotfdpsgz3z6vrdru
+- valory/task_submission_abci:0.1.0:bafybeigh5t4dfzz7z6cudvgnbpzevmj5oijqwc5z2e6vgzjyohsnbr3s7i
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
@@ -157,6 +157,7 @@ models:
       service_registry_address: null
       settlement_base_gas: 300000
       settlement_gas_per_request: 150000
+      settlement_gas_per_requester_group: 110000
       settlement_process_payment_gas: 120000
       settlement_profit_transfer_gas: 70000
       settlement_metadata_hash_gas: 40000

@@ -81,7 +81,10 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
     DEFAULT_MANUAL_GAS_LIMIT,
     DEFAULT_SETTLEMENT_BASE_GAS,
     DEFAULT_SETTLEMENT_GAS_PER_REQUEST,
+    DEFAULT_SETTLEMENT_GAS_PER_REQUESTER_GROUP,
+    RECORDED_FIRST_TIME_GROUPS_GAS_USED,
     RECORDED_METADATA_HASH_GAS,
+    RECORDED_OUT_OF_GAS_GROUPS_AT_1M,
     RECORDED_OUT_OF_GAS_ITEMS_AT_1M,
     RECORDED_PROCESS_PAYMENT_GAS,
     RECORDED_PROFIT_TRANSFER_GAS,
@@ -100,6 +103,7 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
     _run_gen,
     _state_contract_msg,
     _state_ledger_msg,
+    recorded_grouped_settlement_gas,
     recorded_settlement_gas,
 )
 
@@ -3389,6 +3393,9 @@ _DEFAULT_CAPACITY = (
     DEFAULT_MANUAL_GAS_LIMIT - DEFAULT_SETTLEMENT_BASE_GAS
 ) // DEFAULT_SETTLEMENT_GAS_PER_REQUEST
 _OK_SIMULATION = {"data": b"\xdd", "simulation_ok": True}
+_ONCHAIN_BACKLOG_GAS_LIMIT = 1_500_000
+# Off-chain requests that fit after the 3 on-chain ones at that limit.
+_OFFCHAIN_NEXT_TO_ONCHAIN = 4
 _USAGE_TX = {"to": "0xHASH", "value": 0, "data": b"\x00"}
 _HASH_TX = {"to": "0xMETA", "value": 0, "data": b"\x01"}
 # A one-mech profit split: the process-payment tx, then three transfers.
@@ -3495,7 +3502,100 @@ class TestSettlementFitsGasLimit:
         backward = self._settle_over_periods(self._make_b(), list(reversed(tasks)))
         assert forward == backward
         assert forward[0] == [f"0xA-{i}" for i in range(1, 5)]
-        assert forward[1] == ["0xA-5", "0xB-1", "0xB-2", "0xB-3"]
+        assert forward[1] == ["0xA-5", "0xB-1", "0xB-2"]
+
+    def _settle_groups_over_periods(
+        self, b: Any, tasks: List[Dict[str, Any]]
+    ) -> List[List[int]]:
+        """Run periods until every task settles; return each period's group sizes."""
+        pending, batches = list(tasks), []
+        while pending:
+            included, calls, mock_skip = self._build_offchain_batch(b, pending)
+            mock_skip.assert_not_called()
+            assert included, "a period with pending work must make progress"
+            batches.append(
+                [len(c[OffchainKeys.DELIVER_WITH_SIGNATURES.value]) for c in calls]
+            )
+            pending = [t for t in pending if t["request_id"] not in included]
+        return batches
+
+    @pytest.mark.parametrize(
+        "manual_gas_limit, n_groups",
+        [
+            (DEFAULT_MANUAL_GAS_LIMIT, 1),
+            (DEFAULT_MANUAL_GAS_LIMIT, 2),
+            (DEFAULT_MANUAL_GAS_LIMIT, RECORDED_OUT_OF_GAS_GROUPS_AT_1M - 1),
+            (DEFAULT_MANUAL_GAS_LIMIT, RECORDED_OUT_OF_GAS_GROUPS_AT_1M),
+            (DEFAULT_MANUAL_GAS_LIMIT, 10),
+            (8_000_000, 50),
+        ],
+    )
+    def test_one_request_groups_settle_in_batches_that_each_fit(
+        self, manual_gas_limit: int, n_groups: int
+    ) -> None:
+        """Every batch of first-time requester groups fits the recorded gas.
+
+        :param manual_gas_limit: the settlement tx gas limit.
+        :param n_groups: one-request groups, each from its own requester.
+        """
+        tasks = [
+            task
+            for i in range(n_groups)
+            for task in _explicit_tasks(1, sender=f"0x{i:040x}")
+        ]
+        b = self._make_b(manual_gas_limit=manual_gas_limit)
+        batches = self._settle_groups_over_periods(b, tasks)
+        assert all(
+            recorded_grouped_settlement_gas(sizes) <= manual_gas_limit
+            for sizes in batches
+        )
+        assert sum(len(sizes) for sizes in batches) == n_groups
+
+    def test_default_budget_holds_back_the_batch_that_ran_out_of_gas(self) -> None:
+        """The recorded multi-group batch is split, and its budget is above its gasUsed."""
+        tasks = [
+            task
+            for i in range(RECORDED_OUT_OF_GAS_GROUPS_AT_1M)
+            for task in _explicit_tasks(1, sender=f"0x{i:040x}")
+        ]
+        included, calls, _ = self._build_offchain_batch(self._make_b(), tasks)
+        assert 0 < len(calls) < RECORDED_OUT_OF_GAS_GROUPS_AT_1M
+        assert len(included) == len(calls)
+        groups = RECORDED_OUT_OF_GAS_GROUPS_AT_1M
+        budget = (
+            DEFAULT_SETTLEMENT_BASE_GAS
+            + (groups - 1) * DEFAULT_SETTLEMENT_GAS_PER_REQUESTER_GROUP
+            + groups * DEFAULT_SETTLEMENT_GAS_PER_REQUEST
+        )
+        assert budget >= RECORDED_FIRST_TIME_GROUPS_GAS_USED[groups]
+
+    @pytest.mark.parametrize(
+        "group_gas, expected_groups",
+        [
+            (0, RECORDED_OUT_OF_GAS_GROUPS_AT_1M),
+            (DEFAULT_SETTLEMENT_GAS_PER_REQUESTER_GROUP, 3),
+            (125_000, 3),
+            (125_001, 2),
+            (400_000, 2),
+            (400_001, 1),
+        ],
+    )
+    def test_group_budget_sets_how_many_requesters_share_a_tx(
+        self, group_gas: int, expected_groups: int
+    ) -> None:
+        """Groups past the first each pay the group budget; the first pays none.
+
+        :param group_gas: ``settlement_gas_per_requester_group``.
+        :param expected_groups: groups the first batch carries.
+        """
+        tasks = [
+            task
+            for i in range(RECORDED_OUT_OF_GAS_GROUPS_AT_1M)
+            for task in _explicit_tasks(1, sender=f"0x{i:040x}")
+        ]
+        b = self._make_b(settlement_gas_per_requester_group=group_gas)
+        _included, calls, _ = self._build_offchain_batch(b, tasks)
+        assert len(calls) == expected_groups
 
     def test_requesters_fill_the_tx_by_earliest_deadline(self) -> None:
         """A requester whose deadline comes first is settled first, whatever its address."""
@@ -3705,17 +3805,33 @@ class TestSettlementFitsGasLimit:
     def test_onchain_deliveries_settle_every_period_under_an_offchain_backlog(
         self,
     ) -> None:
-        """Prepaid on-chain requests go first; off-chain groups take what is left."""
-        b = self._make_b()
+        """Prepaid on-chain requests go first; off-chain groups take what is left.
+
+        The off-chain group follows other delivery calls, so it pays its group
+        budget: 4 off-chain requests fit next to the 3 on-chain ones at 1.5M.
+        """
+        b = self._make_b(manual_gas_limit=_ONCHAIN_BACKLOG_GAS_LIMIT)
         backlog = _explicit_tasks(20)
         for period in range(3):
             onchain = self._onchain_tasks(period)
             included, _txs = self._build_payload(b, backlog + onchain)
             onchain_ids = [str(t["request_id"]) for t in onchain]
             assert included[: len(onchain_ids)] == onchain_ids
-            assert len(included) == _DEFAULT_CAPACITY
+            assert included[len(onchain_ids) :] == [
+                t["request_id"] for t in backlog[:_OFFCHAIN_NEXT_TO_ONCHAIN]
+            ]
             backlog = [t for t in backlog if t["request_id"] not in included]
-        assert len(backlog) == 20 - 3 * (_DEFAULT_CAPACITY - 3)
+        assert len(backlog) == 20 - 3 * _OFFCHAIN_NEXT_TO_ONCHAIN
+
+    def test_offchain_group_after_onchain_deliveries_pays_its_group_budget(
+        self,
+    ) -> None:
+        """At the shipped limit, 3 on-chain requests leave no room for an off-chain group."""
+        onchain = self._onchain_tasks(0)
+        included, _txs = self._build_payload(
+            self._make_b(), _explicit_tasks(4) + onchain
+        )
+        assert included == [str(t["request_id"]) for t in onchain]
 
     def test_legacy_response_tx_takes_its_budget_from_the_capacity(self) -> None:
         """A legacy delivery carrying a response tx leaves less room for off-chain."""

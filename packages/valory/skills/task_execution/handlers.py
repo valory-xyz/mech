@@ -2731,8 +2731,10 @@ class MechHttpHandler(AbstractResponseHandler):
         available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
         reserved = unsettled_signed_caps(self.context.shared_state, sender_checksum)
         # Caps of unsettled requests are already spoken for, so the 402 names
-        # this request's cap against the balance left after them.
-        spendable = max(0, available_amount - reserved)
+        # this request's cap against the balance left after them. It goes
+        # negative when the balance fell below those caps, which keeps
+        # ``required - currentBalance`` the exact deposit that clears the 402.
+        spendable = available_amount - reserved
         if spendable < request_delivery_rate:
             self.context.logger.info(
                 "Offchain request %s refused: balance %d does not cover cap %d "

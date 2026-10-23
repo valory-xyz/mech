@@ -7418,6 +7418,44 @@ def test_depositing_the_402_shortfall_gets_the_request_accepted(
     assert retried.status_code == HttpCode.OK_CODE.value
 
 
+_BALANCE_SPENT_ELSEWHERE = 60
+
+
+def test_shortfall_stays_exact_when_the_balance_is_below_the_reserved_caps(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """``currentBalance`` goes negative rather than hiding part of the shortfall.
+
+    The balance drops below the unsettled caps after acceptance (spent on
+    another mech or on-chain). Depositing ``required - currentBalance`` clears
+    the 402, and one unit less does not.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    ledger = {"balance": _RESERVATION_CAP}
+    mh = _handler_with_balance(handler_context, monkeypatch, 0, ledger=ledger)
+    sender = _RESERVATION_SENDER
+    accepted = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9250", sender=sender)
+    assert accepted.status_code == HttpCode.OK_CODE.value
+    ledger["balance"] -= _BALANCE_SPENT_ELSEWHERE
+
+    refused = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9251", sender=sender)
+    assert refused.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    challenge = json.loads(refused.body.decode("utf-8"))
+    assert int(challenge["currentBalance"]) == -_BALANCE_SPENT_ELSEWHERE
+    shortfall = int(challenge["required"]) - int(challenge["currentBalance"])
+    assert shortfall == _RESERVATION_CAP + _BALANCE_SPENT_ELSEWHERE
+
+    ledger["balance"] += shortfall - 1
+    short = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9251", sender=sender)
+    assert short.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    ledger["balance"] += 1
+    retried = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9251", sender=sender)
+    assert retried.status_code == HttpCode.OK_CODE.value
+
+
 def test_unsettled_caps_are_counted_per_sender(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
