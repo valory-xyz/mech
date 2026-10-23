@@ -2736,6 +2736,15 @@ class MechHttpHandler(AbstractResponseHandler):
         # negative when the balance fell below those caps, which keeps
         # ``required - currentBalance`` the exact deposit that clears the 402.
         spendable = available_amount - reserved
+        decision = (
+            BALANCE_LOG_DECISION_ACCEPTED
+            if spendable >= request_delivery_rate
+            else BALANCE_LOG_DECISION_REJECTED
+        )
+        self.context.logger.info(
+            f"offchain_balance_check sender={sender} required={request_delivery_rate} "
+            f"available={available_amount} reserved={reserved} decision={decision}"
+        )
         if spendable < request_delivery_rate:
             self.context.logger.info(
                 "Offchain request %s refused: balance %d does not cover cap %d "
@@ -3717,15 +3726,6 @@ class MechHttpHandler(AbstractResponseHandler):
             asset_address = self._resolve_balance_tracker_asset(
                 ledger_api=ledger_api,
                 balance_tracker_address=balance_tracker_address,
-            )
-            decision = (
-                BALANCE_LOG_DECISION_ACCEPTED
-                if available_amount >= required_amount
-                else BALANCE_LOG_DECISION_REJECTED
-            )
-            self.context.logger.info(
-                f"offchain_balance_check sender={sender} required={required_amount} "
-                f"available={available_amount} decision={decision}"
             )
             return {
                 ResponseKey.STATUS.value: ResponseStatus.OK.value,

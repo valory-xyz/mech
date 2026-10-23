@@ -45,7 +45,9 @@ class BalanceTrackerContract(Contract):
     ) -> JSONLike:
         """Get mech balance"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        mech_balance = contract_instance.functions.mapMechBalances(mech_address).call()
+        mech_balance = contract_instance.functions.mapMechBalances(
+            ledger_api.api.to_checksum_address(mech_address)
+        ).call()
         return {"mech_balance": mech_balance}
 
     @classmethod

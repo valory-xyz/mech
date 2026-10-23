@@ -7408,6 +7408,47 @@ def test_balance_covers_the_caps_of_unsettled_requests(
     assert len(handler_context.shared_state["pending_tasks"]) == 2
 
 
+def test_logged_balance_decision_matches_the_reservation_outcome(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The logged decision counts unsettled caps, so a 402 never logs as accepted.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    balance = 2 * _RESERVATION_CAP
+    mh = _handler_with_balance(handler_context, monkeypatch, balance)
+    info_lines: List[str] = []
+    monkeypatch.setattr(
+        handler_context.logger,
+        "info",
+        lambda msg, *args, **_: info_lines.append(msg % args if args else msg),
+    )
+    codes = [
+        _post_cap(
+            mh,
+            http_dialogue,
+            _RESERVATION_CAP,
+            str(9230 + i),
+            sender=_RESERVATION_SENDER,
+        ).status_code
+        for i in range(3)
+    ]
+
+    assert codes == [200, 200, 402]
+    checks = [ln for ln in info_lines if ln.startswith("offchain_balance_check ")]
+    prefix = (
+        f"offchain_balance_check sender={_RESERVATION_SENDER} "
+        f"required={_RESERVATION_CAP} available={balance}"
+    )
+    assert checks == [
+        f"{prefix} reserved=0 decision=accepted",
+        f"{prefix} reserved={_RESERVATION_CAP} decision=accepted",
+        f"{prefix} reserved={balance} decision=rejected",
+    ]
+
+
 def test_depositing_the_402_shortfall_gets_the_request_accepted(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:

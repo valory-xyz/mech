@@ -32,7 +32,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/balance_tracker:0.1.0:bafybeiayyxl643qfpw57vopytxgyd6flxxmwassswuxen7myekqaxdxxvi
+- valory/balance_tracker:0.1.0:bafybeiatui346z26iy6ukai54d6cb2el4ehtv5mwlopr4tafc6gwkt3yzm
 - valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
 - valory/erc20:0.1.0:bafybeibpuyikvpmtaraca4lqokf3kf6jlpmafkqm6oixnps3ig23jfbllq
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
@@ -47,7 +47,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/task_execution:0.1.0:bafybeibpfnzxyborc6wujaebdqbhwr66mywreihxhaok2c3deb357yacfq
+- valory/task_execution:0.1.0:bafybeicgfdve522nme5kbo55hukpp46zjlg4fw2zwjtzpqolt6p55ux2ai
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:

@@ -21,8 +21,10 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 
+import pytest
 from web3 import Web3
 
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
@@ -31,6 +33,8 @@ _ABI_PATH = Path(__file__).parent.parent / "build" / "BalanceTracker.json"
 _ACCOUNT = "0x1000000000000000000000000000000000000001"
 _AMOUNT = 12345
 _DEPOSIT_FOR_SELECTOR = "2f4f21e2"
+_MECH_CHECKSUM = "0xabCDeF0123456789AbcdEf0123456789aBCDEF01"
+_MECH_BALANCE = 777
 
 
 def _web3_contract() -> object:
@@ -81,3 +85,45 @@ class TestBuildDepositForData:
                 amount=_AMOUNT,
             )
         assert int.from_bytes(result["data"][-32:], "big") == _AMOUNT
+
+
+class TestGetMechBalance:
+    """`get_mech_balance` reads `mapMechBalances` with a checksummed address."""
+
+    @pytest.mark.parametrize(
+        "mech_address",
+        [_MECH_CHECKSUM, _MECH_CHECKSUM.lower(), "0x" + _MECH_CHECKSUM[2:].upper()],
+        ids=["checksummed", "lowercase", "uppercase"],
+    )
+    def test_any_address_case_reads_the_checksummed_address(
+        self, mech_address: str
+    ) -> None:
+        """The contract is called with the EIP-55 form whatever case was configured."""
+        instance = MagicMock()
+        instance.functions.mapMechBalances.return_value.call.return_value = (
+            _MECH_BALANCE
+        )
+        with patch.object(
+            BalanceTrackerContract, "get_instance", return_value=instance
+        ):
+            result = BalanceTrackerContract.get_mech_balance(
+                ledger_api=SimpleNamespace(api=Web3()),
+                contract_address="0x0000000000000000000000000000000000000000",
+                mech_address=mech_address,
+            )
+        instance.functions.mapMechBalances.assert_called_once_with(_MECH_CHECKSUM)
+        assert result == {"mech_balance": _MECH_BALANCE}
+
+    def test_malformed_address_raises(self) -> None:
+        """A value that is not a 20-byte hex address is rejected before any call."""
+        instance = MagicMock()
+        with patch.object(
+            BalanceTrackerContract, "get_instance", return_value=instance
+        ):
+            with pytest.raises(ValueError):
+                BalanceTrackerContract.get_mech_balance(
+                    ledger_api=SimpleNamespace(api=Web3()),
+                    contract_address="0x0000000000000000000000000000000000000000",
+                    mech_address="0x1234",
+                )
+        instance.functions.mapMechBalances.assert_not_called()
