@@ -3728,6 +3728,10 @@ class TestSettlementFitsGasLimit:
         """Deliveries plus every other tx in the multisend stay under the limit.
 
         Checked against gas recorded on the fork, not against the budgets.
+
+        :param update_hash_tx: the metadata hash tx, or None when not sent.
+        :param split_profit_txs: the profit split txs, or None when not sent.
+        :param offchain_included: how many off-chain requests the tx carries.
         """
         b = self._make_b()
         included, txs = self._build_payload(
