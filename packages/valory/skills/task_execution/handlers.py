@@ -2038,12 +2038,17 @@ class MechHttpHandler(AbstractResponseHandler):
         Settlement calls the configured marketplace through each mech's
         ``exec``, and the marketplace only credits a mech registered on it,
         so the configured address must equal the mech's own
-        ``mechMarketplace()``. On a mismatch or a failed read the boot-cached
-        constants are cleared, so off-chain requests are refused until the
-        next restart and nothing is accepted that could not settle.
+        ``mechMarketplace()``. Outcomes per mech:
+
+        - A different marketplace, or a contract-level error (revert,
+          undecodable return): clear the boot-cached constants so
+          off-chain requests are refused until the next restart.
+        - A transport failure (RPC unreachable, timeout): log a warning and
+          leave the constants loaded; settlement simulation still rejects
+          a call to a marketplace the mech is not registered on.
 
         :param ledger_api: the ledger API object used for the view calls.
-        :return: True when every marketplace mech matches the configuration.
+        :return: False when a mech is confirmed bound elsewhere or incompatible.
         """
         configured = ledger_api.api.to_checksum_address(
             self.params.mech_marketplace_address
@@ -2060,23 +2065,32 @@ class MechHttpHandler(AbstractResponseHandler):
                         "mech_marketplace"
                     ]
                 )
-            except Exception:  # pylint: disable=broad-exception-caught
+            except (RequestException, TimeoutError, Web3RPCError):
+                self.context.logger.warning(
+                    "Could not read mechMarketplace() of mech %s (transport "
+                    "error); keeping off-chain requests enabled.",
+                    mech,
+                    exc_info=True,
+                )
+                continue
+            except (ContractLogicError, BadFunctionCallOutput, ValueError):
                 self.context.logger.exception(
-                    "Could not read mechMarketplace() of mech %s; off-chain "
-                    "requests disabled until the next restart.",
+                    "mechMarketplace() of mech %s failed with a contract-level "
+                    "error; off-chain requests disabled until the next restart.",
                     mech,
                 )
-                bound = None
+                self._domain_separator = None
+                self._payment_type = None
+                return False
             if bound != configured:
-                if bound is not None:
-                    self.context.logger.error(
-                        "Mech %s is bound to marketplace %s, but "
-                        "mech_marketplace_address is %s; off-chain requests "
-                        "disabled until the configuration is fixed.",
-                        mech,
-                        bound,
-                        configured,
-                    )
+                self.context.logger.error(
+                    "Mech %s is bound to marketplace %s, but "
+                    "mech_marketplace_address is %s; off-chain requests "
+                    "disabled until the configuration is fixed.",
+                    mech,
+                    bound,
+                    configured,
+                )
                 self._domain_separator = None
                 self._payment_type = None
                 return False

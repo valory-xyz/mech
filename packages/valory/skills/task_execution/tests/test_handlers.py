@@ -8001,12 +8001,17 @@ def test_mech_binding_check_passes_when_every_mech_uses_the_configured_marketpla
 
 @pytest.mark.parametrize(
     "second_mech_reads",
-    [_OTHER_MARKETPLACE, ValueError("could not decode"), TimeoutError()],
+    [
+        _OTHER_MARKETPLACE,
+        _Web3BadFunctionCallOutput("empty return"),
+        _Web3ContractLogicError("execution reverted"),
+        "0xnot-an-address",
+    ],
 )
-def test_mech_binding_check_disables_offchain_accepts_on_a_mismatch_or_failed_read(
+def test_mech_binding_check_disables_offchain_accepts_on_a_mismatch_or_incompatible_mech(
     handler_context: Any, monkeypatch: Any, second_mech_reads: Any
 ) -> None:
-    """One mech bound elsewhere, or unreadable, clears the constants.
+    """One mech bound elsewhere, reverting or with an undecodable return clears the constants.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
@@ -8023,6 +8028,55 @@ def test_mech_binding_check_disables_offchain_accepts_on_a_mismatch_or_failed_re
     assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is False
     assert mh._domain_separator is None
     assert mh._payment_type is None
+
+
+@pytest.mark.parametrize(
+    "transport_error",
+    [TimeoutError(), _Web3RPCError("rpc down"), requests.ConnectionError("refused")],
+)
+def test_mech_binding_check_keeps_offchain_accepts_on_a_transport_error(
+    handler_context: Any, monkeypatch: Any, transport_error: Exception
+) -> None:
+    """A transport failure warns and keeps the constants; the other mechs are still checked.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param transport_error: the error the first mech's read raises.
+    """
+    mh = _bound_handler(
+        handler_context,
+        monkeypatch,
+        {
+            _SIGVERIFY_MECH.lower(): transport_error,
+            _SECOND_MECH.lower(): _SIGVERIFY_MARKETPLACE,
+        },
+    )
+    warnings: List[Any] = []
+    handler_context.logger.warning = lambda *args, **_kw: warnings.append(args)
+    assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is True
+    assert [w[1] for w in warnings] == [_SIGVERIFY_MECH.lower()]
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE
+
+
+def test_mech_binding_check_still_disables_a_later_mismatch_after_a_transport_error(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A transport failure on one mech does not hide a mismatch on the next.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _bound_handler(
+        handler_context,
+        monkeypatch,
+        {
+            _SIGVERIFY_MECH.lower(): TimeoutError(),
+            _SECOND_MECH.lower(): _OTHER_MARKETPLACE,
+        },
+    )
+    assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is False
+    assert mh._domain_separator is None
 
 
 def test_mech_bound_elsewhere_refuses_offchain_requests_and_skips_later_checks(
