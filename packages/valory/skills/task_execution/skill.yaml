@@ -35,7 +35,7 @@ fingerprint:
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq
   utils/preimage.py: bafybeigmnszzylkggybbgt43pzoekrtfbjvxfercp5rrfzcwgzfuzgpn6m
   utils/request_id.py: bafybeib4gd63fueilhwrpxvogtj2vncpxgm7purnyekrzxxt6ghoykfq34
-  utils/task.py: bafybeignclw6dvv2spznba5shqxeoknigihbczx7rxafyibounws2euzq4
+  utils/task.py: bafybeieeq6ofyhpiepidulcvwaqeblfciuwwjts4yaq77vjyp26ifcpjfi
 fingerprint_ignore_patterns: []
 connections:
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
