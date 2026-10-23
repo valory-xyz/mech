@@ -583,6 +583,7 @@ class ResponseStatus(str, Enum):
 
     REJECTED = "rejected"
     OK = "ok"
+    FAILED = "failed"
     UNAVAILABLE = "unavailable"
 
 
@@ -3097,7 +3098,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 data=stored_response,
             )
             stored_status = stored_response.get(ResponseKey.STATUS.value)
-            if stored_status == ResponseStatus.OK.value:
+            settled = stored_status in (
+                ResponseStatus.OK.value,
+                ResponseStatus.FAILED.value,
+            )
+            if settled:
                 # Visibility stamp on the durable record (first poll only,
                 # no-op unless retention is on). Never gates retention.
                 preimage_buffer.record_stamp(
@@ -3106,9 +3111,7 @@ class MechHttpHandler(AbstractResponseHandler):
                     fetched_at=int(time.time()),
                 )
             self._count_fetch_outcome(
-                FETCH_OUTCOME_DELIVERED
-                if stored_status == ResponseStatus.OK.value
-                else FETCH_OUTCOME_REJECTED
+                FETCH_OUTCOME_DELIVERED if settled else FETCH_OUTCOME_REJECTED
             )
             return
 

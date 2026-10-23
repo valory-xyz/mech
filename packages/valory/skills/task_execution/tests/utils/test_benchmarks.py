@@ -181,6 +181,21 @@ class TestTokenCounterCallbackCall:
             input_price + output_price
         )
 
+    def test_gemini_flash_lite_tokens_are_counted_at_its_listed_price(self) -> None:
+        """A gemini-3.5-flash-lite call is priced from the table, not left unpriced."""
+        cb = TokenCounterCallback()
+        cb(
+            "gemini-3.5-flash-lite",
+            _dummy_counter,
+            input_tokens=2000,
+            output_tokens=400,
+        )
+        assert cb.cost_dict["unpriced_calls"] == 0
+        assert cb.cost_dict["total_tokens"] == 2400
+        assert cb.cost_dict["input_cost"] == pytest.approx(0.0003 * 2)
+        assert cb.cost_dict["output_cost"] == pytest.approx(0.0025 * 0.4)
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.0006 + 0.001)
+
     def test_unpriced_model_counts_nothing_and_warns(self, caplog) -> None:  # type: ignore
         """An unpriced model never raises; without a reported cost it leaves the tally at zero."""
         cb = TokenCounterCallback()

@@ -18,9 +18,12 @@
 # ------------------------------------------------------------------------------
 """Tests for task_execution.utils.task."""
 
-import pytest
+import pickle  # nosec
 
-from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
+import pytest
+from pebble import ProcessPool
+
+from packages.valory.skills.task_execution.utils.task import AnyToolAsTask, ToolError
 
 SIMPLE_TOOL = """\
 def run(*args, **kwargs):
@@ -105,3 +108,110 @@ def spy(**kwargs):
         assert "tool_py" not in result
         assert "callable_method" not in result
         assert result == {"my_arg": "hello"}
+
+
+CLIENT_FAULT_TOOL = """\
+class InvalidRequestError(ValueError):
+    pass
+
+def run(**kwargs):
+    raise InvalidRequestError("prompt is empty")
+"""
+
+UNPRINTABLE_ERROR_TOOL = """\
+class Unprintable(Exception):
+    def __str__(self):
+        raise RuntimeError("no text")
+
+def run(**kwargs):
+    raise Unprintable()
+"""
+
+# Raises an exception class the agent process can import but cannot rebuild
+# from its pickled args, the shape of the OpenAI and Anthropic SDK errors.
+SDK_STYLE_ERROR_TOOL = """\
+from packages.valory.skills.task_execution.tests.utils.test_task import (
+    SdkStyleRateLimitError,
+)
+
+def run(**kwargs):
+    raise SdkStyleRateLimitError("Rate limit reached", response=object(), body=None)
+"""
+
+
+class SdkStyleRateLimitError(Exception):
+    """Needs keyword-only arguments, so ``pickle.loads`` cannot rebuild it."""
+
+    def __init__(self, message: str, *, response: object, body: object) -> None:
+        """Initialize the error.
+
+        :param message: the error text.
+        :param response: the provider HTTP response.
+        :param body: the decoded response body.
+        """
+        super().__init__(message)
+        self.response = response
+        self.body = body
+
+
+class TestToolError:
+    """A tool's exception reaches the agent as a picklable ToolError."""
+
+    def test_tool_exception_is_raised_as_tool_error_with_its_class_name(
+        self,
+    ) -> None:
+        """The tool's class name and message survive, the class itself does not."""
+        with pytest.raises(ToolError) as caught:
+            AnyToolAsTask().execute(tool_py=CLIENT_FAULT_TOOL, callable_method="run")
+        assert caught.value.type_name == "InvalidRequestError"
+        assert caught.value.message == "prompt is empty"
+        assert str(caught.value) == "prompt is empty"
+
+    def test_tool_exception_without_text_keeps_its_class_name(self) -> None:
+        """A message that cannot be rendered leaves an empty message, not a crash."""
+        with pytest.raises(ToolError) as caught:
+            AnyToolAsTask().execute(
+                tool_py=UNPRINTABLE_ERROR_TOOL, callable_method="run"
+            )
+        assert (caught.value.type_name, caught.value.message) == ("Unprintable", "")
+
+    def test_tool_error_survives_a_pickle_round_trip(self) -> None:
+        """The worker pickles the exception; the agent must get the same fields."""
+        restored = pickle.loads(  # nosec
+            pickle.dumps(ToolError("InvalidRequestError", "prompt is empty"))
+        )
+        assert isinstance(restored, ToolError)
+        assert (restored.type_name, restored.message) == (
+            "InvalidRequestError",
+            "prompt is empty",
+        )
+
+    def test_tool_exception_crosses_the_worker_process_boundary(self) -> None:
+        """Run in a real worker: the agent sees the tool's class name, not a PicklingError."""
+        with ProcessPool(max_workers=1) as pool:
+            future = pool.schedule(
+                AnyToolAsTask().execute,
+                kwargs={"tool_py": CLIENT_FAULT_TOOL, "callable_method": "run"},
+                timeout=60,
+            )
+            with pytest.raises(ToolError) as caught:
+                future.result()
+        assert caught.value.type_name == "InvalidRequestError"
+
+    def test_sdk_style_exception_crosses_the_worker_process_boundary(self) -> None:
+        """An exception that cannot be unpickled arrives as a ToolError, not a hang."""
+        raw = SdkStyleRateLimitError("Rate limit reached", response=None, body=None)
+        with pytest.raises(TypeError):
+            pickle.loads(pickle.dumps(raw))  # nosec
+        with ProcessPool(max_workers=1) as pool:
+            future = pool.schedule(
+                AnyToolAsTask().execute,
+                kwargs={"tool_py": SDK_STYLE_ERROR_TOOL, "callable_method": "run"},
+                timeout=60,
+            )
+            with pytest.raises(ToolError) as caught:
+                future.result(timeout=60)
+        assert (caught.value.type_name, caught.value.message) == (
+            "SdkStyleRateLimitError",
+            "Rate limit reached",
+        )

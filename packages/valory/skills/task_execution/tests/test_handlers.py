@@ -6515,6 +6515,20 @@ def _fetch_setup_delivered(handler_context: Any) -> Dict[str, str]:
     return {"request_id": "7"}
 
 
+def _fetch_setup_failed(handler_context: Any) -> Dict[str, str]:
+    handler_context.shared_state["offchain_request_responses"] = {
+        "7": {
+            "request_id": "7",
+            "status": "failed",
+            "error": "RuntimeError: down",
+            "fault": "mech",
+            "delivery_rate": 1,
+            "response": {},
+        }
+    }
+    return {"request_id": "7"}
+
+
 def _fetch_setup_rejected(handler_context: Any) -> Dict[str, str]:
     handler_context.shared_state["offchain_request_responses"] = {
         "7": {"request_id": "7", "status": "rejected", "reason": "x"}
@@ -6542,12 +6556,20 @@ def _fetch_setup_bad_request(handler_context: Any) -> Dict[str, str]:
     "setup, expected_outcome",
     [
         (_fetch_setup_delivered, hmod.FETCH_OUTCOME_DELIVERED),
+        (_fetch_setup_failed, hmod.FETCH_OUTCOME_DELIVERED),
         (_fetch_setup_rejected, hmod.FETCH_OUTCOME_REJECTED),
         (_fetch_setup_done_task_fallback, hmod.FETCH_OUTCOME_DONE_TASK_FALLBACK),
         (_fetch_setup_not_found, hmod.FETCH_OUTCOME_NOT_FOUND),
         (_fetch_setup_bad_request, hmod.FETCH_OUTCOME_BAD_REQUEST),
     ],
-    ids=["delivered", "rejected", "done_task_fallback", "not_found", "bad_request"],
+    ids=[
+        "delivered",
+        "settled_failure",
+        "rejected",
+        "done_task_fallback",
+        "not_found",
+        "bad_request",
+    ],
 )
 def test_fetch_offchain_info_counts_exactly_one_bounded_outcome(
     handler_context: Any,
