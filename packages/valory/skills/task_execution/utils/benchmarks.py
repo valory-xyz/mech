@@ -45,6 +45,9 @@ class TokenCounterCallback:
         "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
         "claude-fable-5": {"input": 0.01, "output": 0.05},
         "claude-sonnet-5-5": {"input": 0.002, "output": 0.010},
+        # Google list prices, Standard tier, ai.google.dev/gemini-api/docs/pricing.
+        # Output includes thinking tokens.
+        "gemini-3.5-flash-lite": {"input": 0.0003, "output": 0.0025},
         # OpenRouter passes the provider list price through. The ":online" web
         # search is billed per request on top of the tokens and reaches the
         # mech through ``call_cost``, not through this table.
