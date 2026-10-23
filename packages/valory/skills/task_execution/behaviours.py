@@ -1472,8 +1472,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        # The on-chain failure text stays as it was; off-chain a request the
-        # mech could not serve as written names what was wrong with it.
         client_error = (
             self._client_fault[0]
             if self._client_fault is not None and is_offchain
@@ -1934,9 +1932,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     reason = f"Requested pricing invalid. Actual {req_id_delivery_rate}, needed {tool_pricing}."
                     self.context.logger.warning(reason)
                     self._count_task_failure(tool_name, FAILURE_REASON_PRICING_INVALID)
-                    self._fail_as_client_fault(
-                        f"signed delivery rate {req_id_delivery_rate} is below "
-                        f"the price {tool_pricing} of tool {tool_name}"
+                    self._fail_as_mech_fault(
+                        f"tool {tool_name} is priced at {tool_pricing}, above "
+                        f"the signed delivery rate {req_id_delivery_rate}"
                     )
                     # reset the time counter used to measure time taken to prepare the task
                     self.tool_preparation_start_time = 0.0
@@ -1999,6 +1997,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param metric_reason: bounded ``reason`` label for the failure counter.
         """
         self._client_fault = (error, metric_reason)
+        self._invalid_request = True
+
+    def _fail_as_mech_fault(self, error: str) -> None:
+        """Mark the executing task failed, before it ran, for a mech-side reason.
+
+        Requests whose signed rate is below the tool price are refused at
+        acceptance, so a price above the signed rate at run time means the
+        operator changed pricing in between. Off-chain the task settles as a
+        mech-fault failure carrying ``error``; the on-chain text is unchanged.
+
+        :param error: the error an off-chain requester sees.
+        """
+        if self._executing_task is not None and self._executing_task.get(
+            "is_offchain", False
+        ):
+            self._tool_error_reason = error
         self._invalid_request = True
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
@@ -2248,7 +2262,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         A client fault is charged the signed cap. A mech fault is charged the
         mech's minimum charge (``minimum_charge``), never above the cap; what
-        the tool reported spending is not counted.
+        the tool reported spending is not counted. A run skipped before the
+        tool started is not charged the tool floor.
 
         :param done_task: the done task, carrying ``tool`` and
             ``dynamic_tool_cost`` (the floor) when set.
@@ -2258,7 +2273,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """
         if cap is None:
             return None
-        floor = done_task.get("dynamic_tool_cost")
+        tool_ran = not self._invalid_request
+        floor = done_task.get("dynamic_tool_cost") if tool_ran else None
         done_task["pricing"] = {
             "measured_cost": None,
             "fixed_cost": fixed_share_in_asset_units(self.params),
@@ -2269,7 +2285,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if fault == FAULT_CLIENT:
             return cap
         tool = done_task.get("tool")
-        return min(minimum_charge(self.params, tool if tool else None), cap)
+        charged_tool = tool if tool and tool_ran else None
+        return min(minimum_charge(self.params, charged_tool), cap)
 
     def _charged_delivery_rate(
         self,
@@ -2932,6 +2949,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     ) -> None:
         """Count one off-chain request that failed after it was accepted.
 
+        The ``tool`` label is the tool name only when the mech serves it, else
+        ``"unknown"``, so a request cannot add series.
+
         :param metric_reason: bounded ``reason`` label value.
         :param fault: who caused the failure.
         :param tool: the tool the request named.
@@ -2940,7 +2960,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.mech_metrics.inc_counter(
             self.mech_metrics.mech_offchain_failures_total,
             1,
-            tool=str(tool or "unknown"),
+            tool=tool if tool in self._tools_to_package_hash else "unknown",
             reason=metric_reason,
             fault=fault,
             chain=labels["chain"],

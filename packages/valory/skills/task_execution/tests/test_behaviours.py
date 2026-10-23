@@ -2026,6 +2026,7 @@ def _seed_executing_task(
     behaviour._done_task = None  # _handle_done_task assigns it
     behaviour._invalid_request = False  # default to the success shape
     behaviour._ipfs_error_reason = None
+    behaviour._tools_to_package_hash = {"mytool": "bafymytool"}
 
 
 def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
@@ -5728,11 +5729,6 @@ MALFORMED_CAP = 100
             f"request metadata is {beh_mod.IPFS_MAX_TASK_BYTES + 1} bytes, over "
             f"the {beh_mod.IPFS_MAX_TASK_BYTES} byte limit",
         ),
-        (
-            json.dumps({"prompt": "hi", "tool": "priced_tool"}),
-            f"signed delivery rate {MALFORMED_CAP} is below the price "
-            f"{MALFORMED_CAP + 1} of tool priced_tool",
-        ),
     ],
     ids=[
         "not_json",
@@ -5741,7 +5737,6 @@ MALFORMED_CAP = 100
         "prompt_not_a_string",
         "prompt_over_limit",
         "metadata_over_limit",
-        "cap_below_tool_price",
     ],
 )
 def test_offchain_malformed_request_is_skipped_and_charged_the_signed_cap(
@@ -5979,6 +5974,7 @@ def test_record_offchain_failure_counts_bounded_reason(
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
     monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
     behaviour._executing_task = {"requestId": 9, "is_offchain": True, "tool": "x"}
+    behaviour._tools_to_package_hash = {"x": "bafyx"}
     free_text = "Cannot step in. Tool x is not installed. Ignoring request 9."
 
     if metric_reason is None:
@@ -5998,6 +5994,26 @@ def test_record_offchain_failure_counts_bounded_reason(
     )
     # The human-readable reason still reaches the requester unchanged.
     assert shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["9"]["reason"] == free_text
+
+
+@pytest.mark.parametrize(
+    "tool, label",
+    [("x", "x"), ("not_a_tool", "unknown"), ("", "unknown"), (None, "unknown")],
+    ids=["served_tool", "unserved_tool", "empty", "none"],
+)
+def test_offchain_failure_tool_label_is_bounded_to_served_tools(
+    behaviour: Any, monkeypatch: Any, tool: Optional[str], label: str
+) -> None:
+    """Only a tool the mech serves becomes a label value; anything else is unknown."""
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    behaviour._tools_to_package_hash = {"x": "bafyx"}
+
+    behaviour._count_offchain_failure(
+        beh_mod.OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED, beh_mod.FAULT_CLIENT, tool
+    )
+
+    assert inc.call_args.kwargs["tool"] == label
 
 
 def _metric_calls(mock: MagicMock, metric: Any) -> List[Any]:
@@ -6645,6 +6661,55 @@ def test_offchain_mech_fault_is_charged_the_minimum_charge(
     assert envelope["error"] == "RuntimeError: provider outage"
 
 
+def test_offchain_tool_priced_above_the_signed_rate_is_a_mech_fault(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A tool price above the signed rate at run time is the operator's change.
+
+    The tool is skipped and the run settles as a mech fault at the minimum
+    charge without the tool floor, well under the signed cap.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=6, fixed=FIXED_SHARE_USD_6DEC, fee_bp=1500)
+    pricing = {"priced_tool": CAP_ONE_USD_6DEC + 1}
+    params_stub.tools_to_pricing = pricing
+    behaviour._tools_to_pricing = pricing
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _stub_offchain_io(behaviour, monkeypatch)
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=58)
+    behaviour._tools_to_package_hash = {"priced_tool": "bafytool"}
+    behaviour._executing_task["request_delivery_rate"] = CAP_ONE_USD_6DEC
+    behaviour.request_id_to_delivery_rate_info[58] = CAP_ONE_USD_6DEC
+    prepared = MagicMock()
+    monkeypatch.setattr(behaviour, "_prepare_task", prepared)
+    payload = json.dumps({"prompt": "hi", "tool": "priced_tool"})
+
+    behaviour._handle_get_task(
+        SimpleNamespace(files={"metadata.json": payload}), MagicMock()
+    )
+    behaviour._handle_done_task(behaviour._get_executing_task_result())
+
+    prepared.assert_not_called()
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["58"]
+    assert {k: stored[k] for k in ("status", "error", "fault", "delivery_rate")} == {
+        "status": "failed",
+        "error": f"tool priced_tool is priced at {CAP_ONE_USD_6DEC + 1}, above "
+        f"the signed delivery rate {CAP_ONE_USD_6DEC}",
+        "fault": beh_mod.FAULT_MECH,
+        "delivery_rate": MECH_FAULT_CHARGE,
+    }
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_FAILED_FLOOR
+    assert done_task["pricing"]["tool_floor"] is None
+
+
 def test_offchain_mech_fault_is_never_charged_above_the_signed_cap(
     behaviour: Any, params_stub: Any
 ) -> None:
@@ -6869,7 +6934,7 @@ def test_failure_counted_before_execution_is_not_counted_again(
     _, inc = _stub_offchain_io(behaviour, monkeypatch)
     _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=50)
     behaviour._count_task_failure("mytool", beh_mod.FAILURE_REASON_PRICING_INVALID)
-    behaviour._fail_as_client_fault("signed delivery rate is below the price")
+    behaviour._fail_as_mech_fault("tool mytool is priced above the signed rate")
 
     behaviour._handle_done_task(task_result=None)
 
