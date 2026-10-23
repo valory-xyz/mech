@@ -25,7 +25,7 @@ part most likely to drift independently of the AEA async plumbing.
 """
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -480,6 +480,37 @@ def test_fetch_payload_rebuilds_delivered_shape() -> None:
         "status": "ok",
         "content_cid": "cid",
         "response": {"result": "p_yes=0.7"},
+    }
+
+
+@pytest.mark.parametrize(
+    "done_task, extra",
+    [
+        ({"actual_delivery_rate": 14_118}, {"delivery_rate": 14_118}),
+        (None, {}),
+    ],
+    ids=["with_charge", "no_done_task"],
+)
+def test_fetch_payload_rebuilds_failed_shape(
+    done_task: Optional[dict], extra: dict
+) -> None:
+    """A settled failure serves status ``failed`` with its error, fault and charge."""
+    response = {"result": None, "error": "RuntimeError: down", "fault": "mech"}
+    record = {
+        "request_id": 42,
+        "settlement_status": preimage.STATUS_DELIVERED,
+        "response": json.dumps(response),
+        "response_cid": "cid",
+        preimage.FIELD_DONE_TASK: done_task,
+    }
+    assert preimage.fetch_payload(record) == {
+        "request_id": "42",
+        "status": "failed",
+        "error": "RuntimeError: down",
+        "fault": "mech",
+        **extra,
+        "content_cid": "cid",
+        "response": response,
     }
 
 

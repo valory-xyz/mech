@@ -2913,6 +2913,49 @@ class TestGetOffchainTasksDeliverData:
         assert b._actual_delivery_rate(task, max_rate=max_rate) == expected
         assert b.context.logger.warning.called is warns
 
+    @pytest.mark.parametrize(
+        "flag, nonce_mode, contract_callable, expected_rates",
+        [
+            (False, None, "get_offchain_deliver_data", [100, 100]),
+            (True, None, "get_offchain_deliver_data_with_cap", [100, 1]),
+            (
+                True,
+                NONCE_MODE_EXPLICIT,
+                "get_offchain_deliver_data_with_nonces",
+                [100, 1],
+            ),
+        ],
+        ids=["legacy_four_arg", "cap_five_arg", "explicit_six_arg"],
+    )
+    def test_a_batch_of_failed_runs_settles_every_request_at_a_non_zero_charge(
+        self,
+        flag: bool,
+        nonce_mode: Optional[str],
+        contract_callable: str,
+        expected_rates: List[int],
+    ) -> None:
+        """Failed runs settle like answered ones, each at its stored charge."""
+        # A client-fault run carries the signed cap, a mech-fault run the
+        # minimum charge of one unit; with the flag off both pay the signed
+        # value. The batch never sums to zero.
+        explicit = nonce_mode == NONCE_MODE_EXPLICIT
+        client = self._offchain_task(
+            "f1", nonce=4242 if explicit else 1, nonce_mode=nonce_mode
+        )
+        client["actual_delivery_rate"] = 100
+        mech = self._offchain_task(
+            "f2", nonce=4243 if explicit else 2, nonce_mode=nonce_mode
+        )
+        mech["actual_delivery_rate"] = 1
+
+        (call,) = self._deliver_calls(
+            self._make_b(cap_and_actual_enabled=flag), [mech, client]
+        )
+
+        assert call["contract_callable"] == contract_callable
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == expected_rates
+        assert min(call[OffchainKeys.DELIVERY_RATES_CAMEL.value]) > 0
+
     def test_explicit_nonce_tasks_go_to_the_six_arg_wrapper_in_their_own_call(
         self,
     ) -> None:
