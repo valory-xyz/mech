@@ -184,7 +184,7 @@ REQUEST_OUTCOME_SENDER_UNRESOLVED: RequestOutcome = "sender_unresolved"  # 503
 REQUEST_OUTCOME_NONCE_REJECTED: RequestOutcome = "nonce_rejected"  # 401 / 503
 REQUEST_OUTCOME_BALANCE_UNAVAILABLE: RequestOutcome = "balance_unavailable"  # 503
 REQUEST_OUTCOME_INSUFFICIENT_BALANCE: RequestOutcome = "insufficient_balance"  # 402
-REQUEST_OUTCOME_CAP_BELOW_MINIMUM: RequestOutcome = "cap_below_minimum"  # 402
+REQUEST_OUTCOME_CAP_BELOW_MINIMUM: RequestOutcome = "cap_below_minimum"  # 400
 REQUEST_OUTCOME_INTERNAL_ERROR: RequestOutcome = "internal_error"  # 500 / 503
 REQUEST_OUTCOME_REJECTED_OTHER: RequestOutcome = "rejected_other"  # untagged
 mech_offchain_requests_total = Counter(
@@ -226,7 +226,7 @@ mech_preimage_incomplete_rows = Gauge(
 # Off-chain HTTP hardening
 MAX_HTTP_BODY_BYTES = 1_048_576  # 1MB cap on inbound HTTP bodies
 # Body-shape bound only: rejects negatives. A cap below the mech's minimum
-# charge is refused with a 402 once the balance has been read.
+# charge is refused with a 400 once the balance has been read.
 MIN_DELIVERY_RATE = 0
 MAX_DELIVERY_RATE = 2**256 - 1  # uint256 upper bound
 # 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
@@ -490,8 +490,9 @@ REQUEST_ALREADY_ACCEPTED = "already accepted"
 # round-trip needed for the compare.
 IPFS_HASH_MULTIHASH_PREFIX = "1220"
 
-# 402 reasons. The signed cap must cover the mech's minimum charge, and the
-# sender's balance must cover this cap plus the caps of its unsettled requests.
+# Acceptance refusals. A signed cap below the mech's minimum charge gets a 400
+# naming ``minimum_cap``. A balance that, after the caps of the sender's
+# unsettled requests, does not cover this cap gets a 402.
 INSUFFICIENT_BALANCE = "insufficient balance"
 SIGNED_CAP_BELOW_MINIMUM = "signed cap below the mech's minimum charge"
 
@@ -638,6 +639,7 @@ class ResponseKey(str, Enum):
     BALANCE_TRACKER_ADDRESS = "balance_tracker_address"
     PAYMENT_TYPE = "payment_type"
     ASSET_ADDRESS = "asset_address"
+    MINIMUM_CAP = "minimum_cap"
 
 
 # 402 challenge constants — surfaced so clients can branch on a stable label.
@@ -2648,23 +2650,25 @@ class MechHttpHandler(AbstractResponseHandler):
                 request_delivery_rate,
                 minimum,
             )
-            self._send_payment_required(
+            # No deposit raises a signed cap, so this is not a 402 challenge.
+            self._send_rejection_response(
                 http_msg,
                 http_dialogue,
                 request_id,
-                balance_check={
-                    **balance_check,
-                    ResponseKey.REQUIRED_AMOUNT.value: minimum,
-                },
                 reason=SIGNED_CAP_BELOW_MINIMUM,
+                status_code=HttpCode.BAD_REQUEST_CODE.value,
+                status_text="Bad request",
+                body_extras={ResponseKey.MINIMUM_CAP.value: minimum},
                 outcome=REQUEST_OUTCOME_CAP_BELOW_MINIMUM,
             )
             return
 
         available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
         reserved = unsettled_signed_caps(self.context.shared_state, sender_checksum)
-        required = reserved + request_delivery_rate
-        if available_amount < required:
+        # Caps of unsettled requests are already spoken for, so the 402 names
+        # this request's cap against the balance left after them.
+        spendable = max(0, available_amount - reserved)
+        if spendable < request_delivery_rate:
             self.context.logger.info(
                 "Offchain request %s refused: balance %d does not cover cap %d "
                 "plus %d reserved by unsettled requests.",
@@ -2679,7 +2683,8 @@ class MechHttpHandler(AbstractResponseHandler):
                 request_id,
                 balance_check={
                     **balance_check,
-                    ResponseKey.REQUIRED_AMOUNT.value: required,
+                    ResponseKey.AVAILABLE_AMOUNT.value: spendable,
+                    ResponseKey.REQUIRED_AMOUNT.value: request_delivery_rate,
                 },
                 reason=INSUFFICIENT_BALANCE,
                 outcome=REQUEST_OUTCOME_INSUFFICIENT_BALANCE,

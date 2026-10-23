@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 """Tests for task_submission_abci.models."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -190,31 +190,61 @@ class TestParamsInit:
         assert p.task_mutable_params.latest_metadata_hash is None
 
     @pytest.mark.parametrize(
-        "overrides, valid",
+        "overrides, error",
         [
-            ({}, True),
-            ({"manual_gas_limit": 450_000}, True),
-            ({"manual_gas_limit": 449_999}, False),
-            ({"manual_gas_limit": 0}, False),
-            ({"settlement_gas_per_request": 0}, False),
-            ({"settlement_gas_per_request": -1}, False),
-            ({"settlement_base_gas": 400_000}, False),
-            ({"manual_gas_limit": 8_000_000, "settlement_base_gas": 0}, True),
+            ({}, None),
+            ({"manual_gas_limit": 450_000}, None),
+            ({"manual_gas_limit": 449_999}, "must cover settlement_base_gas"),
+            ({"manual_gas_limit": 0}, "must cover settlement_base_gas"),
+            ({"settlement_gas_per_request": 0}, "must cover settlement_base_gas"),
+            ({"settlement_gas_per_request": -1}, "must cover settlement_base_gas"),
+            ({"settlement_base_gas": 400_000}, "must cover settlement_base_gas"),
+            ({"manual_gas_limit": 8_000_000, "settlement_base_gas": 0}, None),
+            ({"settlement_base_gas": -1}, "settlement_base_gas must not be negative"),
+            ({"settlement_metadata_hash_gas": 0}, None),
+            (
+                {"settlement_metadata_hash_gas": -1},
+                "settlement_metadata_hash_gas must not be negative",
+            ),
+            (
+                {"settlement_process_payment_gas": -1},
+                "settlement_process_payment_gas must not be negative",
+            ),
+            (
+                {"settlement_profit_transfer_gas": -1},
+                "settlement_profit_transfer_gas must not be negative",
+            ),
+            (
+                {"settlement_legacy_response_gas": -1},
+                "settlement_legacy_response_gas must not be negative",
+            ),
         ],
     )
-    def test_gas_limit_must_fit_one_request(
-        self, overrides: Dict[str, Any], valid: bool
+    def test_gas_config_is_validated(
+        self, overrides: Dict[str, Any], error: Optional[str]
     ) -> None:
-        """A gas config that cannot carry one request is refused at startup."""
+        """A gas config that cannot carry one request, or has a negative budget, is refused."""
         kwargs = self._make_kwargs(**overrides)
         with patch.object(BaseParams, "__init__", return_value=None):
             p = Params.__new__(Params)
-            if valid:
+            if error is None:
                 Params.__init__(p, **kwargs)
                 assert p.manual_gas_limit == kwargs["manual_gas_limit"]
             else:
-                with pytest.raises(ValueError, match="must cover settlement_base_gas"):
+                with pytest.raises(ValueError, match=error):
                     Params.__init__(p, **kwargs)
+
+    def test_gas_budgets_default_to_the_shipped_values(self) -> None:
+        """Budgets left out of the config take the documented defaults."""
+        with patch.object(BaseParams, "__init__", return_value=None):
+            p = Params.__new__(Params)
+            Params.__init__(p, **self._make_kwargs())
+        assert (
+            p.settlement_process_payment_gas,
+            p.settlement_profit_transfer_gas,
+            p.settlement_metadata_hash_gas,
+            p.settlement_legacy_response_gas,
+        ) == (120_000, 70_000, 40_000, 150_000)
 
     def test_calls_super_init(self) -> None:
         """Test Params.__init__ calls super().__init__."""

@@ -81,6 +81,10 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
     DEFAULT_MANUAL_GAS_LIMIT,
     DEFAULT_SETTLEMENT_BASE_GAS,
     DEFAULT_SETTLEMENT_GAS_PER_REQUEST,
+    RECORDED_METADATA_HASH_GAS,
+    RECORDED_OUT_OF_GAS_ITEMS_AT_1M,
+    RECORDED_PROCESS_PAYMENT_GAS,
+    RECORDED_PROFIT_TRANSFER_GAS,
     _error_contract_msg,
     _error_ledger_msg,
     _gen_returning,
@@ -96,6 +100,7 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
     _run_gen,
     _state_contract_msg,
     _state_ledger_msg,
+    recorded_settlement_gas,
 )
 
 # A settlement deadline every explicit-nonce test task can meet.
@@ -3369,14 +3374,14 @@ _DEFAULT_CAPACITY = (
     DEFAULT_MANUAL_GAS_LIMIT - DEFAULT_SETTLEMENT_BASE_GAS
 ) // DEFAULT_SETTLEMENT_GAS_PER_REQUEST
 _OK_SIMULATION = {"data": b"\xdd", "simulation_ok": True}
-
-
-def _fits_gas_limit(n_requests: int) -> bool:
-    """Whether a tx delivering ``n_requests`` stays within the shipped gas config."""
-    return (
-        DEFAULT_SETTLEMENT_BASE_GAS + n_requests * DEFAULT_SETTLEMENT_GAS_PER_REQUEST
-        <= DEFAULT_MANUAL_GAS_LIMIT
-    )
+_USAGE_TX = {"to": "0xHASH", "value": 0, "data": b"\x00"}
+_HASH_TX = {"to": "0xMETA", "value": 0, "data": b"\x01"}
+# A one-mech profit split: the process-payment tx, then three transfers.
+_SPLIT_TXS = [{"to": "0xBT", "value": 0, "data": b"\x02"}] + [
+    {"to": "0xMECH", "value": 0, "data": b"\x03"} for _ in range(3)
+]
+_MARKETPLACE_IDS = (11, 12)
+_LEGACY_ID = "r-legacy"
 
 
 def _explicit_tasks(n: int, sender: str = "0xSENDER") -> List[Dict[str, Any]]:
@@ -3387,6 +3392,8 @@ def _explicit_tasks(n: int, sender: str = "0xSENDER") -> List[Dict[str, Any]]:
             f"{sender}-{i}", sender=sender, nonce=i, nonce_mode=NONCE_MODE_EXPLICIT
         )
         task["actual_delivery_rate"] = 70
+        # Off-chain tasks are delivered through the designated marketplace mech.
+        task["is_marketplace_mech"] = True
         tasks.append(task)
     return tasks
 
@@ -3447,7 +3454,10 @@ class TestSettlementFitsGasLimit:
         """Each batch fits; together the batches cover every request once, in nonce order."""
         tasks = _explicit_tasks(n_requests)
         batches = self._settle_over_periods(self._make_b(), tasks)
-        assert all(_fits_gas_limit(len(batch)) for batch in batches)
+        assert all(
+            recorded_settlement_gas(len(batch)) <= DEFAULT_MANUAL_GAS_LIMIT
+            for batch in batches
+        )
         assert len(batches) == -(-n_requests // _DEFAULT_CAPACITY)
         assert [rid for batch in batches for rid in batch] == [
             t["request_id"] for t in tasks
@@ -3510,6 +3520,30 @@ class TestSettlementFitsGasLimit:
         )
         assert "nonces" not in call_kwargs
 
+    def test_explicit_group_over_capacity_keeps_its_earliest_deadlines(self) -> None:
+        """An explicit group is cut to the requests closest to expiry, in nonce order."""
+        b = self._make_b()
+        tasks = _explicit_tasks(6)
+        for task, deadline in zip(tasks, (9, 3, 8, 1, 7, 3)):
+            task[beh_mod.DEADLINE_KEY] = _FAR_DEADLINE - 10 + deadline
+        included, calls, mock_skip = self._build_offchain_batch(b, tasks)
+        assert included == ["0xSENDER-2", "0xSENDER-4", "0xSENDER-5", "0xSENDER-6"]
+        (call_kwargs,) = calls
+        assert call_kwargs["nonces"] == [2, 4, 5, 6]
+        assert call_kwargs["deadlines"] == [
+            _FAR_DEADLINE - 10 + d for d in (3, 1, 7, 3)
+        ]
+        mock_skip.assert_not_called()
+
+    def test_explicit_group_with_equal_deadlines_keeps_its_lowest_nonces(
+        self,
+    ) -> None:
+        """Equal deadlines fall back to nonce order."""
+        b = self._make_b()
+        tasks = list(reversed(_explicit_tasks(6)))
+        included, _calls, _ = self._build_offchain_batch(b, tasks)
+        assert included == [f"0xSENDER-{i}" for i in range(1, 5)]
+
     def test_sequential_group_within_capacity_is_delivered_whole(self) -> None:
         """A group that fits goes out unchanged in a single call."""
         b = self._make_b(cap_and_actual_enabled=False)
@@ -3540,6 +3574,12 @@ class TestSettlementFitsGasLimit:
         """Capacity is the spare gas over the base, in whole per-request budgets."""
         b = self._make_b(manual_gas_limit=manual_gas_limit)
         assert b._settlement_request_capacity() == expected
+
+    def test_default_capacity_is_below_the_batch_that_ran_out_of_gas(self) -> None:
+        """The shipped config never builds the batch size that reverted on the fork."""
+        capacity = self._make_b()._settlement_request_capacity()
+        assert 0 < capacity < RECORDED_OUT_OF_GAS_ITEMS_AT_1M
+        assert recorded_settlement_gas(capacity) <= DEFAULT_MANUAL_GAS_LIMIT
 
     def test_a_tight_gas_limit_settles_one_request_per_period(self) -> None:
         """At a limit that fits one request, a group is never sent whole."""
@@ -3577,50 +3617,135 @@ class TestSettlementFitsGasLimit:
         assert [len(c[MarketplaceKeys.REQUEST_IDS.value]) for c in calls] == [2, 1]
         mock_skip.assert_not_called()
 
-    def test_all_deliver_paths_share_one_capacity(self) -> None:
-        """Off-chain fills first, marketplace and legacy get what is left."""
-        b = self._make_b()
-        offchain = _explicit_tasks(3)
+    @staticmethod
+    def _onchain_tasks(
+        period: int, legacy_response: bool = False
+    ) -> List[Dict[str, Any]]:
+        """Two marketplace requests and one legacy request arriving in ``period``."""
         marketplace = [
             {
                 "is_marketplace_mech": True,
                 "mech_address": "0xM1",
-                "request_id": rid,
-                "requestId": rid,
+                "request_id": rid + 100 * period,
+                "requestId": rid + 100 * period,
                 "task_result": "de" * 16,
             }
-            for rid in (11, 12)
+            for rid in _MARKETPLACE_IDS
         ]
-        legacy = {"is_marketplace_mech": False, "request_id": "r-legacy"}
-        b._synchronized_data.done_tasks = offchain + marketplace + [legacy]
-        usage_tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
+        legacy: Dict[str, Any] = {
+            "is_marketplace_mech": False,
+            "request_id": f"{_LEGACY_ID}-{period}",
+        }
+        if legacy_response:
+            legacy["transaction"] = {"to": "0xTOOL", "value": 0, "data": b"\x04"}
+        return marketplace + [legacy]
+
+    @staticmethod
+    def _build_payload(
+        b: Any,
+        done_tasks: List[Dict[str, Any]],
+        update_hash_tx: Optional[Dict[str, Any]] = None,
+        split_profit_txs: Optional[List[Dict[str, Any]]] = None,
+    ) -> Tuple[List[str], List[Dict[str, Any]]]:
+        """One full payload build: the included ids and the txs sent to the multisend."""
+        b._synchronized_data.done_tasks = done_tasks
+        multisend = MagicMock(side_effect=_gen_returning("encoded"))
         with (
             patch.object(
-                b, "get_mech_update_hash_tx", side_effect=_gen_returning(None)
+                b, "get_mech_update_hash_tx", side_effect=_gen_returning(update_hash_tx)
             ),
-            patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
+            patch.object(
+                b,
+                "get_split_profit_txs",
+                side_effect=_gen_returning(split_profit_txs or []),
+            ),
             patch.object(
                 b,
                 "get_contract_api_response",
                 side_effect=_gen_returning(_state_contract_msg(_OK_SIMULATION)),
             ),
-            patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
-            patch.object(b, "_get_deliver_tx") as mock_legacy,
             patch.object(
-                b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
+                b,
+                "_get_offchain_requester_balance",
+                side_effect=_gen_returning(10**9),
             ),
-            patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
+            patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
+            patch.object(
+                b,
+                "_get_deliver_tx",
+                side_effect=lambda task: _gen_returning(
+                    {"to": "0xLEGACY", "value": 0, "data": b"", "simulation_ok": True}
+                )(),
+            ),
+            patch.object(
+                b, "get_update_usage_tx", side_effect=_gen_returning(_USAGE_TX)
+            ),
+            patch.object(b, "_to_multisend", multisend),
         ):
             result = _run_gen(b.get_payload_content())
         envelope = decode_tx_payload(result)
         assert envelope is not None
-        assert envelope["included_request_ids"] == [
-            "0xSENDER-1",
-            "0xSENDER-2",
-            "0xSENDER-3",
-            "11",
-        ]
-        mock_legacy.assert_not_called()
+        return envelope["included_request_ids"], multisend.call_args.args[0]
+
+    def test_onchain_deliveries_settle_every_period_under_an_offchain_backlog(
+        self,
+    ) -> None:
+        """Prepaid on-chain requests go first; off-chain groups take what is left."""
+        b = self._make_b()
+        backlog = _explicit_tasks(20)
+        for period in range(3):
+            onchain = self._onchain_tasks(period)
+            included, _txs = self._build_payload(b, backlog + onchain)
+            onchain_ids = [str(t["request_id"]) for t in onchain]
+            assert included[: len(onchain_ids)] == onchain_ids
+            assert len(included) == _DEFAULT_CAPACITY
+            backlog = [t for t in backlog if t["request_id"] not in included]
+        assert len(backlog) == 20 - 3 * (_DEFAULT_CAPACITY - 3)
+
+    def test_legacy_response_tx_takes_its_budget_from_the_capacity(self) -> None:
+        """A legacy delivery carrying a response tx leaves less room for off-chain."""
+        b = self._make_b()
+        onchain = self._onchain_tasks(0, legacy_response=True)
+        included, txs = self._build_payload(b, _explicit_tasks(4) + onchain)
+        assert included == ["11", "12", f"{_LEGACY_ID}-0"]
+        assert onchain[-1]["transaction"] in txs
+
+    @pytest.mark.parametrize(
+        "update_hash_tx, split_profit_txs, offchain_included",
+        [
+            pytest.param(None, None, _DEFAULT_CAPACITY, id="deliveries_only"),
+            pytest.param(_HASH_TX, None, 4, id="metadata_hash"),
+            pytest.param(None, _SPLIT_TXS, 2, id="profit_split"),
+            pytest.param(_HASH_TX, _SPLIT_TXS, 2, id="hash_and_split"),
+        ],
+    )
+    def test_settlement_tx_fits_the_recorded_gas(
+        self,
+        update_hash_tx: Optional[Dict[str, Any]],
+        split_profit_txs: Optional[List[Dict[str, Any]]],
+        offchain_included: int,
+    ) -> None:
+        """Deliveries plus every other tx in the multisend stay under the limit.
+
+        Checked against gas recorded on the fork, not against the budgets.
+        """
+        b = self._make_b()
+        included, txs = self._build_payload(
+            b, _explicit_tasks(20), update_hash_tx, split_profit_txs
+        )
+        assert len(included) == offchain_included
+        extra = (RECORDED_METADATA_HASH_GAS if update_hash_tx else 0) + (
+            RECORDED_PROCESS_PAYMENT_GAS
+            + (len(split_profit_txs) - 1) * RECORDED_PROFIT_TRANSFER_GAS
+            if split_profit_txs
+            else 0
+        )
+        assert (
+            recorded_settlement_gas(len(included)) + extra <= DEFAULT_MANUAL_GAS_LIMIT
+        )
+        for tx in [update_hash_tx, *(split_profit_txs or [])]:
+            if tx is not None:
+                assert tx in txs
 
 
 # ---------------------------------------------------------------------------
@@ -4050,7 +4175,7 @@ class TestTransactionPreparationGetPayloadContent:
         }
 
     def test_included_ids_aggregate_across_all_three_deliver_paths(self) -> None:
-        """Off-chain, marketplace and legacy ids all land in the envelope, in that order."""
+        """Marketplace, legacy and off-chain ids all land in the envelope, in that order."""
         b = self._make_b()
         legacy = {"is_marketplace_mech": False, "request_id": "r-legacy"}
         b._synchronized_data.done_tasks = [legacy]
@@ -4088,7 +4213,7 @@ class TestTransactionPreparationGetPayloadContent:
             result = _run_gen(b.get_payload_content())
         assert decode_tx_payload(result) == {
             "tx_hash": "encoded",
-            "included_request_ids": ["r-off", "r-mkt", "r-legacy"],
+            "included_request_ids": ["r-mkt", "r-legacy", "r-off"],
         }
 
     def test_abandoned_offchain_batch_contributes_no_ids(self) -> None:

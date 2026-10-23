@@ -91,6 +91,50 @@ CONSENSUS_TIMESTAMP = 1_700_000_000
 DEFAULT_MANUAL_GAS_LIMIT = 1_000_000
 DEFAULT_SETTLEMENT_BASE_GAS = 300_000
 DEFAULT_SETTLEMENT_GAS_PER_REQUEST = 150_000
+DEFAULT_SETTLEMENT_PROCESS_PAYMENT_GAS = 120_000
+DEFAULT_SETTLEMENT_PROFIT_TRANSFER_GAS = 70_000
+DEFAULT_SETTLEMENT_METADATA_HASH_GAS = 40_000
+DEFAULT_SETTLEMENT_LEGACY_RESPONSE_GAS = 150_000
+
+# gasUsed of settlement txs recorded on a Polygon fork (Safe execTransaction +
+# multisend + usage checkpoint), keyed by explicit-nonce off-chain items in
+# the tx. A 6-item tx ran out of gas at a 1,000,000 limit.
+RECORDED_SETTLEMENT_GAS_USED = {
+    2: 470_983,
+    4: 736_326,
+    5: 868_991,
+    9: 1_399_903,
+    11: 1_665_364,
+    50: 6_851_735,
+}
+RECORDED_OUT_OF_GAS_ITEMS_AT_1M = 6
+# eth_estimateGas on the same fork, from the Safe, for the other txs that can
+# share the multisend: processPaymentByMultisig, the costlier profit transfer
+# through mech.exec (native to a fresh receiver) and changeHash.
+RECORDED_PROCESS_PAYMENT_GAS = 111_105
+RECORDED_PROFIT_TRANSFER_GAS = 66_037
+RECORDED_METADATA_HASH_GAS = 28_566
+
+
+def recorded_settlement_gas(n_items: int) -> int:
+    """Return the recorded gasUsed for a tx of ``n_items``, interpolated between records.
+
+    :param n_items: explicit-nonce off-chain items in the tx.
+    :return: the recorded or linearly interpolated gasUsed, rounded up.
+    """
+    if n_items in RECORDED_SETTLEMENT_GAS_USED:
+        return RECORDED_SETTLEMENT_GAS_USED[n_items]
+    points = sorted(RECORDED_SETTLEMENT_GAS_USED)
+    below = [n for n in points if n < n_items]
+    above = [n for n in points if n > n_items]
+    if below and above:
+        low, high = below[-1], above[0]
+    elif above:
+        low, high = points[0], points[1]
+    else:
+        low, high = points[-2], points[-1]
+    low_gas, high_gas = (RECORDED_SETTLEMENT_GAS_USED[n] for n in (low, high))
+    return low_gas + -(-(high_gas - low_gas) * (n_items - low) // (high - low))
 
 
 def _make_full_ctx(
@@ -140,6 +184,10 @@ def _make_full_ctx(
         manual_gas_limit=DEFAULT_MANUAL_GAS_LIMIT,
         settlement_base_gas=DEFAULT_SETTLEMENT_BASE_GAS,
         settlement_gas_per_request=DEFAULT_SETTLEMENT_GAS_PER_REQUEST,
+        settlement_process_payment_gas=DEFAULT_SETTLEMENT_PROCESS_PAYMENT_GAS,
+        settlement_profit_transfer_gas=DEFAULT_SETTLEMENT_PROFIT_TRANSFER_GAS,
+        settlement_metadata_hash_gas=DEFAULT_SETTLEMENT_METADATA_HASH_GAS,
+        settlement_legacy_response_gas=DEFAULT_SETTLEMENT_LEGACY_RESPONSE_GAS,
     )
     defaults.update(overrides)
     for attr, val in defaults.items():
