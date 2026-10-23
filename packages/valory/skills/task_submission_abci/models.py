@@ -101,12 +101,35 @@ class Params(BaseParams):
         self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
         self.task_mutable_params = MutableParams()
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
-        # Gas reserved in every settlement tx for everything but the delivered
-        # requests, and gas budgeted per delivered request. A tx carries at
-        # most ``(manual_gas_limit - base) // per_request`` requests.
+        # Gas budgets for one settlement tx, all within ``manual_gas_limit``.
+        # Polygon fork, explicit-nonce off-chain items through the Safe
+        # multisend (gasUsed): 2 items 470,983, 4 items 736,326, 5 items
+        # 868,991, 50 items 6,851,735, so about 133k per item plus about
+        # 205k per tx (Safe, multisend and the usage checkpoint). 6 items ran
+        # out of gas at a 1M limit. A delivery wrapped in ``mech.exec``
+        # measured 6k to 18k below the mech's direct wrapper, so it needs no
+        # extra budget. The defaults keep a margin over these figures.
         self.settlement_base_gas: int = int(kwargs.get("settlement_base_gas", 300_000))
         self.settlement_gas_per_request: int = int(
             kwargs.get("settlement_gas_per_request", 150_000)
+        )
+        # Budgets for the other txs that can share the multisend, from
+        # eth_estimateGas on the same fork (each includes the 21k a call inside
+        # the multisend does not pay): processPaymentByMultisig 111,105; a
+        # profit transfer through ``mech.exec`` 62,850 (token) or 66,037
+        # (native, fresh receiver); changeHash 28,566. A legacy response tx is
+        # supplied by the tool, so its budget is a cap, not a measurement.
+        self.settlement_process_payment_gas: int = int(
+            kwargs.get("settlement_process_payment_gas", 120_000)
+        )
+        self.settlement_profit_transfer_gas: int = int(
+            kwargs.get("settlement_profit_transfer_gas", 70_000)
+        )
+        self.settlement_metadata_hash_gas: int = int(
+            kwargs.get("settlement_metadata_hash_gas", 40_000)
+        )
+        self.settlement_legacy_response_gas: int = int(
+            kwargs.get("settlement_legacy_response_gas", 150_000)
         )
         if self.settlement_gas_per_request <= 0 or (
             self.manual_gas_limit
@@ -118,6 +141,15 @@ class Params(BaseParams):
                 f"request at settlement_gas_per_request "
                 f"{self.settlement_gas_per_request} (which must be positive)."
             )
+        for name in (
+            "settlement_base_gas",
+            "settlement_process_payment_gas",
+            "settlement_profit_transfer_gas",
+            "settlement_metadata_hash_gas",
+            "settlement_legacy_response_gas",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must not be negative.")
         # We are using 10_000 for 100% so 1000 == 0.1 for the service_owner_share
         self.service_owner_share = self._ensure("service_owner_share", kwargs, int)
         self.profit_split_balance = self._ensure("profit_split_balance", kwargs, int)

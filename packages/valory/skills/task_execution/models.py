@@ -32,10 +32,14 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 BASIS_POINTS = 10_000
 # fixed_cost_per_request is expressed in USD with this many decimals.
 USD_DECIMALS = 6
-# The least any run is priced at, answered or failed, so a batch never sums to
-# zero, which BalanceTrackerBase.sol:269 rejects. An off-chain request whose
-# signed cap is below the minimum charge (any cap of 0) is refused at acceptance.
+# The least a failed run is priced at before the cap clamp, so a batch made of
+# failed runs never sums to zero, which BalanceTrackerBase.sol:269 rejects. A
+# requester who signed a cap of 0 is still clamped to 0.
 FAILED_RUN_MIN_RATE = 1
+# The least ``minimum_charge`` returns, in payment-asset base units, so no
+# accepted run is charged zero. An off-chain request whose signed cap is below
+# the minimum charge (any cap of 0) is refused at acceptance.
+MINIMUM_CHARGE_BASE_UNITS = 1
 # ``pricing_mode`` on the predict-api event: the rule that set the charge.
 PRICING_CAP_AND_ACTUAL = "cap_and_actual"
 PRICING_FAILED_FLOOR = "failed_floor"
@@ -162,7 +166,7 @@ def minimum_charge(params: PricingParams, tool: Optional[str]) -> int:
         fixed_share_in_asset_units(params), params.marketplace_fee_bp
     )
     floor = params.tools_to_pricing.get(tool, 0) if tool is not None else 0
-    return max(FAILED_RUN_MIN_RATE, int(floor), fixed)
+    return max(MINIMUM_CHARGE_BASE_UNITS, int(floor), fixed)
 
 
 class Params(Model):

@@ -704,6 +704,29 @@ def _first_of_group(details: Dict[str, Any], count: int) -> Dict[str, Any]:
     return {key: value[:count] for key, value in details.items()}
 
 
+def _trim_group(details: Dict[str, Any], nonce_mode: str, count: int) -> Dict[str, Any]:
+    """Return a copy of a requester group cut down to ``count`` requests.
+
+    A sequential group keeps its lowest nonces, since the contract consumes
+    them in order. An explicit group keeps its earliest deadlines (ties by
+    nonce), in nonce order, so the requests closest to expiry settle first.
+
+    :param details: a requester group whose values are aligned lists, in
+        nonce order.
+    :param nonce_mode: the group's nonce mode.
+    :param count: how many requests to keep.
+    :return: the trimmed copy.
+    """
+    if nonce_mode != NONCE_MODE_EXPLICIT:
+        return _first_of_group(details, count)
+    deadlines = details[OffchainKeys.DEADLINES.value]
+    nonces = details[OffchainKeys.NONCES.value]
+    keep = sorted(
+        sorted(range(len(nonces)), key=lambda i: (deadlines[i], nonces[i]))[:count]
+    )
+    return {key: [value[i] for i in keep] for key, value in details.items()}
+
+
 def _order_groups_for_settlement(
     groups: Dict[Tuple[str, str], Dict[str, Any]],
 ) -> List[Tuple[Tuple[str, str], Dict[str, Any]]]:
@@ -1953,18 +1976,11 @@ class TransactionPreparationBehaviour(
             # of the txs. The error will be logged.
             all_txs.extend(split_profit_txs)
 
-        capacity = self._settlement_request_capacity()
-        (
-            offchain_deliver_txs,
-            offchain_included_ids,
-        ) = yield from self._get_offchain_tasks_deliver_data(capacity)
-        if offchain_deliver_txs is not None:
-            # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
-            all_txs.extend(offchain_deliver_txs)
-            included_request_ids.extend(offchain_included_ids)
-            capacity -= len(offchain_included_ids)
+        gas_left = self._settlement_gas_left(update_hash_tx, split_profit_txs)
+        per_request = self.params.settlement_gas_per_request
 
-        # filter out all the marketplace done tasks
+        # On-chain requests go first: they are prepaid and bound by the
+        # marketplace response timeout. Off-chain groups fill what is left.
         marketplace_done_tasks = [
             done_task
             for done_task in self.synchronized_data.done_tasks
@@ -1974,13 +1990,13 @@ class TransactionPreparationBehaviour(
             marketplace_deliver_txs,
             marketplace_included_ids,
         ) = yield from self._get_marketplace_tasks_deliver_data(
-            marketplace_done_tasks, capacity
+            marketplace_done_tasks, max(0, gas_left // per_request)
         )
         if marketplace_deliver_txs is not None:
             # in case of None, the agent will procced ahead as there are no marketplace tasks to deliver
             all_txs.extend(marketplace_deliver_txs)
             included_request_ids.extend(marketplace_included_ids)
-            capacity -= len(marketplace_included_ids)
+            gas_left -= len(marketplace_included_ids) * per_request
 
         # filter out the remaining tasks
         remaining_tasks = [
@@ -1989,7 +2005,13 @@ class TransactionPreparationBehaviour(
             if not done_task.get(IS_MARKETPLACE_MECH_KEY)
         ]
         for position, task in enumerate(remaining_tasks):
-            if capacity <= 0:
+            response_tx = task.get("transaction", None)
+            task_gas = per_request + (
+                self.params.settlement_legacy_response_gas
+                if response_tx is not None
+                else 0
+            )
+            if task_gas > gas_left:
                 self.context.logger.info(
                     f"Requests {extract_request_ids(remaining_tasks[position:])} "
                     "held for the next period: the settlement tx is full."
@@ -2017,10 +2039,20 @@ class TransactionPreparationBehaviour(
 
             all_txs.append(deliver_tx)
             included_request_ids.extend(extract_request_ids([task]))
-            capacity -= 1
-            response_tx = task.get("transaction", None)
+            gas_left -= task_gas
             if response_tx is not None:
                 all_txs.append(response_tx)
+
+        (
+            offchain_deliver_txs,
+            offchain_included_ids,
+        ) = yield from self._get_offchain_tasks_deliver_data(
+            max(0, gas_left // per_request)
+        )
+        if offchain_deliver_txs is not None:
+            # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
+            all_txs.extend(offchain_deliver_txs)
+            included_request_ids.extend(offchain_included_ids)
 
         update_usage_tx = yield from self.get_update_usage_tx()
         if update_usage_tx is None:
@@ -2046,6 +2078,31 @@ class TransactionPreparationBehaviour(
         """
         spare = self.params.manual_gas_limit - self.params.settlement_base_gas
         return max(0, spare // self.params.settlement_gas_per_request)
+
+    def _settlement_gas_left(
+        self,
+        update_hash_tx: Optional[Dict[str, Any]],
+        split_profit_txs: Optional[List[Dict[str, Any]]],
+    ) -> int:
+        """Gas left for deliveries once the other txs of the multisend are budgeted.
+
+        A profit split holds one process-payment tx per mech, then transfers.
+
+        :param update_hash_tx: the metadata hash tx, or None when not sent.
+        :param split_profit_txs: the profit split txs, or None/empty when not sent.
+        :return: ``manual_gas_limit`` minus the base and every other tx's budget.
+        """
+        params = self.params
+        gas = params.manual_gas_limit - params.settlement_base_gas
+        if update_hash_tx is not None:
+            gas -= params.settlement_metadata_hash_gas
+        if split_profit_txs:
+            payments = min(len(self.mech_addresses), len(split_profit_txs))
+            gas -= payments * params.settlement_process_payment_gas
+            gas -= (
+                len(split_profit_txs) - payments
+            ) * params.settlement_profit_transfer_gas
+        return max(0, gas)
 
     def _to_multisend(
         self, transactions: List[Dict]
@@ -2234,8 +2291,8 @@ class TransactionPreparationBehaviour(
         """Build the off-chain deliver txs, one per requester.
 
         Groups are taken in order while they fit ``capacity``; a group that
-        does not fit whole keeps its lowest nonces. The rest are held for a
-        later period, not counted as failed attempts.
+        does not fit whole is cut by :func:`_trim_group`. The rest are held
+        for a later period, not counted as failed attempts.
 
         :param capacity: the most requests the txs may deliver; None for the
             whole settlement capacity.
@@ -2351,15 +2408,17 @@ class TransactionPreparationBehaviour(
                     counted_request_ids.update(group_request_ids)
                     continue
                 if len(group_request_ids) > remaining:
+                    if remaining > 0:
+                        details = _trim_group(details, nonce_mode, remaining)
+                    kept = details[REQUEST_IDS_KEY] if remaining > 0 else []
                     self.context.logger.info(
-                        f"Requests {group_request_ids[max(remaining, 0):]} for "
-                        f"{sender} ({nonce_mode}) held for the next period: the "
-                        "settlement tx is full."
+                        f"Requests {[r for r in group_request_ids if r not in kept]} "
+                        f"for {sender} ({nonce_mode}) held for the next period: "
+                        "the settlement tx is full."
                     )
                     if remaining <= 0:
                         continue
-                    details = _first_of_group(details, remaining)
-                    group_request_ids = details[REQUEST_IDS_KEY]
+                    group_request_ids = kept
                 group_charge = sum(details[OffchainKeys.DELIVERY_RATES.value])
                 if sender in included_charge:
                     total = included_charge[sender] + group_charge

@@ -7196,7 +7196,7 @@ def _post_cap(
 
 
 @pytest.mark.parametrize(
-    "tools_to_pricing, fixed_cost, tool, cap, required",
+    "tools_to_pricing, fixed_cost, tool, cap, minimum",
     [
         pytest.param({}, 0, None, 0, 1, id="zero_cap_no_floor"),
         pytest.param({}, 0, None, 1, None, id="one_unit_no_floor"),
@@ -7238,9 +7238,12 @@ def test_signed_cap_covers_the_minimum_charge(
     fixed_cost: int,
     tool: Any,
     cap: int,
-    required: Any,
+    minimum: Any,
 ) -> None:
-    """A cap below max(1, tool floor, grossed-up fixed share) is refused with 402.
+    """A cap below max(1, tool floor, grossed-up fixed share) is refused with 400.
+
+    The reply names the minimum cap and carries no deposit challenge, since
+    no deposit raises a signed cap.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
@@ -7249,7 +7252,7 @@ def test_signed_cap_covers_the_minimum_charge(
     :param fixed_cost: ``fixed_cost_per_request`` in USD micro-units.
     :param tool: the tool the request names, or None for none.
     :param cap: the signed cap.
-    :param required: the minimum the 402 names, or None when accepted.
+    :param minimum: the minimum cap the 400 names, or None when accepted.
     """
     params = handler_context.params
     params.tools_to_pricing = tools_to_pricing
@@ -7261,20 +7264,19 @@ def test_signed_cap_covers_the_minimum_charge(
     resp = _post_cap(mh, http_dialogue, cap, request_id="9100", ipfs_data=ipfs_data)
 
     pending = handler_context.shared_state["pending_tasks"]
-    if required is None:
+    if minimum is None:
         assert resp.status_code == HttpCode.OK_CODE.value
         assert len(pending) == 1
         return
-    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
     payload = json.loads(resp.body.decode("utf-8"))
-    assert payload["reason"] == hmod.SIGNED_CAP_BELOW_MINIMUM
-    assert payload["error"] == hmod.SIGNED_CAP_BELOW_MINIMUM
-    assert payload["required"] == str(required)
-    assert payload["payTo"] == "0xBalanceTracker"
+    assert payload["reason"] == "signed cap below the mech's minimum charge"
+    assert payload["minimum_cap"] == minimum
+    assert "depositInstructions" not in payload
+    assert "required" not in payload
+    assert "WWW-Authenticate" not in resp.headers
     assert pending == []
     assert handler_context.shared_state["in_memory_requests"] == {}
-    stored = handler_context.shared_state["offchain_request_responses"]["9100"]
-    assert stored["required"] == str(required)
 
 
 def test_zero_cap_is_refused_even_with_a_zero_balance(
@@ -7288,10 +7290,10 @@ def test_zero_cap_is_refused_even_with_a_zero_balance(
     """
     mh = _patched_handler_for_balance(handler_context, monkeypatch, 0)
     resp = _post_cap(mh, http_dialogue, 0, request_id="9101")
-    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
     payload = json.loads(resp.body.decode("utf-8"))
-    assert payload["currentBalance"] == "0"
-    assert payload["required"] == "1"
+    assert payload["minimum_cap"] == 1
+    assert "depositInstructions" not in payload
     assert handler_context.shared_state["pending_tasks"] == []
 
 
@@ -7311,8 +7313,8 @@ def test_explicit_nonce_signed_cap_covers_the_minimum_charge(
     below = _make_explicit_eoa_scenario(delivery_rate=99, nonce=1)
     _post_with_mode(mh, http_dialogue, below, hmod.NONCE_MODE_EXPLICIT)
     resp = handler_context.outbox.sent[-1]
-    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
-    assert json.loads(resp.body.decode("utf-8"))["required"] == "100"
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert json.loads(resp.body.decode("utf-8"))["minimum_cap"] == 100
 
     exact = _make_explicit_eoa_scenario(delivery_rate=100, nonce=2)
     _post_with_mode(mh, http_dialogue, exact, hmod.NONCE_MODE_EXPLICIT)
@@ -7325,13 +7327,15 @@ _RESERVATION_SENDER = "0x00000000000000000000000000000000000000aa"
 
 
 def _handler_with_balance(
-    handler_context: Any, monkeypatch: Any, available: int
+    handler_context: Any, monkeypatch: Any, available: int, ledger: Any = None
 ) -> MechHttpHandler:
     """A stubbed-signature handler whose balance read returns ``available``.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     :param available: the balance every read returns.
+    :param ledger: optional dict whose ``"balance"`` entry, when set, is read
+        on every call instead of ``available``, so a test can deposit.
     :return: the configured handler.
     """
     mh = _patched_handler_for_balance(handler_context, monkeypatch, 0)
@@ -7340,7 +7344,9 @@ def _handler_with_balance(
         "_check_offchain_requester_balance",
         lambda sender, delivery_rate: {
             **_ok_balance_check(delivery_rate),
-            hmod.ResponseKey.AVAILABLE_AMOUNT.value: available,
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: (
+                available if ledger is None else ledger["balance"]
+            ),
         },
     )
     return mh
@@ -7351,11 +7357,17 @@ def test_balance_covers_the_caps_of_unsettled_requests(
 ) -> None:
     """With balance for two caps, only two of several requests are accepted.
 
+    The 402 names this request's cap as ``required`` and the balance left
+    after the unsettled caps as ``currentBalance``.
+
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     """
-    mh = _handler_with_balance(handler_context, monkeypatch, 2 * _RESERVATION_CAP)
+    left_over = 30
+    mh = _handler_with_balance(
+        handler_context, monkeypatch, 2 * _RESERVATION_CAP + left_over
+    )
     codes = [
         _post_cap(
             mh,
@@ -7369,9 +7381,41 @@ def test_balance_covers_the_caps_of_unsettled_requests(
     assert codes == [200, 200, 402, 402]
     payload = json.loads(handler_context.outbox.sent[-1].body.decode("utf-8"))
     assert payload["reason"] == hmod.INSUFFICIENT_BALANCE
-    assert payload["required"] == str(3 * _RESERVATION_CAP)
-    assert payload["currentBalance"] == str(2 * _RESERVATION_CAP)
+    assert payload["required"] == str(_RESERVATION_CAP)
+    assert payload["currentBalance"] == str(left_over)
     assert len(handler_context.shared_state["pending_tasks"]) == 2
+
+
+def test_depositing_the_402_shortfall_gets_the_request_accepted(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """``required - currentBalance`` is exactly the deposit that clears the 402.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    ledger = {"balance": _RESERVATION_CAP + 30}
+    mh = _handler_with_balance(handler_context, monkeypatch, 0, ledger=ledger)
+    sender = _RESERVATION_SENDER
+    assert (
+        _post_cap(
+            mh, http_dialogue, _RESERVATION_CAP, "9240", sender=sender
+        ).status_code
+        == 200
+    )
+    refused = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9241", sender=sender)
+    assert refused.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    challenge = json.loads(refused.body.decode("utf-8"))
+    shortfall = int(challenge["required"]) - int(challenge["currentBalance"])
+    assert int(challenge["required"]) <= _RESERVATION_CAP
+
+    ledger["balance"] += shortfall - 1
+    short = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9241", sender=sender)
+    assert short.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    ledger["balance"] += 1
+    retried = _post_cap(mh, http_dialogue, _RESERVATION_CAP, "9241", sender=sender)
+    assert retried.status_code == HttpCode.OK_CODE.value
 
 
 def test_unsettled_caps_are_counted_per_sender(
@@ -7553,7 +7597,9 @@ def test_reservation_counts_sequential_and_explicit_requests(
     )
     refused = handler_context.outbox.sent[-1]
     assert refused.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
-    assert json.loads(refused.body.decode("utf-8"))["required"] == str(3 * cap)
+    challenge = json.loads(refused.body.decode("utf-8"))
+    assert challenge["required"] == str(cap)
+    assert challenge["currentBalance"] == "0"
 
 
 def test_unsettled_signed_caps_drops_requests_no_longer_held() -> None:

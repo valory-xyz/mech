@@ -8,22 +8,22 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeihznn3mryjqw7kst54t3ri4vmmg4mttwygbko2s7fkcl3jjvkxfoa
+  behaviours.py: bafybeifu6h4vrqmzin5omynm7ichyzddeaprivjxbp4h5hji2pip3eudmi
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeibyegn6l3aiy6ogu42ykar2c34db72aeubnc5t5ff7fkdnjcbrori
+  models.py: bafybeiediepka745amyjpewvzo7uyqs33d47k5zklzbop7cunax4ywepta
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeif6tqdvm7drvkqghcthavm4eevrcplvdr7at6uqt6xkutucllogn4
   rounds.py: bafybeigl6ph55gkcme4edpj4zhyb6ksm67ssr6lmftyqzx4hnllfu4dn5y
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
-  tests/conftest.py: bafybeiezvmjjbd2xveb2kg346hlam7h2evvf2nduchyt24naou6w66ligu
+  tests/conftest.py: bafybeidag37miqkgzojrxbyjw3oprnqha223x6jfqdap77orhr4e6es6qy
   tests/golden_mech_event.json: bafybeighfm2sstod7mmhrndna274b3ghrr7m3sq6l36pyibsxuuym62ige
-  tests/test_behaviours.py: bafybeia47rjv4bl6iymvswnfv4lwe3hkuzt4k55mh77sonhdbzf7m26qdq
+  tests/test_behaviours.py: bafybeiadukb5r3entudaxm33assusstyj6wm7sxa57lx5drd34ygjqdwmq
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
-  tests/test_models.py: bafybeigqltzhexy5oejtpi3e5zeloq3brlzut45gg5uczcymqwq5t3xv6q
+  tests/test_models.py: bafybeif45s2o266xtdpiggmsyrmlafe6gkd6s4us4ta4ucohyubzk67mjy
   tests/test_onchain_write_path.py: bafybeibqdljfnuy743ooplczepfybpp7mlhybzjzet3c3zgizrnbujnz3m
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_predict_api_events_client.py: bafybeic55xc6wmtlmz26a2yf3arfhukd5kxgbnmpqnzkj3etju754nm37q
@@ -47,7 +47,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/task_execution:0.1.0:bafybeifg26jivpjfrfxmlizwj5xxqr6v6xqm5cbiv5njb43m6xjwrl4pkq
+- valory/task_execution:0.1.0:bafybeifwwtvm6shrgrsr2b4fk5f57yirw7iob2vhcwzbhh6sdkk2z6kx6i
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:
@@ -179,6 +179,10 @@ models:
       explicit_deadline_settlement_margin_seconds: 180
       settlement_base_gas: 300000
       settlement_gas_per_request: 150000
+      settlement_process_payment_gas: 120000
+      settlement_profit_transfer_gas: 70000
+      settlement_metadata_hash_gas: 40000
+      settlement_legacy_response_gas: 150000
       use_slashing: false
       use_termination: false
       validate_timeout: 1205
