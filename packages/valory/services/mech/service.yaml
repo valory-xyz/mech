@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiaomutgu5dwczhzyeq5j5oh2ndww6iabgz6ra4vc6wpuuqyngntsm
+agent: valory/mech:0.1.0:bafybeih7eajlbozdspgvpwktdxwr2w2bq2sek5pvwsrb4g5jourgkskvxq
 number_of_agents: 4
 deployment:
   agent:
@@ -41,6 +41,13 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -87,6 +94,13 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -130,6 +144,13 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
@@ -173,6 +194,13 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
         explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}

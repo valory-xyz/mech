@@ -297,15 +297,15 @@ def recover_eoa_signer(message_hash: bytes, signature: bytes) -> Optional[str]:
     # the marketplace signs — the marketplace signs the raw request-id
     # bytes32 directly. If a routine ``eth-account`` bump removes the
     # underscore-prefixed API, the exception surfaces here (as
-    # ``AttributeError``) and every EOA request falls through to the
-    # EIP-1271 branch: ``skill.yaml`` pin plus this comment are the
-    # coupling the caller has to notice.
+    # ``AttributeError``) and every request from a sender without code is
+    # refused: ``skill.yaml`` pin plus this comment are the coupling the
+    # caller has to notice.
     try:
         recovered = Account._recover_hash(message_hash, signature=normalised)
     except (BadSignature, ValueError, AttributeError):
         # Recovery failures ``eth-keys`` surfaces as ``BadSignature`` and
         # ``eth-account`` surfaces as ``ValueError`` on malformed inputs
         # (bad ``r``/``s``, curve point at infinity, decode error). The
-        # caller falls through to the EIP-1271 branch on ``None``.
+        # caller refuses the signature on ``None``.
         return None
     return to_checksum_address(recovered)

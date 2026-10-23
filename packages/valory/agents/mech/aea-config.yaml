@@ -43,11 +43,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeihp55ry2ttct4x37n5qbhloom6dpzgarx3d2xz6zjthm22jc4fmua
-- valory/mech_abci:0.1.0:bafybeicridcy5kgdxd4qp265w3ffakmbsgdufo2cchx6r5n5mduns2evyy
+- valory/mech_abci:0.1.0:bafybeibt3wxxcdyyorymuwqdvcshb5vbzu6hxoii72wvxmhnc5aakcusam
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeicfom2sw4gky7w7wk3x4rtniyxrkc6fxqjyuioyuqjpcfzlakfx2m
-- valory/task_submission_abci:0.1.0:bafybeia6ifi4ynkqfb3fx7fa57kfwk3rgtx234blduytancmyfasgh5oa4
+- valory/task_execution:0.1.0:bafybeiehnftjqeyi47l6fcrjxjtrgu6o7nlqyw7myb3ywq6spk4jozwnw4
+- valory/task_submission_abci:0.1.0:bafybeihnkgz4py5ac7drxcr5hh4e7gepghh4k6r3b7cumhpfqnivvsp7sy
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
@@ -216,6 +216,13 @@ models:
       mech_to_config: ${dict:{}}
       cap_and_actual_enabled: ${bool:false}
       explicit_deadline_settlement_margin_seconds: ${int:180}
+      settlement_base_gas: ${int:300000}
+      settlement_gas_per_request: ${int:150000}
+      settlement_gas_per_requester_group: ${int:110000}
+      settlement_process_payment_gas: ${int:120000}
+      settlement_profit_transfer_gas: ${int:70000}
+      settlement_metadata_hash_gas: ${int:40000}
+      settlement_legacy_response_gas: ${int:150000}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}

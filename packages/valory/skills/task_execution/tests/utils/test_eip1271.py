@@ -92,6 +92,7 @@ def test_check_eip1271_signature_returns_valid_on_magic_value() -> None:
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
+        has_code=True,
     )
     assert result is Eip1271Verdict.VALID
 
@@ -116,6 +117,7 @@ def test_check_eip1271_signature_returns_declined_on_non_magic_value(
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
+        has_code=True,
     )
     assert result is Eip1271Verdict.DECLINED
 
@@ -128,25 +130,32 @@ def test_check_eip1271_signature_returns_declined_on_non_magic_value(
         ),
         pytest.param(
             BadFunctionCallOutput(
-                "Could not transact with/call contract function, "
-                "is contract deployed correctly and chain synced?"
+                "Could not decode contract function call to isValidSignature "
+                "with return data: b'', output_types: ['bytes4']"
             ),
-            id="bad_function_call_output_missing_code",
+            id="bad_function_call_output_empty_return",
+        ),
+        pytest.param(
+            BadFunctionCallOutput(
+                "Could not decode contract function call to isValidSignature "
+                "with return data: b'\\x01', output_types: ['bytes4']"
+            ),
+            id="bad_function_call_output_short_return",
         ),
     ],
 )
 def test_check_eip1271_signature_returns_declined_on_credential_side_failure(
     raised: BaseException,
 ) -> None:
-    """A revert or codeless target maps to DECLINED (the contract said no).
+    """A revert or an undecodable return from code maps to DECLINED.
 
     ``ContractLogicError`` fires on an explicit ``revert`` (including
     the out-of-gas revert triggered by the gas cap).
-    ``BadFunctionCallOutput`` with the missing-code message shape
-    fires when the ``eth_call`` target has no code at all — a plain
-    EOA whose ``ecrecover`` did not match on the primary path. Both
-    are credential-side outcomes; the caller routes ``DECLINED`` to
-    401 so the client learns its signature was not accepted.
+    ``BadFunctionCallOutput`` fires when the sender has code but its
+    return data is not a ``bytes4``, such as the empty return of code
+    without an ``isValidSignature`` function. Settlement decodes the
+    same return and reverts, so both are final; the caller routes
+    ``DECLINED`` to 401.
 
     :param raised: the boundary exception injected by the parametrise.
     """
@@ -158,6 +167,7 @@ def test_check_eip1271_signature_returns_declined_on_credential_side_failure(
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
+        has_code=True,
     )
     assert result is Eip1271Verdict.DECLINED
 
@@ -174,13 +184,6 @@ def test_check_eip1271_signature_returns_declined_on_credential_side_failure(
             Web3ValidationError("schema mismatch"), id="web3_validation_error"
         ),
         pytest.param(ValueError("abi decode failure"), id="value_error"),
-        pytest.param(
-            BadFunctionCallOutput(
-                "Could not decode contract function call to isValidSignature "
-                "with return data: b'', output_types: ['bytes4']"
-            ),
-            id="bad_function_call_output_decode_failure_from_pruned_node",
-        ),
         pytest.param(
             requests.exceptions.ConnectionError("boom"), id="connection_error"
         ),
@@ -212,8 +215,30 @@ def test_check_eip1271_signature_returns_call_failed_on_infra_error(
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
+        has_code=True,
     )
     assert result is Eip1271Verdict.CALL_FAILED
+
+
+def test_check_eip1271_signature_declines_sender_without_code_without_a_call() -> None:
+    """A sender without code is DECLINED and no ``eth_call`` is made.
+
+    EIP-1271 applies only to a sender with code, so there is nothing to
+    ask; the call mock would return the magic value if it were reached.
+    """
+    ledger_api = _make_ledger_api("isValidSignature", EIP1271_MAGIC_VALUE)
+
+    result = check_eip1271_signature(
+        ledger_api=ledger_api,
+        contract_address=_CONTRACT_ADDRESS,
+        message_hash=_MESSAGE_HASH,
+        signature=_SIGNATURE,
+        gas=_TEST_GAS_CAP,
+        has_code=False,
+    )
+
+    assert result is Eip1271Verdict.DECLINED
+    ledger_api.call_mock.assert_not_called()
 
 
 def test_check_eip1271_signature_logger_records_branch_for_operator_triage() -> None:
@@ -245,6 +270,7 @@ def test_check_eip1271_signature_logger_records_branch_for_operator_triage() -> 
             message_hash=_MESSAGE_HASH,
             signature=_SIGNATURE,
             gas=_TEST_GAS_CAP,
+            has_code=True,
             logger=logger,
         )
     finally:
@@ -283,6 +309,7 @@ def test_check_eip1271_signature_raises_timeout_error_on_transport_timeout(
             message_hash=_MESSAGE_HASH,
             signature=_SIGNATURE,
             gas=_TEST_GAS_CAP,
+            has_code=True,
         )
 
 
@@ -302,6 +329,7 @@ def test_check_eip1271_signature_passes_gas_cap_to_eth_call() -> None:
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
         gas=123_456,
+        has_code=True,
     )
 
     ledger_api.call_mock.assert_called_once_with({"gas": 123_456})
