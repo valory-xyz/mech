@@ -9,13 +9,13 @@ fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
   behaviours.py: bafybeidx3vjh335n3h2cltsq5hvcext2boott7ezy3fyz6danieohodjqy
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
-  handlers.py: bafybeidwdueyjily37obacjxnamawtavp6xyucotlbtjzl26tf2vydysui
+  handlers.py: bafybeiepun55vcih72omdbj5luohbt2gimiigqfnilsaftrmw7dolkxmkq
   models.py: bafybeifchgnrinrjkbszdaajax3g2i3jjlkfgayvcnjbqmhshrvcrzpwrm
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeib7yqov5ch5o2zzgriv3gvqn6pmp2fwwx75ns646a4dnsodtqoeoa
   tests/test_behaviours.py: bafybeihbqzbtglknk6muc7x4haymgumuhzcvsek4bicqdzck2t2lfvk3ga
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
-  tests/test_handlers.py: bafybeials7iskt4rw5me5eazuvmyqvpxppps56zzokmicf77aaojz3cswi
+  tests/test_handlers.py: bafybeidcwi3ldzyxht4fqkyz47qs2klkpspa5ywffjztp2u2677i74ymoq
   tests/test_models.py: bafybeiawmd5tkiuzzdcsnopnvscney6eptnotddi4njgz3jz2lausf4vn4
   tests/test_preimage_buffer.py: bafybeickjqlsfqugfz3yjatgvxdy62fisarq36xlgdis73rnzy5s4vzgh4
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
@@ -45,7 +45,7 @@ connections:
 contracts:
 - valory/balance_tracker:0.1.0:bafybeiayyxl643qfpw57vopytxgyd6flxxmwassswuxen7myekqaxdxxvi
 - valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
-- valory/olas_mech:0.1.0:bafybeif7l4fdadg76ulxodjgkjwnpwkdvjykcvhe6576ppnhuxt77exzzu
+- valory/olas_mech:0.1.0:bafybeietn7pqpqzmr5g6toqvo2qtuwgudjx3tgozqydka3zdg5p6ominni
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la

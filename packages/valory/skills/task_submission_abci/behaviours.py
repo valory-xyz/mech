@@ -160,6 +160,7 @@ IS_OFFCHAIN = "is_offchain"
 NONCE = "nonce"
 SENDER = "sender"
 REQUESTER_KEY = "requester"
+MARKETPLACE_ADDRESS_KEY = "marketplace_address"
 
 # predict-api analytics-write outcome counter. Labels:
 #
@@ -2461,6 +2462,9 @@ class TransactionPreparationBehaviour(
                 contract_callable = "get_offchain_deliver_data"
                 if self.params.cap_and_actual_enabled:
                     contract_data[OffchainKeys.MAX_RATES_CAMEL.value] = max_rates
+                    contract_data[MARKETPLACE_ADDRESS_KEY] = (
+                        self.params.mech_marketplace_address
+                    )
                     contract_callable = "get_offchain_deliver_data_with_cap"
                 if nonce_mode == NONCE_MODE_EXPLICIT:
                     contract_data[OffchainKeys.NONCES.value] = details[

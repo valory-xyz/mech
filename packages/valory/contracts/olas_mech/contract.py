@@ -174,6 +174,51 @@ class MechOperation(Enum):
     DELEGATE_CALL = 1
 
 
+# The marketplace's settlement overloads, called through the mech's ``exec``
+# so that a mech deployed without these wrappers can still use them. The
+# marketplace takes ``msg.sender`` as the mech, so the delivery is recorded
+# against the mech that runs ``exec``.
+MARKETPLACE_DELIVER_WITH_CAP_SIGNATURE = (
+    "deliverMarketplaceWithSignatures("
+    "address,(bytes,bytes,bytes)[],uint256[],uint256[],bytes)"
+)
+MARKETPLACE_DELIVER_WITH_NONCES_SIGNATURE = (
+    "deliverMarketplaceWithSignatures("
+    "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],uint256[],bytes)"
+)
+
+
+def _marketplace_deliver_abi(uint_array_names: List[str]) -> Dict[str, Any]:
+    """ABI entry of a marketplace ``deliverMarketplaceWithSignatures`` overload."""
+    inputs: List[Dict[str, Any]] = [
+        {"name": "requester", "type": "address"},
+        {
+            "name": "deliverWithSignatures",
+            "type": "tuple[]",
+            "components": [
+                {"name": "requestData", "type": "bytes"},
+                {"name": "signature", "type": "bytes"},
+                {"name": "deliveryData", "type": "bytes"},
+            ],
+        },
+    ]
+    inputs.extend({"name": name, "type": "uint256[]"} for name in uint_array_names)
+    inputs.append({"name": "paymentData", "type": "bytes"})
+    return {
+        "name": "deliverMarketplaceWithSignatures",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": inputs,
+        "outputs": [],
+    }
+
+
+MARKETPLACE_SETTLEMENT_ABI = [
+    _marketplace_deliver_abi(["deliveryRates", "maxRates"]),
+    _marketplace_deliver_abi(["deliveryRates", "maxRates", "nonces", "deadlines"]),
+]
+
+
 def pad_address_for_topic(address: str) -> bytes:
     """Left-pad an Ethereum address to 32 bytes for use in a topic."""
     return bytes.fromhex(address[Ox_CHARS:].zfill(TOPIC_CHARS))
@@ -545,10 +590,51 @@ class OlasMechContract(Contract):
         return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
+    def _marketplace_deliver_through_exec(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        marketplace_address: str,
+        sender: str,
+        overload_signature: str,
+        args: List[Any],
+    ) -> JSONLike:
+        """Encode a marketplace settlement overload wrapped in the mech's ``exec``.
+
+        :param ledger_api: the ledger API.
+        :param contract_address: the mech that runs ``exec``.
+        :param marketplace_address: the marketplace the mech is registered on.
+        :param sender: the mech operator (service Safe) the call is simulated from.
+        :param overload_signature: the marketplace overload to call.
+        :param args: the overload's arguments.
+        :return: the ``exec`` calldata and whether its simulation succeeded.
+        """
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        marketplace = contract_instance.w3.eth.contract(abi=MARKETPLACE_SETTLEMENT_ABI)
+        inner = marketplace.encode_abi(
+            abi_element_identifier=overload_signature, args=args
+        )
+        exec_data = cls.get_exec_tx_data(
+            ledger_api,
+            contract_address,
+            to=contract_instance.w3.to_checksum_address(marketplace_address),
+            value=0,
+            data=bytes.fromhex(inner[2:]),
+            operation=MechOperation.CALL.value,
+            tx_gas=0,
+        )["data"]
+        data = cast(bytes, exec_data)
+        simulation_ok = cls.simulate_tx(
+            cast(EthereumApi, ledger_api), contract_address, sender, "0x" + data.hex()
+        ).pop("data")
+        return {"data": data, "simulation_ok": simulation_ok}
+
+    @classmethod
     def get_offchain_deliver_data_with_cap(
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
+        marketplace_address: str,
         sender: str,
         requester: str,
         deliverWithSignatures: List[Dict[str, List]],
@@ -556,37 +642,22 @@ class OlasMechContract(Contract):
         maxRates: List[int],
         paymentData: str,
     ) -> JSONLike:
-        """Get offchain deliver tx data for the cap-and-actual 5-arg overload."""
-        ledger_api = cast(EthereumApi, ledger_api)
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        # Overloading in Solidity: ethers/web3 can't resolve the function from
-        # the bare name once two overloads coexist, so the explicit signature
-        # string is required.
-        overload_signature = (
-            "deliverMarketplaceWithSignatures("
-            "address,(bytes,bytes,bytes)[],uint256[],uint256[],bytes)"
+        """Get ``exec`` calldata for the marketplace's 5-arg cap-and-actual deliver."""
+        return cls._marketplace_deliver_through_exec(
+            ledger_api,
+            contract_address,
+            marketplace_address,
+            sender,
+            MARKETPLACE_DELIVER_WITH_CAP_SIGNATURE,
+            [requester, deliverWithSignatures, deliveryRates, maxRates, paymentData],
         )
-        data = contract_instance.encode_abi(
-            abi_element_identifier=overload_signature,
-            args=[
-                requester,
-                deliverWithSignatures,
-                deliveryRates,
-                maxRates,
-                paymentData,
-            ],
-        )
-
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
-            "data"
-        )
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
     def get_offchain_deliver_data_with_nonces(
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
+        marketplace_address: str,
         sender: str,
         requester: str,
         deliverWithSignatures: List[Dict[str, List]],
@@ -596,16 +667,14 @@ class OlasMechContract(Contract):
         deadlines: List[int],
         paymentData: str,
     ) -> JSONLike:
-        """Get offchain deliver tx data for the explicit-nonce overload (nonces and deadlines)."""
-        ledger_api = cast(EthereumApi, ledger_api)
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        overload_signature = (
-            "deliverMarketplaceWithSignatures("
-            "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],uint256[],bytes)"
-        )
-        data = contract_instance.encode_abi(
-            abi_element_identifier=overload_signature,
-            args=[
+        """Get ``exec`` calldata for the marketplace's 7-arg explicit-nonce deliver."""
+        return cls._marketplace_deliver_through_exec(
+            ledger_api,
+            contract_address,
+            marketplace_address,
+            sender,
+            MARKETPLACE_DELIVER_WITH_NONCES_SIGNATURE,
+            [
                 requester,
                 deliverWithSignatures,
                 deliveryRates,
@@ -615,10 +684,6 @@ class OlasMechContract(Contract):
                 paymentData,
             ],
         )
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
-            "data"
-        )
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
     def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
@@ -637,6 +702,17 @@ class OlasMechContract(Contract):
         payment_type_bytes = contract_instance.functions.paymentType().call()
 
         return {"mech_type": payment_type_bytes}
+
+    @classmethod
+    def get_mech_marketplace(
+        cls, ledger_api: LedgerApi, contract_address: str
+    ) -> JSONLike:
+        """Get the marketplace the mech is bound to (checksummed)."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        marketplace = contract_instance.functions.mechMarketplace().call()
+        return {
+            "mech_marketplace": contract_instance.w3.to_checksum_address(marketplace)
+        }
 
     @classmethod
     def get_mech_types(

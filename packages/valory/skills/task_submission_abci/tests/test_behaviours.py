@@ -2886,6 +2886,64 @@ class TestGetOffchainTasksDeliverData:
         assert call[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
         assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [60]
 
+    def test_flag_on_deliveries_name_the_mech_marketplace(self) -> None:
+        """The 5-arg and 7-arg calls both carry the marketplace that ``exec`` targets.
+
+        The mech runs the marketplace overload through ``exec``, so the call
+        must point at the configured marketplace, for both groups of a sender.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
+        seq = self._offchain_task("s1", nonce=1)
+        exp = self._offchain_task("e1", nonce=4242, nonce_mode=NONCE_MODE_EXPLICIT)
+        with patch.object(
+            b, "_get_offchain_requester_balance", side_effect=_gen_returning(10**9)
+        ):
+            calls = self._deliver_calls(b, [exp, seq])
+        assert {
+            c["contract_callable"]: c.get(beh_mod.MARKETPLACE_ADDRESS_KEY)
+            for c in calls
+        } == {
+            "get_offchain_deliver_data_with_cap": b.params.mech_marketplace_address,
+            "get_offchain_deliver_data_with_nonces": b.params.mech_marketplace_address,
+        }
+        assert all(c["contract_address"] == "0xMECH" for c in calls)
+
+    def test_flag_off_legacy_delivery_names_no_marketplace(self) -> None:
+        """The legacy 4-arg call goes through the mech's own wrapper, unchanged."""
+        (call,) = self._deliver_calls(
+            self._make_b(cap_and_actual_enabled=False), [self._offchain_task("r1")]
+        )
+        assert call["contract_callable"] == "get_offchain_deliver_data"
+        assert beh_mod.MARKETPLACE_ADDRESS_KEY not in call
+
+    def test_split_explicit_requests_keep_the_marketplace(self) -> None:
+        """Per-request retries of a failed explicit group still target the marketplace."""
+        b = self._make_b(cap_and_actual_enabled=True)
+        tasks = [
+            self._offchain_task(f"e{i}", nonce=4240 + i, nonce_mode=NONCE_MODE_EXPLICIT)
+            for i in (1, 2)
+        ]
+
+        def _simulate(*_args: Any, **kwargs: Any) -> Any:
+            ok = len(kwargs.get("nonces", [])) == 1
+            return _gen_returning(
+                _state_contract_msg({"data": b"\xdd", "simulation_ok": ok})
+            )()
+
+        with (
+            self._patch_sd(b, tasks),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_simulate
+            ) as mock_call,
+        ):
+            _run_gen(b._get_offchain_tasks_deliver_data())
+        marketplaces = [
+            c.kwargs.get(beh_mod.MARKETPLACE_ADDRESS_KEY)
+            for c in mock_call.call_args_list
+        ]
+        assert len(marketplaces) > 1
+        assert set(marketplaces) == {b.params.mech_marketplace_address}
+
     def test_flag_on_clamps_stored_price_to_a_zero_cap(self) -> None:
         """A signed cap of 0 is charged 0 even when the stored price is higher.
 

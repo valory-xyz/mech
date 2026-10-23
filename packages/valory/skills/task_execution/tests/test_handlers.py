@@ -7983,3 +7983,227 @@ def test_sender_code_read_failure_replies_503_and_is_not_cached(
     assert calls == []
     assert mh._sender_code_cache == {}
     assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Boot-time check: every marketplace mech is bound to the configured marketplace
+# ---------------------------------------------------------------------------
+
+_OTHER_MARKETPLACE = "0x1111111111111111111111111111111111111111"
+_SECOND_MECH = "0xbEEFbEEFbEEFbEEFbEEFbEEFbEEFbEEFbEEFbEEF"
+
+
+def _checksum_ledger() -> MagicMock:
+    """A ledger API stub whose only used member is the real checksum helper."""
+    from web3 import Web3  # pylint: disable=import-outside-toplevel
+
+    ledger = MagicMock()
+    ledger.api.to_checksum_address = Web3.to_checksum_address
+    return ledger
+
+
+def _bound_handler(
+    handler_context: Any, monkeypatch: Any, bound: Dict[str, Any]
+) -> MechHttpHandler:
+    """A handler with loaded constants whose mechs report the given marketplaces.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param bound: mech address (lowercase) -> its ``mechMarketplace()``, or
+        an exception instance the read raises.
+    :return: the handler.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+    for mech in bound:
+        handler_context.params.mech_to_config[mech] = SimpleNamespace(
+            is_marketplace_mech=True, use_dynamic_pricing=False
+        )
+
+    def _read(_ledger: Any, mech: str) -> Dict[str, str]:
+        value = bound[mech]
+        if isinstance(value, Exception):
+            raise value
+        return {"mech_marketplace": value}
+
+    monkeypatch.setattr(hmod.OlasMechContract, "get_mech_marketplace", _read)
+    return mh
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [_SIGVERIFY_MARKETPLACE, _SIGVERIFY_MARKETPLACE.lower()],
+)
+def test_mech_binding_check_passes_when_every_mech_uses_the_configured_marketplace(
+    handler_context: Any, monkeypatch: Any, configured: str
+) -> None:
+    """Matching marketplaces keep the constants; the comparison ignores address case.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param configured: the configured marketplace address spelling.
+    """
+    mh = _bound_handler(
+        handler_context,
+        monkeypatch,
+        {
+            _SIGVERIFY_MECH.lower(): _SIGVERIFY_MARKETPLACE,
+            _SECOND_MECH.lower(): _SIGVERIFY_MARKETPLACE,
+        },
+    )
+    handler_context.params.mech_marketplace_address = configured
+    assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is True
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE
+
+
+@pytest.mark.parametrize(
+    "second_mech_reads",
+    [
+        _OTHER_MARKETPLACE,
+        _Web3BadFunctionCallOutput("empty return"),
+        _Web3ContractLogicError("execution reverted"),
+        "0xnot-an-address",
+    ],
+)
+def test_mech_binding_check_disables_offchain_accepts_on_a_mismatch_or_incompatible_mech(
+    handler_context: Any, monkeypatch: Any, second_mech_reads: Any
+) -> None:
+    """One mech bound elsewhere, reverting or with an undecodable return clears the constants.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param second_mech_reads: what the second mech's ``mechMarketplace()`` read returns or raises.
+    """
+    mh = _bound_handler(
+        handler_context,
+        monkeypatch,
+        {
+            _SIGVERIFY_MECH.lower(): _SIGVERIFY_MARKETPLACE,
+            _SECOND_MECH.lower(): second_mech_reads,
+        },
+    )
+    assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is False
+    assert mh._domain_separator is None
+    assert mh._payment_type is None
+
+
+@pytest.mark.parametrize(
+    "transport_error",
+    [TimeoutError(), _Web3RPCError("rpc down"), requests.ConnectionError("refused")],
+)
+def test_mech_binding_check_keeps_offchain_accepts_on_a_transport_error(
+    handler_context: Any, monkeypatch: Any, transport_error: Exception
+) -> None:
+    """A transport failure warns and keeps the constants; the other mechs are still checked.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param transport_error: the error the first mech's read raises.
+    """
+    mh = _bound_handler(
+        handler_context,
+        monkeypatch,
+        {
+            _SIGVERIFY_MECH.lower(): transport_error,
+            _SECOND_MECH.lower(): _SIGVERIFY_MARKETPLACE,
+        },
+    )
+    warnings: List[Any] = []
+    handler_context.logger.warning = lambda *args, **_kw: warnings.append(args)
+    assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is True
+    assert [w[1] for w in warnings] == [_SIGVERIFY_MECH.lower()]
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE
+
+
+def test_mech_binding_check_still_disables_a_later_mismatch_after_a_transport_error(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A transport failure on one mech does not hide a mismatch on the next.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _bound_handler(
+        handler_context,
+        monkeypatch,
+        {
+            _SIGVERIFY_MECH.lower(): TimeoutError(),
+            _SECOND_MECH.lower(): _OTHER_MARKETPLACE,
+        },
+    )
+    assert mh._selfcheck_mechs_bound_to_marketplace(_checksum_ledger()) is False
+    assert mh._domain_separator is None
+
+
+def test_mech_bound_elsewhere_refuses_offchain_requests_and_skips_later_checks(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """At boot a mismatch stops the derivation checks and later accepts get 503.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = _bound_handler(
+        handler_context, monkeypatch, {_SIGVERIFY_MECH.lower(): _OTHER_MARKETPLACE}
+    )
+    views: List[str] = []
+
+    def _view(name: str) -> Any:
+        def _record(**_kw: Any) -> bytes:
+            views.append(name)
+            return b"\x00" * 32
+
+        return _record
+
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "ok", "rpc_address": "http://rpc", "chain_id": 137},
+    )
+    monkeypatch.setattr(mh, "_get_ledger_api", lambda *_a: _checksum_ledger())
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_domain_separator",
+        lambda **_kw: _SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    monkeypatch.setattr(
+        hmod.OlasMechContract,
+        "get_mech_type",
+        lambda *_a: {"mech_type": _SIGVERIFY_PAYMENT_TYPE},
+    )
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_request_id_view",
+        _view("sequential"),
+    )
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_explicit_domain_separator",
+        _view("explicit"),
+    )
+    mh._initialise_offchain_verification_constants()
+
+    assert views == []
+    assert mh._domain_separator is None
+    assert mh._explicit_nonce_ready is False
+    scenario = _make_eoa_scenario()
+    http_msg: Any = make_http_msg(
+        _sig_body(
+            request_id=scenario["request_id"],
+            delivery_rate=scenario["delivery_rate"],
+            nonce=scenario["nonce"],
+            sender=scenario["sender"],
+            signature_hex=scenario["signature_hex"],
+            ipfs_hash=scenario["ipfs_hash"],
+        )
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    assert (
+        handler_context.outbox.sent[-1].status_code
+        == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    )
