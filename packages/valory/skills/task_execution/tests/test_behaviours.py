@@ -5978,7 +5978,7 @@ def test_record_offchain_failure_counts_bounded_reason(
     inc = MagicMock()
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
     monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
-    behaviour._executing_task = {"requestId": 9, "is_offchain": True}
+    behaviour._executing_task = {"requestId": 9, "is_offchain": True, "tool": "x"}
     free_text = "Cannot step in. Tool x is not installed. Ignoring request 9."
 
     if metric_reason is None:
@@ -5991,6 +5991,7 @@ def test_record_offchain_failure_counts_bounded_reason(
     inc.assert_called_once_with(
         behaviour.mech_metrics.mech_offchain_failures_total,
         1,
+        tool="x",
         reason=expected,
         fault=beh_mod.FAULT_MECH,
         **_OFFCHAIN_LABELS,
@@ -6068,6 +6069,7 @@ def test_handle_done_task_invalid_request_uses_bounded_failure_reason(
     # Off-chain failure counted once, delivery not counted.
     assert _metric_calls(inc, m.mech_offchain_failures_total) == [
         {
+            "tool": "mytool",
             "reason": beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED,
             "fault": beh_mod.FAULT_MECH,
             **_OFFCHAIN_LABELS,
@@ -6158,12 +6160,20 @@ def test_offchain_run_with_no_answer_is_a_mech_fault_charged_the_minimum(
     m = behaviour.mech_metrics
     assert _metric_calls(inc, m.mech_offchain_failures_total) == [
         {
+            "tool": "mytool",
             "reason": beh_mod.OFFCHAIN_FAILURE_NO_RESULT,
             "fault": beh_mod.FAULT_MECH,
             **_OFFCHAIN_LABELS,
         }
     ]
     assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+    assert _metric_calls(inc, m.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_EXECUTION_FAILED,
+            "source": beh_mod.SOURCE_OFFCHAIN,
+        }
+    ]
 
 
 def test_offchain_run_with_an_answer_is_priced_from_its_spend(
@@ -6598,6 +6608,7 @@ def test_offchain_client_fault_is_charged_the_signed_cap(
     }
     assert _metric_calls(inc, behaviour.mech_metrics.mech_offchain_failures_total) == [
         {
+            "tool": "mytool",
             "reason": beh_mod.OFFCHAIN_FAILURE_INVALID_REQUEST,
             "fault": beh_mod.FAULT_CLIENT,
             **_OFFCHAIN_LABELS,
@@ -6742,6 +6753,135 @@ def test_offchain_tool_error_message_hides_configured_api_keys(
     )
 
 
+# A configured key that contains words the keychain also holds as settings.
+KEY_WITH_SETTING_WORDS = "AIzaSy-google-true-raw-0123456789"
+SETTINGS_AND_KEY_KEYCHAIN = beh_mod.KeyChain(
+    {
+        "search_provider": ["google"],
+        "return_source_content": ["true"],
+        "source_content_mode": ["raw"],
+        "google_api_key": [KEY_WITH_SETTING_WORDS],
+    }
+)
+
+
+def test_tool_error_reason_masks_keys_but_not_setting_values() -> None:
+    """A key holding setting words is masked whole; the words elsewhere stay."""
+    exc = ValueError(f"google search (raw, true) rejected key {KEY_WITH_SETTING_WORDS}")
+
+    reason = beh_mod._tool_error_reason(exc, SETTINGS_AND_KEY_KEYCHAIN)
+
+    assert reason == "ValueError: google search (raw, true) rejected key [redacted]"
+
+
+def test_tool_error_reason_masks_a_longer_key_before_one_it_contains() -> None:
+    """A key that contains another configured key is masked whole."""
+    short_key, long_key = "abcdefghijkl", "abcdefghijkl-0123456789"
+    keychain = beh_mod.KeyChain({"first": [short_key], "second": [long_key]})
+
+    reason = beh_mod._tool_error_reason(ValueError(f"bad key {long_key}"), keychain)
+
+    assert reason == "ValueError: bad key [redacted]"
+
+
+def test_tool_error_reason_masks_a_key_that_straddles_the_cap() -> None:
+    """Masking runs before the cut, so no prefix of a key survives at the edge."""
+    prefix = "x" * (495 - len("ValueError: "))
+    exc = ValueError(prefix + KEY_WITH_SETTING_WORDS)
+
+    reason = beh_mod._tool_error_reason(exc, SETTINGS_AND_KEY_KEYCHAIN)
+
+    assert reason == "ValueError: " + prefix + "[reda"
+    assert KEY_WITH_SETTING_WORDS[:4] not in reason
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            "Rate limit reached for gpt-4o in organization org-AbCdEf0123456789 "
+            "on tokens per min (TPM)",
+            "Rate limit reached for gpt-4o in organization [redacted] "
+            "on tokens per min (TPM)",
+        ),
+        ("quota for project proj_AbCdEf0123456789", "quota for project [redacted]"),
+        ("user user-AbCdEf0123456789 is blocked", "user [redacted] is blocked"),
+        (
+            "rate limit for your organization (8e2b1c3d-1111-4a2b-9c3d-0123456789ab)",
+            "rate limit for your organization ([redacted])",
+        ),
+        (
+            "Incorrect API key provided: sk-proj-abc123XYZ",
+            "Incorrect API key provided: [redacted]",
+        ),
+        ("org-chart and user-agent are fine", "org-chart and user-agent are fine"),
+        ("task-0123456789abcdef not found", "task-0123456789abcdef not found"),
+        ("", ""),
+    ],
+    ids=[
+        "openai_org",
+        "openai_project",
+        "openai_user",
+        "uuid_org",
+        "unconfigured_sk_key",
+        "short_suffix_kept",
+        "no_word_boundary_kept",
+        "empty",
+    ],
+)
+def test_tool_error_reason_masks_account_identifiers(
+    message: str, expected: str
+) -> None:
+    """Provider account ids never reach the requester; ordinary words do."""
+    reason = beh_mod._tool_error_reason(RuntimeError(message), None)
+
+    assert reason == (f"RuntimeError: {expected}" if expected else "RuntimeError")
+
+
+@pytest.mark.parametrize("is_offchain", [True, False], ids=["offchain", "onchain"])
+def test_tool_raise_counts_one_failed_task_for_its_tool(
+    behaviour: Any, params_stub: Any, monkeypatch: Any, is_offchain: bool
+) -> None:
+    """A run whose tool raised is in mech_tasks_failed_total once, by tool."""
+    _, inc = _stub_offchain_io(behaviour, monkeypatch)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_store_file_req", lambda files: (object(), object())
+    )
+
+    _finish_tool_run(
+        behaviour, params_stub, is_offchain, 49, _failed_future(TOOL_ERROR)
+    )
+
+    source = beh_mod.SOURCE_OFFCHAIN if is_offchain else beh_mod.SOURCE_ONCHAIN
+    assert _metric_calls(inc, behaviour.mech_metrics.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_EXECUTION_FAILED,
+            "source": source,
+        }
+    ]
+
+
+def test_failure_counted_before_execution_is_not_counted_again(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """A request refused on price is one failed task, under its own reason."""
+    _, inc = _stub_offchain_io(behaviour, monkeypatch)
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=50)
+    behaviour._count_task_failure("mytool", beh_mod.FAILURE_REASON_PRICING_INVALID)
+    behaviour._fail_as_client_fault("signed delivery rate is below the price")
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert _metric_calls(inc, behaviour.mech_metrics.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_PRICING_INVALID,
+            "source": beh_mod.SOURCE_OFFCHAIN,
+        }
+    ]
+
+
 @pytest.mark.parametrize(
     "exc, expected",
     [
@@ -6842,6 +6982,32 @@ def test_timeout_after_a_tool_error_reports_the_timeout_reason(
     )
     assert sent == []
     assert [t["request_id"] for t in shared_state[beh_mod.DONE_TASKS]] == [47]
+
+
+def test_onchain_store_timeout_after_a_tool_error_records_a_failed_run(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """The tool raised, then its store reply timed out at the limit: still failed."""
+    params_stub.use_offchain = True
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    params_stub.request_id_to_num_timeouts[48] = 0
+    params_stub.timeout_limit = 1
+    _finish_tool_run(behaviour, params_stub, False, 48, _failed_future(TOOL_ERROR))
+
+    behaviour._handle_timeout_task()
+    captured_callback[-1](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["48"]["event"]["response"]
+    assert (event["status"], event["result"], event["error"]) == (
+        "failed",
+        None,
+        "Task timed out 1 times during execution. ",
+    )
 
 
 @pytest.mark.parametrize(

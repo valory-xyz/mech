@@ -22,6 +22,7 @@
 import functools
 import json
 import math
+import re
 import threading
 import time
 from asyncio import Future
@@ -507,13 +508,47 @@ def _cap_raw_content(blob: Dict[str, Any]) -> Dict[str, Any]:
 # grow the failure envelope or the delivered result past it.
 MAX_TOOL_ERROR_CHARS = 500
 TOOL_ERROR_REDACTED = "[redacted]"
+# Keychain values shorter than this are settings (``google``, ``true``,
+# ``raw``), not secrets, and are left in the message.
+MIN_SECRET_CHARS = 12
+# Provider account identifiers: OpenAI organization, project and user ids,
+# provider-style secret keys, and UUIDs (Anthropic names its organization by
+# one).
+ACCOUNT_ID_PATTERN = re.compile(
+    r"\b(?:org|user)-[A-Za-z0-9]{8,}"
+    r"|\bproj_[A-Za-z0-9]{8,}"
+    r"|\bsk-[A-Za-z0-9_-]{8,}"
+    r"|\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b"
+)
+
+
+def _redact_secrets(message: str, keychain: Optional[KeyChain]) -> str:
+    """Mask configured secrets and provider account identifiers in ``message``.
+
+    Longer secrets are replaced first, so a secret that contains another one
+    is masked whole.
+
+    :param message: the text to scrub.
+    :param keychain: the configured API keys, or ``None`` when not loaded.
+    :return: ``message`` with every secret and account id replaced.
+    """
+    services = keychain.services if keychain is not None else {}
+    secrets = {
+        key
+        for keys in services.values()
+        for key in keys
+        if isinstance(key, str) and len(key) >= MIN_SECRET_CHARS
+    }
+    for secret in sorted(secrets, key=len, reverse=True):
+        message = message.replace(secret, TOOL_ERROR_REDACTED)
+    return ACCOUNT_ID_PATTERN.sub(TOOL_ERROR_REDACTED, message)
 
 
 def _tool_error_reason(exc: BaseException, keychain: Optional[KeyChain]) -> str:
     """Describe a tool exception for the requester: its type and message only.
 
-    No traceback and no call arguments. Any configured API key that appears in
-    the message is replaced before the text is cut to MAX_TOOL_ERROR_CHARS.
+    No traceback and no call arguments. Secrets and account identifiers are
+    masked (``_redact_secrets``) before the text is cut to MAX_TOOL_ERROR_CHARS.
 
     :param exc: the exception the tool raised.
     :param keychain: the configured API keys, or ``None`` when not loaded.
@@ -523,11 +558,7 @@ def _tool_error_reason(exc: BaseException, keychain: Optional[KeyChain]) -> str:
         message = str(exc)
     except Exception:  # pylint: disable=W0718
         message = ""
-    services = keychain.services if keychain is not None else {}
-    for keys in services.values():
-        for key in keys:
-            if isinstance(key, str) and key:
-                message = message.replace(key, TOOL_ERROR_REDACTED)
+    message = _redact_secrets(message, keychain)
     name = _exception_type_name(exc)
     reason = f"{name}: {message}" if message else name
     return reason[:MAX_TOOL_ERROR_CHARS]
@@ -673,9 +704,9 @@ class MechMetrics:
         )
         self.mech_offchain_failures_total = Counter(
             "mech_offchain_failures_total",
-            "Off-chain requests that failed after being accepted (reason is one "
-            "of the OFFCHAIN_FAILURE_* constants, fault is client or mech)",
-            labelnames=["reason", "fault", "chain", "mech_address"],
+            "Off-chain requests that failed after being accepted, by tool (reason "
+            "is one of the OFFCHAIN_FAILURE_* constants, fault is client or mech)",
+            labelnames=["tool", "reason", "fault", "chain", "mech_address"],
         )
         self.mech_offchain_delivery_latency_seconds = Histogram(
             "mech_offchain_delivery_latency_seconds",
@@ -733,6 +764,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # Error and metric reason when the current task failed because of
         # what the request asked for; None otherwise.
         self._client_fault: Optional[Tuple[str, OffchainFailureReason]] = None
+        # Whether the current task's failure is already in mech_tasks_failed_total.
+        self._task_failure_counted = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
@@ -1257,6 +1290,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._request_handling_deadline = None
         self._tool_error_reason = None
         self._client_fault = None
+        self._task_failure_counted = False
 
         # Off-chain path: prompt JSON is already inline in ``task_data["ipfs_data"]``
         # (set by the handler in ``_enqueue_offchain_request`` and mirrored to
@@ -1542,13 +1576,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.mech_metrics.inc_counter(
             self.mech_metrics.mech_tasks_completed_total, tool=tool, source=source
         )
-        if self._invalid_request:
-            self.mech_metrics.inc_counter(
-                metric=self.mech_metrics.mech_tasks_failed_total,
-                tool=tool,
-                reason=FAILURE_REASON_EXECUTION_FAILED,
-                source=source,
-            )
+        run_failed = (
+            self._invalid_request
+            or not execution_succeeded
+            or response.get("result") is None
+        )
+        if run_failed and not self._task_failure_counted:
+            self._count_task_failure(tool, FAILURE_REASON_EXECUTION_FAILED)
 
         if is_offchain:
             # Off-chain path: skip the IPFS upload so the response stays private
@@ -1650,7 +1684,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             if fault is None:
                 self._record_offchain_delivery(executing_task, tool)
             else:
-                self._count_offchain_failure(metric_reason, fault)
+                self._count_offchain_failure(metric_reason, fault, tool)
             # Mirror the (request, response) preimage into the durable buffer
             # after the in-memory return channel is populated. The response
             # stays private (not on IPFS), so this is the operator's only audit
@@ -1699,8 +1733,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.is_cold_start = False
         self._request_handling_deadline = None
         self._ipfs_error_reason = None
-        self._tool_error_reason = None
-        self._client_fault = None
         # reset all times
         self.tool_preparation_start_time = 0.0
         self.tool_execution_start_time = 0.0
@@ -1874,12 +1906,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._ignored_request_ids.add(rid)
             reason = f"Cannot step in. Tool {tool_name} is not installed. Ignoring request {rid}."
             self.context.logger.info(reason)
-            self.mech_metrics.inc_counter(
-                metric=self.mech_metrics.mech_tasks_failed_total,
-                tool=tool_name,
-                reason=FAILURE_REASON_TOOL_NOT_INSTALLED,
-                source=_source_label(executing_task),
-            )
+            self._count_task_failure(tool_name, FAILURE_REASON_TOOL_NOT_INSTALLED)
             if bool(executing_task.get("is_offchain", False)):
                 self._fail_as_client_fault(
                     f"tool {tool_name} is not available on this mech",
@@ -1906,12 +1933,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 if req_id_delivery_rate < tool_pricing:
                     reason = f"Requested pricing invalid. Actual {req_id_delivery_rate}, needed {tool_pricing}."
                     self.context.logger.warning(reason)
-                    self.mech_metrics.inc_counter(
-                        metric=self.mech_metrics.mech_tasks_failed_total,
-                        tool=tool_name,
-                        reason=FAILURE_REASON_PRICING_INVALID,
-                        source=_source_label(executing_task),
-                    )
+                    self._count_task_failure(tool_name, FAILURE_REASON_PRICING_INVALID)
                     self._fail_as_client_fault(
                         f"signed delivery rate {req_id_delivery_rate} is below "
                         f"the price {tool_pricing} of tool {tool_name}"
@@ -1944,15 +1966,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             executing_task["tool"] = tool_name
             reason = f"Tool {tool_name} is not valid."
             self.context.logger.warning(reason)
-            self.mech_metrics.inc_counter(
-                metric=self.mech_metrics.mech_tasks_failed_total,
-                tool=tool_name,
-                reason=FAILURE_REASON_TOOL_INVALID,
-                source=_source_label(executing_task),
-            )
+            self._count_task_failure(tool_name, FAILURE_REASON_TOOL_INVALID)
             self._fail_as_client_fault(reason)
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
+
+    def _count_task_failure(self, tool: Optional[str], reason: FailureReason) -> None:
+        """Count the current task once in ``mech_tasks_failed_total``.
+
+        :param tool: the tool the task named.
+        :param reason: bounded ``reason`` label value.
+        """
+        self.mech_metrics.inc_counter(
+            metric=self.mech_metrics.mech_tasks_failed_total,
+            tool=tool,
+            reason=reason,
+            source=_source_label(self._executing_task),
+        )
+        self._task_failure_counted = True
 
     def _fail_as_client_fault(
         self,
@@ -2855,6 +2886,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._ipfs_error_reason = None
         self._tool_error_reason = None
         self._client_fault = None
+        self._task_failure_counted = False
         self._request_handling_deadline = None
         self._async_result = None
 
@@ -2896,17 +2928,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
 
     def _count_offchain_failure(
-        self, metric_reason: OffchainFailureReason, fault: Fault
+        self, metric_reason: OffchainFailureReason, fault: Fault, tool: Optional[str]
     ) -> None:
         """Count one off-chain request that failed after it was accepted.
 
         :param metric_reason: bounded ``reason`` label value.
         :param fault: who caused the failure.
+        :param tool: the tool the request named.
         """
         labels = self._offchain_metric_labels()
         self.mech_metrics.inc_counter(
             self.mech_metrics.mech_offchain_failures_total,
             1,
+            tool=str(tool or "unknown"),
             reason=metric_reason,
             fault=fault,
             chain=labels["chain"],
@@ -2937,7 +2971,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "status": "rejected",
             "reason": reason,
         }
-        self._count_offchain_failure(metric_reason, FAULT_MECH)
+        tool = (self._executing_task or {}).get("tool")
+        self._count_offchain_failure(metric_reason, FAULT_MECH, tool)
         # Capture the rejection in the durable preimage buffer (no-op unless
         # off-chain preimage retention is enabled).
         self._buffer_preimage_settlement(

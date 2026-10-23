@@ -110,7 +110,7 @@ def spy(**kwargs):
         assert result == {"my_arg": "hello"}
 
 
-CLIENT_FAULT_TOOL = """\\
+CLIENT_FAULT_TOOL = """\
 class InvalidRequestError(ValueError):
     pass
 
@@ -118,7 +118,7 @@ def run(**kwargs):
     raise InvalidRequestError("prompt is empty")
 """
 
-UNPRINTABLE_ERROR_TOOL = """\\
+UNPRINTABLE_ERROR_TOOL = """\
 class Unprintable(Exception):
     def __str__(self):
         raise RuntimeError("no text")
@@ -126,6 +126,32 @@ class Unprintable(Exception):
 def run(**kwargs):
     raise Unprintable()
 """
+
+# Raises an exception class the agent process can import but cannot rebuild
+# from its pickled args, the shape of the OpenAI and Anthropic SDK errors.
+SDK_STYLE_ERROR_TOOL = """\
+from packages.valory.skills.task_execution.tests.utils.test_task import (
+    SdkStyleRateLimitError,
+)
+
+def run(**kwargs):
+    raise SdkStyleRateLimitError("Rate limit reached", response=object(), body=None)
+"""
+
+
+class SdkStyleRateLimitError(Exception):
+    """Needs keyword-only arguments, so ``pickle.loads`` cannot rebuild it."""
+
+    def __init__(self, message: str, *, response: object, body: object) -> None:
+        """Initialize the error.
+
+        :param message: the error text.
+        :param response: the provider HTTP response.
+        :param body: the decoded response body.
+        """
+        super().__init__(message)
+        self.response = response
+        self.body = body
 
 
 class TestToolError:
@@ -171,3 +197,21 @@ class TestToolError:
             with pytest.raises(ToolError) as caught:
                 future.result()
         assert caught.value.type_name == "InvalidRequestError"
+
+    def test_sdk_style_exception_crosses_the_worker_process_boundary(self) -> None:
+        """An exception that cannot be unpickled arrives as a ToolError, not a hang."""
+        raw = SdkStyleRateLimitError("Rate limit reached", response=None, body=None)
+        with pytest.raises(TypeError):
+            pickle.loads(pickle.dumps(raw))  # nosec
+        with ProcessPool(max_workers=1) as pool:
+            future = pool.schedule(
+                AnyToolAsTask().execute,
+                kwargs={"tool_py": SDK_STYLE_ERROR_TOOL, "callable_method": "run"},
+                timeout=60,
+            )
+            with pytest.raises(ToolError) as caught:
+                future.result(timeout=60)
+        assert (caught.value.type_name, caught.value.message) == (
+            "SdkStyleRateLimitError",
+            "Rate limit reached",
+        )
