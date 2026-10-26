@@ -26,7 +26,7 @@ dependencies = [
     "web3<8,>=7.15.0",
     "pytest-asyncio>=1.3",
     "aiohttp<4.0.0,>=3.8.5",
-    "certifi",
+    "certifi>=2026.10.23",
     "multidict",
     "ecdsa>=0.15",
     "py-ecc<10,>=8",

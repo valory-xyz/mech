@@ -87,7 +87,8 @@ dependencies:
     version: <4.0.0,>=3.8.5
   asn1crypto:
     version: <1.5.0,>=1.4.0
-  certifi: {}
+  certifi:
+    version: '>=2026.10.23'
   ecdsa:
     version: '>=0.15'
   grpcio:

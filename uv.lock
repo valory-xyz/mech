@@ -1574,7 +1574,7 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.8.5,<4.0.0" },
     { name = "asn1crypto", specifier = ">=1.4.0,<1.5.0" },
-    { name = "certifi" },
+    { name = "certifi", specifier = ">=2026.10.23" },
     { name = "ecdsa", specifier = ">=0.15" },
     { name = "grpcio", specifier = ">=1.78.0,<2" },
     { name = "hypothesis", specifier = ">=6" },
