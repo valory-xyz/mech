@@ -27,14 +27,14 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
-- valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeien4bl2tevynexkpaqzq24ozu2vw4zeurw4elfwhqvkbqh5swe7ta
-- valory/task_submission_abci:0.1.0:bafybeih7yrbv5c4csh2uokpfttepxi6mrldte47bwsallrbkvksa6d33zy
-- valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
+- valory/abstract_round_abci:0.1.0:bafybeiedcsiiv4s3iu4uilbbys3yemzs2vvkblbwtumnrcwqbnalgiv5pi
+- valory/delivery_rate_abci:0.1.0:bafybeifounuqfkcqckhhu6nq5esiocvyektagjuwyleemxl7hut56gcfg4
+- valory/registration_abci:0.1.0:bafybeiczrxjc4dvw35q6ve2sdozqsmamqrlrhaxj5fcvajd3cmgfzx34hm
+- valory/reset_pause_abci:0.1.0:bafybeig2zorapaqx6ubr3e63ujztidafzhstitgqdjocvec77ytr6jggzy
+- valory/task_execution:0.1.0:bafybeib2xna53rzkip3umg7j3ryqfun74coq4sfkktnvcwt7fgg5lpg5q4
+- valory/task_submission_abci:0.1.0:bafybeig7kquh6xllbyerw4r52pvlwq3mt4s3i7xhlk3dgzmeq6wujwzq4u
+- valory/termination_abci:0.1.0:bafybeifs63hjdekvstdanmiwyo3qzyn5qegkvmjemm4poago7x6lcly7ni
+- valory/transaction_settlement_abci:0.1.0:bafybeidkkgo6tmpybsmzun3tnxrfzdkjvtvaxgqhx52yw3657tn25ybkri
 behaviours:
   main:
     args: {}
@@ -204,6 +204,6 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==2.2.9
+    version: ==2.2.10
 is_abstract: false
 customs: []
