@@ -19,7 +19,9 @@
 
 """This module contains the dynamic_contribution contract definition."""
 
+import concurrent.futures
 import logging
+import threading
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Union, cast
 
@@ -45,6 +47,49 @@ _logger = logging.getLogger(
 # dicts; a dedicated local alias keeps the public signatures readable without
 # reintroducing the web3.types import.
 BlockIdentifier = Union[int, str]
+
+# Wall-clock bound on a single deliver-simulation ``eth_call``. ``eth.call``
+# has no timeout of its own, and the per-HTTP-request timeout on
+# ``EthereumApi`` is not a wall-clock bound: ``web3.HTTPProvider``'s retry
+# configuration and open-aea's ``RotatingHTTPProvider`` retry loop multiply it
+# well past any single-request budget. Without a bound, one unresponsive
+# simulation occupies the ledger connection for the whole
+# ``TransactionPreparationRound`` budget, the round times out before submitting
+# any delivery, and it self-loops making no forward progress. Bounding each
+# simulation returns control within the deadline; a simulation that overruns is
+# treated as a failed simulation, so that one delivery is skipped for the
+# current period exactly as the revert path already does, and the rest of the
+# batch proceeds. The aggregate across a round's deliveries stays well under the
+# round budget. An abandoned ``eth_call`` keeps running in its worker thread
+# until the underlying HTTP stack gives up, after which the thread is reclaimed.
+SIMULATION_RPC_DEADLINE_SECONDS = 10.0
+
+# ``max_workers`` for the simulation executor. Sized so a short burst of
+# deliveries in one round each get a worker without queueing; under a sustained
+# RPC hang abandoned workers fill up, after which ``future.result(timeout=...)``
+# still returns on the deadline with the callable never having started, so the
+# simulation verdict stays ``False`` and the round still makes progress.
+_SIMULATION_EXECUTOR_MAX_WORKERS = 4
+
+_simulation_executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
+_simulation_executor_lock = threading.Lock()
+
+
+def _get_simulation_executor() -> concurrent.futures.ThreadPoolExecutor:
+    """Return the process-wide executor used to wall-clock-bound simulations.
+
+    :return: the lazily-created ``ThreadPoolExecutor``.
+    """
+    global _simulation_executor  # pylint: disable=global-statement
+    if _simulation_executor is None:
+        with _simulation_executor_lock:
+            if _simulation_executor is None:
+                _simulation_executor = concurrent.futures.ThreadPoolExecutor(
+                    max_workers=_SIMULATION_EXECUTOR_MAX_WORKERS,
+                    thread_name_prefix="olas-mech-simulate",
+                )
+    return _simulation_executor
+
 
 PAYMENT_TYPE_NATIVE_NVM = (
     "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
@@ -466,9 +511,22 @@ class OlasMechContract(Contract):
         contract_address: str,
         sender_address: str,
         data: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
-        """Simulate the transaction."""
-        try:
+        """Simulate the transaction under a wall-clock deadline.
+
+        :param ledger_api: the ledger api.
+        :param contract_address: the mech contract address.
+        :param sender_address: the address the simulated call is sent from.
+        :param data: the calldata to simulate, hex-encoded.
+        :param deadline_seconds: upper bound in seconds for the simulation
+            ``eth_call``. A call that does not return within the deadline is
+            treated as a failed simulation, so the caller skips that delivery
+            for the current period rather than blocking the round.
+        :return: ``{"data": <simulation_ok>}``.
+        """
+
+        def _call() -> None:
             ledger_api.api.eth.call(
                 {
                     "from": ledger_api.api.to_checksum_address(sender_address),
@@ -476,8 +534,26 @@ class OlasMechContract(Contract):
                     "data": data,
                 }
             )
+
+        future = _get_simulation_executor().submit(_call)
+        try:
+            future.result(timeout=deadline_seconds)
             simulation_ok = True
-        except Exception as e:
+        except concurrent.futures.TimeoutError:
+            # ``TimeoutError`` aliases ``concurrent.futures.TimeoutError`` in
+            # Python 3.11+, so this branch also fires when the call returned
+            # and raised its own timeout. ``future.done()`` tells the two
+            # apart; both resolve to a failed simulation, the distinction is
+            # only for the log line.
+            if future.done():
+                _logger.info("Simulation failed: call timed out at the RPC layer.")
+            else:
+                _logger.info(
+                    f"Simulation did not return within {deadline_seconds}s; "
+                    f"treating as a failed simulation."
+                )
+            simulation_ok = False
+        except Exception as e:  # pylint: disable=broad-except
             _logger.info(f"Simulation failed: {str(e)}")
             simulation_ok = False
 
