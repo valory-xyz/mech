@@ -28,6 +28,12 @@ from unittest.mock import patch
 
 import pytest
 import yaml
+from web3.exceptions import (
+    ContractCustomError,
+    ContractLogicError,
+    ContractPanicError,
+    Web3RPCError,
+)
 
 from packages.valory.contracts.olas_mech import contract as contract_module
 from packages.valory.contracts.olas_mech.contract import (
@@ -143,13 +149,13 @@ class TestSimulateWithDeadline:
     @pytest.mark.parametrize(
         "error",
         [
-            ValueError("execution reverted: GS026"),
-            RuntimeError("unexpected node answer"),
-            KeyError("result"),
+            ContractLogicError("execution reverted: GS026"),
+            ContractCustomError("0x08c379a0", data="0x08c379a0"),
+            ContractPanicError("Panic error 0x11", data="0x4e487b71"),
         ],
     )
-    def test_node_error_is_a_conclusive_failure(self, error: Exception) -> None:
-        """Errors that are not transport failures are charged like a revert."""
+    def test_revert_is_a_conclusive_failure(self, error: Exception) -> None:
+        """Only a revert reported by the node is charged as a failed simulation."""
         assert _simulate(_FakeLedgerApi(_raising(error))) == _FAILED
 
     @pytest.mark.parametrize(
@@ -157,11 +163,14 @@ class TestSimulateWithDeadline:
         [
             TimeoutError("read timed out"),
             ConnectionResetError("connection reset by peer"),
-            OSError("network is unreachable"),
+            Web3RPCError("{'code': -32005, 'message': 'rate limit exceeded'}"),
+            Web3RPCError("{'code': -32000, 'message': 'header not found'}"),
+            ValueError("execution reverted: GS026"),
+            KeyError("result"),
         ],
     )
-    def test_transport_error_is_inconclusive(self, error: Exception) -> None:
-        """A transport failure, including the call's own timeout, is inconclusive."""
+    def test_non_revert_error_is_inconclusive(self, error: Exception) -> None:
+        """Any error other than a revert, including RPC-level errors, is inconclusive."""
         assert _simulate(_FakeLedgerApi(_raising(error))) == _INCONCLUSIVE
 
     def test_hanging_call_is_inconclusive_on_the_deadline(self, hang: _Hang) -> None:

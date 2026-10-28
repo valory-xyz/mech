@@ -27,6 +27,7 @@ from unittest.mock import patch
 
 import pytest
 from web3 import Web3
+from web3.exceptions import ContractLogicError, Web3RPCError
 
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.olas_mech.contract import (
@@ -116,14 +117,15 @@ class TestGetProcessPaymentTx:
         ("eth_call", "ok", "timed_out"),
         [
             (lambda _tx: b"", True, False),
-            (_raise(ValueError("execution reverted")), False, False),
+            (_raise(ContractLogicError("execution reverted")), False, False),
             (_raise(TimeoutError("read timed out")), False, True),
+            (_raise(Web3RPCError("rate limit exceeded")), False, True),
         ],
     )
     def test_reports_the_simulation_verdict(
         self, eth_call: Callable[[Any], object], ok: bool, timed_out: bool
     ) -> None:
-        """Success, revert and transport timeout map to distinct verdicts."""
+        """A revert is a conclusive failure; timeouts and RPC errors are inconclusive."""
         with patch.object(
             BalanceTrackerContract, "get_instance", return_value=_web3_contract()
         ):

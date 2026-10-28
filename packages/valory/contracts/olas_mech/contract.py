@@ -29,6 +29,7 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
+from web3.exceptions import ContractLogicError
 
 from packages.valory.contracts.mech_marketplace.contract import (
     DELIVERY_RATE_INDEX,
@@ -77,10 +78,11 @@ def simulate_with_deadline(
 ) -> Dict[str, bool]:
     """Simulate ``data`` with ``eth_call``, returning within ``deadline_seconds``.
 
-    An answer from the node (success or revert) is conclusive. The outcome is
-    inconclusive (``simulation_timed_out=True``, ``simulation_ok=False``) when
-    the call overruns the deadline, fails at the transport layer (``OSError``),
-    or cannot start because ``MAX_INFLIGHT_SIMULATIONS`` calls are still running.
+    Only success or a revert (``ContractLogicError``) is conclusive. Anything
+    else is inconclusive (``simulation_timed_out=True``, ``simulation_ok=False``):
+    the call overruns the deadline, raises any other error (transport failures,
+    JSON-RPC errors such as rate limits), or cannot start because
+    ``MAX_INFLIGHT_SIMULATIONS`` calls are still running.
     Calls run on daemon threads, so an abandoned one never delays process exit.
 
     :param ledger_api: the ledger api.
@@ -129,13 +131,11 @@ def simulate_with_deadline(
         return _simulation_result(ok=False, timed_out=True)
     if not errors:
         return _simulation_result(ok=True)
-    if isinstance(errors[0], OSError):
-        _logger.warning(
-            f"Simulation failed at the RPC transport; result inconclusive: {errors[0]}"
-        )
-        return _simulation_result(ok=False, timed_out=True)
-    _logger.info(f"Simulation failed: {errors[0]}")
-    return _simulation_result(ok=False)
+    if isinstance(errors[0], ContractLogicError):
+        _logger.info(f"Simulation failed: {errors[0]}")
+        return _simulation_result(ok=False)
+    _logger.warning(f"Simulation did not complete; result inconclusive: {errors[0]!r}")
+    return _simulation_result(ok=False, timed_out=True)
 
 
 PAYMENT_TYPE_NATIVE_NVM = (
