@@ -119,8 +119,15 @@ def _raising(error: Exception) -> Callable[[], object]:
     return _raise
 
 
-def _simulate(ledger: _FakeLedgerApi, deadline: float = _SHORT_DEADLINE) -> dict:
-    return simulate_with_deadline(ledger, _MECH, _SENDER, "0x", deadline)  # type: ignore[arg-type]
+def _simulate(
+    ledger: _FakeLedgerApi, deadline: float = _SHORT_DEADLINE, data: str = "0x"
+) -> dict:
+    return simulate_with_deadline(ledger, _MECH, _SENDER, data, deadline)  # type: ignore[arg-type]
+
+
+def _calldata(index: int) -> str:
+    """Return distinct calldata per ``index``, so calls are not the same call."""
+    return f"0x{index:08x}"
 
 
 @pytest.fixture
@@ -137,6 +144,7 @@ def hang() -> Iterator[_Hang]:
         if got:
             contract_module._inflight_simulations.release()
     assert all(acquired), "a simulation thread did not exit after release"
+    assert not contract_module._inflight_calls
 
 
 class TestSimulateWithDeadline:
@@ -149,8 +157,12 @@ class TestSimulateWithDeadline:
     @pytest.mark.parametrize(
         "error",
         [
-            ContractLogicError("execution reverted: GS026"),
-            ContractCustomError("0x08c379a0", data="0x08c379a0"),
+            ContractLogicError("execution reverted: GS026", data="0x08c379a0"),
+            ContractLogicError("execution reverted", data="0x"),
+            ContractLogicError("execution reverted", data="Reverted 0x08c379a0"),
+            ContractLogicError("execution reverted", data=None),
+            ContractLogicError("execution reverted", data="no data"),
+            ContractCustomError("0xb7a4f2c1", data="0xb7a4f2c1"),
             ContractPanicError("Panic error 0x11", data="0x4e487b71"),
         ],
     )
@@ -167,6 +179,12 @@ class TestSimulateWithDeadline:
             Web3RPCError("{'code': -32000, 'message': 'header not found'}"),
             ValueError("execution reverted: GS026"),
             KeyError("result"),
+            ContractLogicError("header not found", data=None),
+            ContractLogicError(
+                "execution reverted: daily request count exceeded",
+                data={"see": "https://infura.io/dashboard"},
+            ),
+            ContractCustomError("rate limit exceeded", data="rate limit exceeded"),
         ],
     )
     def test_non_revert_error_is_inconclusive(self, error: Exception) -> None:
@@ -185,12 +203,18 @@ class TestSimulateWithDeadline:
 
     def test_full_pool_is_inconclusive_without_calling(self, hang: _Hang) -> None:
         """With every slot held by a hung call, a new call never starts."""
-        for _ in range(MAX_INFLIGHT_SIMULATIONS):
-            assert _simulate(_FakeLedgerApi(hang)) == _INCONCLUSIVE
+        for index in range(MAX_INFLIGHT_SIMULATIONS):
+            assert (
+                _simulate(_FakeLedgerApi(hang), data=_calldata(index)) == _INCONCLUSIVE
+            )
 
         fresh = _FakeLedgerApi(lambda: b"")
         begin = time.monotonic()
-        result = _simulate(fresh, deadline=_RELEASE_WAIT_SECONDS)
+        result = _simulate(
+            fresh,
+            deadline=_RELEASE_WAIT_SECONDS,
+            data=_calldata(MAX_INFLIGHT_SIMULATIONS),
+        )
         elapsed = time.monotonic() - begin
 
         assert result == _INCONCLUSIVE
@@ -208,13 +232,45 @@ class TestSimulateWithDeadline:
         ):
             for _ in range(MAX_INFLIGHT_SIMULATIONS + 1):
                 assert _simulate(_FakeLedgerApi(hang)) == _INCONCLUSIVE
+        assert not contract_module._inflight_calls
         assert not hang.started.is_set()
         assert _simulate(_FakeLedgerApi(lambda: b"")) == _OK
 
     def test_slot_is_reusable_after_a_hung_call_ends(self, hang: _Hang) -> None:
         """A slot held by a hung call is returned once that call finishes."""
-        for _ in range(MAX_INFLIGHT_SIMULATIONS):
-            _simulate(_FakeLedgerApi(hang))
+        for index in range(MAX_INFLIGHT_SIMULATIONS):
+            _simulate(_FakeLedgerApi(hang), data=_calldata(index))
+        hang.release.set()
+
+        deadline = time.monotonic() + _RELEASE_WAIT_SECONDS
+        result = _INCONCLUSIVE
+        while result != _OK and time.monotonic() < deadline:
+            result = _simulate(_FakeLedgerApi(lambda: b""))
+        assert result == _OK
+
+    def test_same_call_in_flight_is_inconclusive_without_calling(
+        self, hang: _Hang
+    ) -> None:
+        """A call still running from an earlier simulation is not started again."""
+        assert _simulate(_FakeLedgerApi(hang)) == _INCONCLUSIVE
+
+        repeat = _FakeLedgerApi(lambda: b"")
+        begin = time.monotonic()
+        result = _simulate(repeat, deadline=_RELEASE_WAIT_SECONDS)
+        elapsed = time.monotonic() - begin
+
+        assert result == _INCONCLUSIVE
+        assert repeat.api.eth.calls == 0
+        assert elapsed < _PROMPT_RETURN_SECONDS
+
+    def test_other_calls_run_while_one_is_in_flight(self, hang: _Hang) -> None:
+        """Only the same call is held back; different calldata still simulates."""
+        _simulate(_FakeLedgerApi(hang), data=_calldata(0))
+        assert _simulate(_FakeLedgerApi(lambda: b""), data=_calldata(1)) == _OK
+
+    def test_same_call_runs_again_once_the_earlier_one_ends(self, hang: _Hang) -> None:
+        """The in-flight mark is cleared when the earlier call returns."""
+        _simulate(_FakeLedgerApi(hang))
         hang.release.set()
 
         deadline = time.monotonic() + _RELEASE_WAIT_SECONDS

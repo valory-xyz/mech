@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeihklpzeypw2jrgq5m6mfnvt5ovzdu2bzrd5h3qeqhtlx6pdaskpcm
+  behaviours.py: bafybeicm6yjxlwooi77itxnqywmmjdz2izm4432nqbfshxfvifiudb3rhu
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -19,7 +19,7 @@ fingerprint:
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeih53puxozft6stnagkhe37la2nye5kqtbiuteexg54jieg6wbhg54
-  tests/test_behaviours.py: bafybeifsff2ske7sgilpkavy5q2jlknksgg7gl7xyrblouiot2lz66sxcu
+  tests/test_behaviours.py: bafybeifjknwv7houa2zrqwmh2vnoylwahmv3cs7by6a374zqd3g7iuwida
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeia3dojxv6suk5eoaspc2yfolpyoxywhgxg6gwgdvgly4nudg544tm
@@ -31,14 +31,14 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/balance_tracker:0.1.0:bafybeid7fgq3ogqsh6qlnt24yjcrbqqujxxw2wkbnn6uxnmzez3jkdrxju
+- valory/balance_tracker:0.1.0:bafybeibtds6mmu53rm4az6dps5hansk2juz562jfytusy7bpvbooc33ria
 - valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
 - valory/erc20:0.1.0:bafybeigafpclygxbid3tbtavpjtz4rxqi4j7uwqlhxbumdm6itzmat6m3m
 - valory/gnosis_safe:0.1.0:bafybeifv2ajl76hvtpdtcv2alkislkqr5t7jcyspd5cimmnkfhnyemeux4
 - valory/hash_checkpoint:0.1.0:bafybeickz4ack57gvznbaq74stt2tnyeng3l5bf7rlr5jdfnitku7mvrde
 - valory/mech_marketplace:0.1.0:bafybeidk67435jzze4pyrqjixspubbsb2rvpe7jobnhttxavi3s3upu7ne
 - valory/multisend:0.1.0:bafybeibyx4c6bpkragj5j2augv27til6xrdlnpgyrlttg5dsccxje4yis4
-- valory/olas_mech:0.1.0:bafybeid66mfmlhtc4cyawy3gmug7g7jarwek2dgml2ezpvprxz3rm443fq
+- valory/olas_mech:0.1.0:bafybeiaxgpc3flvaiq3hjr3e722jizcfagd2iisnodyp3c2v6vb3vdg6cm
 - valory/service_registry:0.1.0:bafybeicdonzmb3hfltzil27ylfu6tdiiftixbquosfyamzgpkilfoh5fkm
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
@@ -46,7 +46,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiedcsiiv4s3iu4uilbbys3yemzs2vvkblbwtumnrcwqbnalgiv5pi
-- valory/task_execution:0.1.0:bafybeifqtcsftsvaouuc6gkwjaghvgypljwa2laxampxir2mfi36uuxjx4
+- valory/task_execution:0.1.0:bafybeiaz2bnnpxiggvyiuhzbi3ls4nhc4sh6njfq4v5iowgb4hwb2r66wq
 - valory/transaction_settlement_abci:0.1.0:bafybeidkkgo6tmpybsmzun3tnxrfzdkjvtvaxgqhx52yw3657tn25ybkri
 behaviours:
   main:

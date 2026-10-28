@@ -256,8 +256,8 @@ SETTLEMENT_ATTEMPT_PERIOD_KEY = "settlement_attempt_period"
 # the cost of up to that many good tasks.
 MAX_SETTLEMENT_ATTEMPTS = 3
 # Share of ``round_timeout_seconds`` that the deliver/payment simulations in one
-# tx-preparation round may take in total; the rest is left for building the
-# multisend and reaching consensus.
+# tx-preparation round may take once one of them is inconclusive; the rest is
+# left for building the multisend and reaching consensus.
 SIMULATION_ROUND_BUDGET_FRACTION = 0.5
 # Shared-state key holding the tx hash whose settled tasks were last
 # counted, so a re-entered post-settlement round does not count twice.
@@ -570,7 +570,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """Keep ``request_ids`` for the next period without charging an attempt.
 
         Used when the deliver simulation is inconclusive, so an RPC outage
-        never counts towards ``MAX_SETTLEMENT_ATTEMPTS``.
+        never counts towards ``MAX_SETTLEMENT_ATTEMPTS``. Starts the round's
+        simulation budget if it is not running yet.
 
         :param request_ids: ``str`` request ids in the deferred group.
         :param source: ``SOURCE_OFFCHAIN`` or ``SOURCE_ONCHAIN``.
@@ -584,24 +585,40 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         self.count_local_settlement(
             SETTLEMENT_OUTCOME_SIM_DEFERRED, source, mech_address, request_ids
         )
+        self.start_simulation_budget()
+
+    @property
+    def simulation_budget_seconds(self) -> float:
+        """Wall-clock seconds a round's simulations get once one is inconclusive."""
+        return self.params.round_timeout_seconds * SIMULATION_ROUND_BUDGET_FRACTION
+
+    def reset_simulation_budget(self) -> None:
+        """Stop this round's simulation budget until a simulation is inconclusive."""
+        self._simulation_budget_ends_at = None
 
     def start_simulation_budget(self) -> None:
-        """Start this round's wall-clock budget for simulations."""
-        self._simulation_budget_ends_at = (
-            time.monotonic()
-            + self.params.round_timeout_seconds * SIMULATION_ROUND_BUDGET_FRACTION
-        )
+        """Start this round's simulation budget unless it is already running.
+
+        The budget starts at the first inconclusive simulation, not at round
+        start: until then every agent has seen the same verdicts, so agents
+        with different RPC latencies still stop at the same group.
+        """
+        if self._simulation_budget_ends_at is None:
+            self._simulation_budget_ends_at = (
+                time.monotonic() + self.simulation_budget_seconds
+            )
 
     def next_simulation_deadline(self) -> Optional[float]:
         """Return the deadline for the next simulation, ``None`` once the budget is spent.
 
         :return: seconds the next simulation may take, at most
-            ``SIMULATION_RPC_DEADLINE_SECONDS``; ``None`` when this round's
-            budget is spent. Without a started budget the per-call bound applies.
+            ``SIMULATION_RPC_DEADLINE_SECONDS`` and the whole budget; ``None``
+            when this round's budget is spent.
         """
         if self._simulation_budget_ends_at is None:
-            return SIMULATION_RPC_DEADLINE_SECONDS
-        remaining = self._simulation_budget_ends_at - time.monotonic()
+            remaining = self.simulation_budget_seconds
+        else:
+            remaining = self._simulation_budget_ends_at - time.monotonic()
         if remaining <= 0:
             return None
         return min(SIMULATION_RPC_DEADLINE_SECONDS, remaining)
@@ -1058,7 +1075,8 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 return None
 
             simulation_ok = process_payment_tx.pop("simulation_ok", False)
-            process_payment_tx.pop(SIMULATION_TIMED_OUT_KEY, False)
+            if process_payment_tx.pop(SIMULATION_TIMED_OUT_KEY, False):
+                self.start_simulation_budget()
             if not simulation_ok:
                 # the simulation failed, log a warning and skip split profit
                 self.context.logger.warning(
@@ -1828,7 +1846,7 @@ class TransactionPreparationBehaviour(
         """
         all_txs = []
         included_request_ids: List[str] = []
-        self.start_simulation_budget()
+        self.reset_simulation_budget()
         update_hash_tx = yield from self.get_mech_update_hash_tx()
         if update_hash_tx is not None:
             # in case of None, the agent should not update the hash

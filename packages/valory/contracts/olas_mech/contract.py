@@ -20,9 +20,10 @@
 """This module contains the dynamic_contribution contract definition."""
 
 import logging
+import re
 import threading
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Union, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -57,6 +58,11 @@ SIMULATION_OK_KEY = "simulation_ok"
 SIMULATION_TIMED_OUT_KEY = "simulation_timed_out"
 
 _inflight_simulations = threading.BoundedSemaphore(MAX_INFLIGHT_SIMULATIONS)
+# (to, data) of each simulation still running; at most one per call at a time.
+_inflight_calls: Set[Tuple[str, str]] = set()
+_inflight_calls_lock = threading.Lock()
+_HEX_REVERT_DATA = re.compile(r"0x[0-9a-fA-F]*")
+_PREFIXED_REVERT_DATA = "Reverted "
 
 
 def _simulation_result(ok: bool, timed_out: bool = False) -> Dict[str, bool]:
@@ -69,6 +75,29 @@ def _simulation_result(ok: bool, timed_out: bool = False) -> Dict[str, bool]:
     return {SIMULATION_OK_KEY: ok, SIMULATION_TIMED_OUT_KEY: timed_out}
 
 
+def _is_revert(error: Exception) -> bool:
+    """Return whether ``error`` is a revert reported by the node.
+
+    web3 also raises ``ContractLogicError`` for JSON-RPC errors whose ``data``
+    is a dict, ``null`` or plain text, so the class alone is not enough. A
+    revert carries hex or ``Reverted``-prefixed revert data, or non-dict data
+    with "revert" in the message.
+
+    :param error: the exception raised by ``eth_call``.
+    :return: ``True`` only for a revert.
+    """
+    if not isinstance(error, ContractLogicError):
+        return False
+    data = error.data
+    if isinstance(data, dict):
+        return False
+    if isinstance(data, str) and (
+        _HEX_REVERT_DATA.fullmatch(data) or data.startswith(_PREFIXED_REVERT_DATA)
+    ):
+        return True
+    return "revert" in str(error.message or "").lower()
+
+
 def simulate_with_deadline(
     ledger_api: EthereumApi,
     contract_address: str,
@@ -78,11 +107,11 @@ def simulate_with_deadline(
 ) -> Dict[str, bool]:
     """Simulate ``data`` with ``eth_call``, returning within ``deadline_seconds``.
 
-    Only success or a revert (``ContractLogicError``) is conclusive. Anything
-    else is inconclusive (``simulation_timed_out=True``, ``simulation_ok=False``):
+    Only success or a revert (see ``_is_revert``) is conclusive. Anything else
+    is inconclusive (``simulation_timed_out=True``, ``simulation_ok=False``):
     the call overruns the deadline, raises any other error (transport failures,
-    JSON-RPC errors such as rate limits), or cannot start because
-    ``MAX_INFLIGHT_SIMULATIONS`` calls are still running.
+    JSON-RPC errors such as rate limits), or does not start because the same
+    call is still running or ``MAX_INFLIGHT_SIMULATIONS`` calls are.
     Calls run on daemon threads, so an abandoned one never delays process exit.
 
     :param ledger_api: the ledger api.
@@ -92,15 +121,29 @@ def simulate_with_deadline(
     :param deadline_seconds: wall-clock upper bound for the call, in seconds.
     :return: the verdict built by ``_simulation_result``.
     """
-    if not _inflight_simulations.acquire(blocking=False):
-        _logger.warning(
-            f"Simulation not started: {MAX_INFLIGHT_SIMULATIONS} earlier "
-            f"simulations are still in flight; result inconclusive."
-        )
-        return _simulation_result(ok=False, timed_out=True)
+    call_key = (contract_address.lower(), data)
+    with _inflight_calls_lock:
+        if call_key in _inflight_calls:
+            _logger.warning(
+                "Simulation not started: an earlier simulation of the same call "
+                "is still in flight; result inconclusive."
+            )
+            return _simulation_result(ok=False, timed_out=True)
+        if not _inflight_simulations.acquire(blocking=False):
+            _logger.warning(
+                f"Simulation not started: {MAX_INFLIGHT_SIMULATIONS} earlier "
+                f"simulations are still in flight; result inconclusive."
+            )
+            return _simulation_result(ok=False, timed_out=True)
+        _inflight_calls.add(call_key)
 
     errors: List[Exception] = []
     finished = threading.Event()
+
+    def _release() -> None:
+        with _inflight_calls_lock:
+            _inflight_calls.discard(call_key)
+            _inflight_simulations.release()
 
     def _call() -> None:
         try:
@@ -114,13 +157,13 @@ def simulate_with_deadline(
         except Exception as e:  # pylint: disable=broad-except
             errors.append(e)
         finally:
-            _inflight_simulations.release()
+            _release()
             finished.set()
 
     try:
         threading.Thread(target=_call, name="olas-mech-simulate", daemon=True).start()
     except RuntimeError as e:
-        _inflight_simulations.release()
+        _release()
         _logger.warning(f"Simulation not started: {e}; result inconclusive.")
         return _simulation_result(ok=False, timed_out=True)
     if not finished.wait(deadline_seconds):
@@ -131,7 +174,7 @@ def simulate_with_deadline(
         return _simulation_result(ok=False, timed_out=True)
     if not errors:
         return _simulation_result(ok=True)
-    if isinstance(errors[0], ContractLogicError):
+    if _is_revert(errors[0]):
         _logger.info(f"Simulation failed: {errors[0]}")
         return _simulation_result(ok=False)
     _logger.warning(f"Simulation did not complete; result inconclusive: {errors[0]!r}")

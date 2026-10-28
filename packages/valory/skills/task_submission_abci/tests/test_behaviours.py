@@ -3026,8 +3026,22 @@ class TestSimulationBudget:
 
     def test_deadline_is_the_per_call_bound_before_a_budget_starts(self) -> None:
         """Without a started budget each simulation gets the full per-call bound."""
-        b = _make_sim_b([])
+        b = _make_sim_b([], round_timeout_seconds=150.0)
         assert b.next_simulation_deadline() == SIMULATION_RPC_DEADLINE_SECONDS
+
+    def test_deadline_before_a_budget_starts_fits_the_whole_budget(self) -> None:
+        """A budget shorter than the per-call bound caps the deadline before it starts."""
+        b = _make_sim_b([], round_timeout_seconds=30.0)
+        assert b.next_simulation_deadline() == 30.0 * SIMULATION_ROUND_BUDGET_FRACTION
+
+    def test_starting_a_running_budget_keeps_its_end(self) -> None:
+        """A later inconclusive simulation does not extend the running budget."""
+        b = _make_sim_b([], round_timeout_seconds=150.0)
+        with patch.object(beh_mod.time, "monotonic", return_value=0.0):
+            b.start_simulation_budget()
+        with patch.object(beh_mod.time, "monotonic", return_value=74.0):
+            b.start_simulation_budget()
+            assert b.next_simulation_deadline() == 1.0
 
     def test_deadline_is_capped_by_the_per_call_bound(self) -> None:
         """A large budget still bounds each call at the per-call deadline."""
@@ -3213,18 +3227,80 @@ class TestInconclusiveSimulationDefers:
         }
         assert _charged(b) == []
 
-    def test_payload_round_starts_a_fresh_budget(self) -> None:
-        """``get_payload_content`` starts the budget, so a zero-length round simulates nothing."""
-        b = _make_sim_b([{"is_marketplace_mech": False, "request_id": "r1"}], 0.0)
+    def test_payload_round_resets_a_spent_budget(self) -> None:
+        """A budget spent in an earlier round does not carry into the next one."""
+        b = _make_sim_b([{"is_marketplace_mech": False, "request_id": "r1"}], 150.0)
+        b._simulation_budget_ends_at = time.monotonic() - 1.0
         deliver_tx = {"to": "0xMECH", "value": 0, "data": b"\x00"}
         deliver_tx.update(_sim_body(b"\x00", ok=True))
         result, mock_deliver = self._legacy_payload(b, deliver_tx)
-        mock_deliver.assert_not_called()
+        assert mock_deliver.call_args.args[1] == SIMULATION_RPC_DEADLINE_SECONDS
         assert decode_tx_payload(result) == {
             "tx_hash": "encoded",
-            "included_request_ids": [],
+            "included_request_ids": ["r1"],
         }
+
+    def _run_offchain_with_clock(
+        self, verdicts: Dict[str, Dict[str, Any]], seconds_per_call: float
+    ) -> Tuple[Any, List[str]]:
+        """Deliver one off-chain group per sender, each call advancing a fake clock."""
+        tasks = [self._offchain_task(f"r-{s}", s) for s in verdicts]
+        b = _make_sim_b(tasks, round_timeout_seconds=150.0)
+        b.reset_simulation_budget()
+        clock = [0.0]
+
+        def _respond(*_args: Any, **kwargs: Any) -> Any:
+            clock[0] += seconds_per_call
+            return _gen_returning(_state_contract_msg(verdicts[kwargs["requester"]]))()
+
+        with (
+            patch.object(beh_mod.time, "monotonic", lambda: clock[0]),
+            patch.object(b, "get_contract_api_response", side_effect=_respond),
+            patch.object(b, "count_settlement"),
+        ):
+            _, included = _run_gen(b._get_offchain_tasks_deliver_data())
+        return b, included
+
+    def test_slow_conclusive_simulations_never_spend_the_budget(self) -> None:
+        """Healthy calls past the budget's length are all delivered, since no budget runs."""
+        ok = _sim_body(b"\x01", ok=True)
+        verdicts = {"0xA": ok, "0xB": ok, "0xC": ok, "0xD": ok}
+        b, included = self._run_offchain_with_clock(verdicts, seconds_per_call=24.0)
+        assert included == ["r-0xA", "r-0xB", "r-0xC", "r-0xD"]
+        assert b._simulation_budget_ends_at is None
+
+    def test_first_inconclusive_simulation_starts_the_budget(self) -> None:
+        """The budget runs from the first inconclusive verdict, so later groups are cut off."""
+        ok = _sim_body(b"\x01", ok=True)
+        verdicts = {
+            "0xA": ok,
+            "0xSLOW": _sim_body(b"\x02", False, timed_out=True),
+            "0xB": ok,
+            "0xC": ok,
+            "0xD": ok,
+            "0xE": ok,
+        }
+        b, included = self._run_offchain_with_clock(verdicts, seconds_per_call=25.0)
+        assert included == ["r-0xA", "r-0xB", "r-0xC", "r-0xD"]
         assert _charged(b) == []
+
+    def test_inconclusive_split_profits_starts_the_budget(self) -> None:
+        """An inconclusive payment simulation starts the budget like a deliver one."""
+        b = _make_sim_b([], round_timeout_seconds=150.0)
+        b.reset_simulation_budget()
+        mech_info = (b"\x00" * 32, "0xTRACK", 1000)
+        payment_tx = {"to": "0xTRACK", "value": 0, "data": b"\x00"}
+        payment_tx.update(_sim_body(b"\x00", False, timed_out=True))
+        with (
+            patch.object(b, "_should_split_profits", side_effect=_gen_returning(True)),
+            patch.object(b, "_get_mech_info", side_effect=_gen_returning(mech_info)),
+            patch.object(b, "_calculate_mech_profits", side_effect=_gen_returning(900)),
+            patch.object(
+                b, "_get_process_payment_tx", side_effect=_gen_returning(payment_tx)
+            ),
+        ):
+            assert _run_gen(b.get_split_profit_txs()) is None
+        assert b._simulation_budget_ends_at is not None
 
     def test_split_profits_skipped_when_budget_is_spent(self) -> None:
         """Profit splitting does not simulate once the round's budget is spent."""
