@@ -19,7 +19,6 @@
 
 """This module contains the dynamic_contribution contract definition."""
 
-import concurrent.futures
 import logging
 import threading
 from enum import Enum
@@ -48,47 +47,94 @@ _logger = logging.getLogger(
 # reintroducing the web3.types import.
 BlockIdentifier = Union[int, str]
 
-# Wall-clock bound on a single deliver-simulation ``eth_call``. ``eth.call``
-# has no timeout of its own, and the per-HTTP-request timeout on
-# ``EthereumApi`` is not a wall-clock bound: ``web3.HTTPProvider``'s retry
-# configuration and open-aea's ``RotatingHTTPProvider`` retry loop multiply it
-# well past any single-request budget. Without a bound, one unresponsive
-# simulation occupies the ledger connection for the whole
-# ``TransactionPreparationRound`` budget, the round times out before submitting
-# any delivery, and it self-loops making no forward progress. Bounding each
-# simulation returns control within the deadline; a simulation that overruns is
-# treated as a failed simulation, so that one delivery is skipped for the
-# current period exactly as the revert path already does, and the rest of the
-# batch proceeds. The aggregate across a round's deliveries stays well under the
-# round budget. An abandoned ``eth_call`` keeps running in its worker thread
-# until the underlying HTTP stack gives up, after which the thread is reclaimed.
+# eth.call has no wall-clock bound; provider retries multiply the per-request timeout.
 SIMULATION_RPC_DEADLINE_SECONDS = 10.0
+# Simulations allowed in flight at once, abandoned ones included.
+MAX_INFLIGHT_SIMULATIONS = 4
+SIMULATION_OK_KEY = "simulation_ok"
+SIMULATION_TIMED_OUT_KEY = "simulation_timed_out"
 
-# ``max_workers`` for the simulation executor. Sized so a short burst of
-# deliveries in one round each get a worker without queueing; under a sustained
-# RPC hang abandoned workers fill up, after which ``future.result(timeout=...)``
-# still returns on the deadline with the callable never having started, so the
-# simulation verdict stays ``False`` and the round still makes progress.
-_SIMULATION_EXECUTOR_MAX_WORKERS = 4
-
-_simulation_executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
-_simulation_executor_lock = threading.Lock()
+_inflight_simulations = threading.BoundedSemaphore(MAX_INFLIGHT_SIMULATIONS)
 
 
-def _get_simulation_executor() -> concurrent.futures.ThreadPoolExecutor:
-    """Return the process-wide executor used to wall-clock-bound simulations.
+def _simulation_result(ok: bool, timed_out: bool = False) -> Dict[str, bool]:
+    """Build the simulation verdict carried in contract responses.
 
-    :return: the lazily-created ``ThreadPoolExecutor``.
+    :param ok: whether the simulated call succeeded.
+    :param timed_out: whether the outcome is inconclusive (see ``simulate_with_deadline``).
+    :return: ``{SIMULATION_OK_KEY: ok, SIMULATION_TIMED_OUT_KEY: timed_out}``.
     """
-    global _simulation_executor  # pylint: disable=global-statement
-    if _simulation_executor is None:
-        with _simulation_executor_lock:
-            if _simulation_executor is None:
-                _simulation_executor = concurrent.futures.ThreadPoolExecutor(
-                    max_workers=_SIMULATION_EXECUTOR_MAX_WORKERS,
-                    thread_name_prefix="olas-mech-simulate",
-                )
-    return _simulation_executor
+    return {SIMULATION_OK_KEY: ok, SIMULATION_TIMED_OUT_KEY: timed_out}
+
+
+def simulate_with_deadline(
+    ledger_api: EthereumApi,
+    contract_address: str,
+    sender_address: str,
+    data: str,
+    deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
+) -> Dict[str, bool]:
+    """Simulate ``data`` with ``eth_call``, returning within ``deadline_seconds``.
+
+    An answer from the node (success or revert) is conclusive. The outcome is
+    inconclusive (``simulation_timed_out=True``, ``simulation_ok=False``) when
+    the call overruns the deadline, fails at the transport layer (``OSError``),
+    or cannot start because ``MAX_INFLIGHT_SIMULATIONS`` calls are still running.
+    Calls run on daemon threads, so an abandoned one never delays process exit.
+
+    :param ledger_api: the ledger api.
+    :param contract_address: the address the simulated call is sent to.
+    :param sender_address: the address the simulated call is sent from.
+    :param data: the calldata to simulate, hex-encoded.
+    :param deadline_seconds: wall-clock upper bound for the call, in seconds.
+    :return: the verdict built by ``_simulation_result``.
+    """
+    if not _inflight_simulations.acquire(blocking=False):
+        _logger.warning(
+            f"Simulation not started: {MAX_INFLIGHT_SIMULATIONS} earlier "
+            f"simulations are still in flight; result inconclusive."
+        )
+        return _simulation_result(ok=False, timed_out=True)
+
+    errors: List[Exception] = []
+    finished = threading.Event()
+
+    def _call() -> None:
+        try:
+            ledger_api.api.eth.call(
+                {
+                    "from": ledger_api.api.to_checksum_address(sender_address),
+                    "to": ledger_api.api.to_checksum_address(contract_address),
+                    "data": data,
+                }
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            errors.append(e)
+        finally:
+            _inflight_simulations.release()
+            finished.set()
+
+    try:
+        threading.Thread(target=_call, name="olas-mech-simulate", daemon=True).start()
+    except RuntimeError as e:
+        _inflight_simulations.release()
+        _logger.warning(f"Simulation not started: {e}; result inconclusive.")
+        return _simulation_result(ok=False, timed_out=True)
+    if not finished.wait(deadline_seconds):
+        _logger.warning(
+            f"Simulation did not return within {deadline_seconds}s; "
+            f"result inconclusive."
+        )
+        return _simulation_result(ok=False, timed_out=True)
+    if not errors:
+        return _simulation_result(ok=True)
+    if isinstance(errors[0], OSError):
+        _logger.warning(
+            f"Simulation failed at the RPC transport; result inconclusive: {errors[0]}"
+        )
+        return _simulation_result(ok=False, timed_out=True)
+    _logger.info(f"Simulation failed: {errors[0]}")
+    return _simulation_result(ok=False)
 
 
 PAYMENT_TYPE_NATIVE_NVM = (
@@ -289,6 +335,7 @@ class OlasMechContract(Contract):
         request_id: int,
         data: str,
         request_id_nonce: Optional[int],
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -299,6 +346,7 @@ class OlasMechContract(Contract):
         :param request_id: the id of the target request
         :param data: the response data
         :param request_id_nonce: request id with nonce, to ensure uniqueness on-chain.
+        :param deadline_seconds: wall-clock bound for the deliver simulation.
         :return: the deliver data
         """
         ledger_api = cast(EthereumApi, ledger_api)
@@ -337,10 +385,10 @@ class OlasMechContract(Contract):
                 abi_element_identifier="deliver", args=[request_id, bytes.fromhex(data)]
             )
 
-        simulation_ok = cls.simulate_tx(
-            ledger_api, contract_address, sender_address, data
-        ).pop("data")
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, data, deadline_seconds
+        )
+        return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_request_events(
@@ -519,45 +567,16 @@ class OlasMechContract(Contract):
         :param contract_address: the mech contract address.
         :param sender_address: the address the simulated call is sent from.
         :param data: the calldata to simulate, hex-encoded.
-        :param deadline_seconds: upper bound in seconds for the simulation
-            ``eth_call``. A call that does not return within the deadline is
-            treated as a failed simulation, so the caller skips that delivery
-            for the current period rather than blocking the round.
-        :return: ``{"data": <simulation_ok>}``.
+        :param deadline_seconds: wall-clock upper bound for the call, in seconds.
+        :return: ``{"data": <simulation_ok>, "simulation_timed_out": <bool>}``.
         """
-
-        def _call() -> None:
-            ledger_api.api.eth.call(
-                {
-                    "from": ledger_api.api.to_checksum_address(sender_address),
-                    "to": ledger_api.api.to_checksum_address(contract_address),
-                    "data": data,
-                }
-            )
-
-        future = _get_simulation_executor().submit(_call)
-        try:
-            future.result(timeout=deadline_seconds)
-            simulation_ok = True
-        except concurrent.futures.TimeoutError:
-            # ``TimeoutError`` aliases ``concurrent.futures.TimeoutError`` in
-            # Python 3.11+, so this branch also fires when the call returned
-            # and raised its own timeout. ``future.done()`` tells the two
-            # apart; both resolve to a failed simulation, the distinction is
-            # only for the log line.
-            if future.done():
-                _logger.info("Simulation failed: call timed out at the RPC layer.")
-            else:
-                _logger.info(
-                    f"Simulation did not return within {deadline_seconds}s; "
-                    f"treating as a failed simulation."
-                )
-            simulation_ok = False
-        except Exception as e:  # pylint: disable=broad-except
-            _logger.info(f"Simulation failed: {str(e)}")
-            simulation_ok = False
-
-        return dict(data=simulation_ok)
+        result = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, data, deadline_seconds
+        )
+        return {
+            "data": result[SIMULATION_OK_KEY],
+            SIMULATION_TIMED_OUT_KEY: result[SIMULATION_TIMED_OUT_KEY],
+        }
 
     @classmethod
     def get_deliver_to_market_tx(
@@ -569,6 +588,7 @@ class OlasMechContract(Contract):
         data: str,
         mech_staking_instance: str,
         mech_service_id: int,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -586,10 +606,10 @@ class OlasMechContract(Contract):
                 mech_service_id,
             ],
         )
-        simulation_ok = cls.simulate_tx(
-            ledger_api, contract_address, sender_address, tx_data
-        ).pop("data")
-        return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, tx_data, deadline_seconds
+        )
+        return {"data": bytes.fromhex(tx_data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_offchain_deliver_data(
@@ -601,6 +621,7 @@ class OlasMechContract(Contract):
         deliverWithSignatures: List[Dict[str, List]],
         deliveryRates: List[int],
         paymentData: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get offchain deliver tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -615,10 +636,10 @@ class OlasMechContract(Contract):
             ],
         )
 
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
-            "data"
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender, data, deadline_seconds
         )
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
@@ -779,6 +800,7 @@ class OlasMechContract(Contract):
         sender: str,
         requestIds: List,
         datas: List,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -791,10 +813,10 @@ class OlasMechContract(Contract):
             ],
         )
 
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
-            "data"
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender, data, deadline_seconds
         )
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_delivery_rate(

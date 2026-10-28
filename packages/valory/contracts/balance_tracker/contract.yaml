@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigim3df7lcxmr4gjugo73fyrwfkkpll7jykgjp7nij6ugbkc7igyy
   build/BalanceTracker.json: bafybeig2ywevvapgqoprxnnkid3atvq6qg7aqfhyd2uvqokdnydcfp2is4
-  contract.py: bafybeiffqbk4qv7k6uonxwwznfedx6jo63lcyqyp5qgbcbv2zvos24yz7u
+  contract.py: bafybeihewhi4q5ojq62hz3faowws3erlvlox6iiikvxusxyttahb2hmjo4
   tests/__init__.py: bafybeicrl6tanguy6dyh7lu7lptym5nclaqyhf3j3i32ykfsz7vvrz2snm
-  tests/test_contract.py: bafybeihjlnu6iazwxnd4ojapr3t5ygztaeqjmuk4lyacgi4gzkqg3oly2y
+  tests/test_contract.py: bafybeietu6wht2qpp3x6pd7z7hc24evpek2rkb22xxllpudjquywa53bym
 fingerprint_ignore_patterns: []
 class_name: BalanceTrackerContract
 contract_interface_paths:
@@ -18,4 +18,5 @@ contract_interface_paths:
 dependencies:
   open-aea-ledger-ethereum:
     version: ==2.2.10
-contracts: []
+contracts:
+- valory/olas_mech:0.1.0:bafybeibceheihpj5murziawzb7ghpukmi3nigxno7xiazquj3nysp5cdh4

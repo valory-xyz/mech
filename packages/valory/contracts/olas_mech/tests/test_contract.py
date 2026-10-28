@@ -21,12 +21,31 @@
 
 import threading
 import time
-from typing import Callable
+from types import SimpleNamespace
+from typing import Callable, Iterator, List
+from unittest.mock import patch
 
-from packages.valory.contracts.olas_mech.contract import OlasMechContract
+import pytest
+
+from packages.valory.contracts.olas_mech import contract as contract_module
+from packages.valory.contracts.olas_mech.contract import (
+    MAX_INFLIGHT_SIMULATIONS,
+    OlasMechContract,
+    SIMULATION_OK_KEY,
+    SIMULATION_TIMED_OUT_KEY,
+    simulate_with_deadline,
+)
 
 _SENDER = "0x3333333333333333333333333333333333333333"
 _MECH = "0x2222222222222222222222222222222222222222"
+_SHORT_DEADLINE = 0.2
+# Generous upper bound on how long a bounded call may take to return.
+_PROMPT_RETURN_SECONDS = 1.5
+_RELEASE_WAIT_SECONDS = 5.0
+
+_OK = {SIMULATION_OK_KEY: True, SIMULATION_TIMED_OUT_KEY: False}
+_FAILED = {SIMULATION_OK_KEY: False, SIMULATION_TIMED_OUT_KEY: False}
+_INCONCLUSIVE = {SIMULATION_OK_KEY: False, SIMULATION_TIMED_OUT_KEY: True}
 
 
 class _FakeEth:
@@ -35,9 +54,11 @@ class _FakeEth:
     def __init__(self, behaviour: Callable[[], object]) -> None:
         """Store the behaviour run on each ``call``."""
         self._behaviour = behaviour
+        self.calls = 0
 
     def call(self, _tx: dict) -> object:
         """Run the injected behaviour as the simulated ``eth_call``."""
+        self.calls += 1
         return self._behaviour()
 
 
@@ -55,54 +76,162 @@ class _FakeApi:
 
 
 class _FakeLedgerApi:
-    """Minimal ``EthereumApi`` stand-in for exercising ``simulate_tx`` directly."""
+    """Minimal ``EthereumApi`` stand-in for exercising simulations directly."""
 
     def __init__(self, behaviour: Callable[[], object]) -> None:
         """Wire up the fake ``api`` object."""
         self.api = _FakeApi(behaviour)
 
 
-class TestSimulateTxWallClockBound:
-    """`simulate_tx` reports the outcome and never blocks past its deadline."""
+class _Hang:
+    """``eth_call`` behaviour that blocks until the test releases it."""
 
-    def test_returns_true_when_call_succeeds(self) -> None:
-        """A returning ``eth_call`` yields ``simulation_ok=True``."""
-        ledger = _FakeLedgerApi(lambda: b"")
-        result = OlasMechContract.simulate_tx(ledger, _MECH, _SENDER, "0x")
-        assert result == {"data": True}
+    def __init__(self) -> None:
+        """Create the release and start signals."""
+        self.release = threading.Event()
+        self.started = threading.Event()
 
-    def test_returns_false_when_call_reverts(self) -> None:
-        """A reverting ``eth_call`` is flattened to ``simulation_ok=False``."""
+    def __call__(self) -> object:
+        """Block until released, then return an empty result."""
+        self.started.set()
+        self.release.wait(_RELEASE_WAIT_SECONDS)
+        return b""
 
-        def _revert() -> object:
-            raise ValueError("execution reverted: GS026")
 
-        ledger = _FakeLedgerApi(_revert)
-        result = OlasMechContract.simulate_tx(ledger, _MECH, _SENDER, "0x")
-        assert result == {"data": False}
+def _raising(error: Exception) -> Callable[[], object]:
+    """Return an ``eth_call`` behaviour that raises ``error``."""
 
-    def test_returns_false_without_waiting_for_a_hanging_call(self) -> None:
-        """A call that overruns the deadline returns False promptly.
+    def _raise() -> object:
+        raise error
 
-        This is the property that keeps a single unresponsive simulation from
-        consuming the whole preparation round: ``simulate_tx`` must return on
-        the deadline, not after the underlying call finally unblocks.
-        """
-        started = threading.Event()
+    return _raise
 
-        def _hang() -> object:
-            started.set()
-            # Blocks far longer than the deadline; the bound must return first.
-            time.sleep(3.0)
-            return b""
 
-        ledger = _FakeLedgerApi(_hang)
+def _simulate(ledger: _FakeLedgerApi, deadline: float = _SHORT_DEADLINE) -> dict:
+    return simulate_with_deadline(ledger, _MECH, _SENDER, "0x", deadline)  # type: ignore[arg-type]
+
+
+@pytest.fixture
+def hang() -> Iterator[_Hang]:
+    """Yield a hanging behaviour and free every simulation slot afterwards."""
+    behaviour = _Hang()
+    yield behaviour
+    behaviour.release.set()
+    acquired: List[bool] = [
+        contract_module._inflight_simulations.acquire(timeout=_RELEASE_WAIT_SECONDS)
+        for _ in range(MAX_INFLIGHT_SIMULATIONS)
+    ]
+    for got in acquired:
+        if got:
+            contract_module._inflight_simulations.release()
+    assert all(acquired), "a simulation thread did not exit after release"
+
+
+class TestSimulateWithDeadline:
+    """``simulate_with_deadline`` separates node answers from inconclusive outcomes."""
+
+    def test_returning_call_is_ok(self) -> None:
+        """A returning ``eth_call`` is a conclusive success."""
+        assert _simulate(_FakeLedgerApi(lambda: b"")) == _OK
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            ValueError("execution reverted: GS026"),
+            RuntimeError("unexpected node answer"),
+            KeyError("result"),
+        ],
+    )
+    def test_node_error_is_a_conclusive_failure(self, error: Exception) -> None:
+        """Errors that are not transport failures are charged like a revert."""
+        assert _simulate(_FakeLedgerApi(_raising(error))) == _FAILED
+
+    @pytest.mark.parametrize(
+        "error",
+        [
+            TimeoutError("read timed out"),
+            ConnectionResetError("connection reset by peer"),
+            OSError("network is unreachable"),
+        ],
+    )
+    def test_transport_error_is_inconclusive(self, error: Exception) -> None:
+        """A transport failure, including the call's own timeout, is inconclusive."""
+        assert _simulate(_FakeLedgerApi(_raising(error))) == _INCONCLUSIVE
+
+    def test_hanging_call_is_inconclusive_on_the_deadline(self, hang: _Hang) -> None:
+        """A call that overruns returns on the deadline, not when the call unblocks."""
         begin = time.monotonic()
-        result = OlasMechContract.simulate_tx(
-            ledger, _MECH, _SENDER, "0x", deadline_seconds=0.2
-        )
+        result = _simulate(_FakeLedgerApi(hang))
         elapsed = time.monotonic() - begin
 
-        assert result == {"data": False}
-        assert started.wait(1.0)  # the simulated call really started
-        assert elapsed < 1.5  # returned on the deadline, not after the 3s block
+        assert result == _INCONCLUSIVE
+        assert hang.started.is_set()
+        assert elapsed < _PROMPT_RETURN_SECONDS
+
+    def test_full_pool_is_inconclusive_without_calling(self, hang: _Hang) -> None:
+        """With every slot held by a hung call, a new call never starts."""
+        for _ in range(MAX_INFLIGHT_SIMULATIONS):
+            assert _simulate(_FakeLedgerApi(hang)) == _INCONCLUSIVE
+
+        fresh = _FakeLedgerApi(lambda: b"")
+        begin = time.monotonic()
+        result = _simulate(fresh, deadline=_RELEASE_WAIT_SECONDS)
+        elapsed = time.monotonic() - begin
+
+        assert result == _INCONCLUSIVE
+        assert fresh.api.eth.calls == 0
+        assert elapsed < _PROMPT_RETURN_SECONDS
+
+    def test_thread_start_failure_is_inconclusive_and_frees_the_slot(
+        self, hang: _Hang
+    ) -> None:
+        """A worker that cannot start leaves no slot held."""
+        with patch.object(
+            contract_module.threading.Thread,
+            "start",
+            side_effect=RuntimeError("can't start new thread"),
+        ):
+            for _ in range(MAX_INFLIGHT_SIMULATIONS + 1):
+                assert _simulate(_FakeLedgerApi(hang)) == _INCONCLUSIVE
+        assert not hang.started.is_set()
+        assert _simulate(_FakeLedgerApi(lambda: b"")) == _OK
+
+    def test_slot_is_reusable_after_a_hung_call_ends(self, hang: _Hang) -> None:
+        """A slot held by a hung call is returned once that call finishes."""
+        for _ in range(MAX_INFLIGHT_SIMULATIONS):
+            _simulate(_FakeLedgerApi(hang))
+        hang.release.set()
+
+        deadline = time.monotonic() + _RELEASE_WAIT_SECONDS
+        result = _INCONCLUSIVE
+        while result != _OK and time.monotonic() < deadline:
+            result = _simulate(_FakeLedgerApi(lambda: b""))
+        assert result == _OK
+
+
+class TestDeliverDataCarriesTheVerdict:
+    """The deliver-data callables return the simulation verdict with the calldata."""
+
+    def test_simulate_tx_keeps_its_data_key(self) -> None:
+        """``simulate_tx`` still reports ``simulation_ok`` under ``data``."""
+        ledger = _FakeLedgerApi(lambda: b"")
+        result = OlasMechContract.simulate_tx(ledger, _MECH, _SENDER, "0x")  # type: ignore[arg-type]
+        assert result == {"data": True, SIMULATION_TIMED_OUT_KEY: False}
+
+    def test_marketplace_deliver_data_honours_the_deadline(self, hang: _Hang) -> None:
+        """The deadline argument bounds the marketplace deliver simulation."""
+        instance = SimpleNamespace(encode_abi=lambda **_kwargs: "0xabcd")
+        begin = time.monotonic()
+        with patch.object(OlasMechContract, "get_instance", return_value=instance):
+            result = OlasMechContract.get_marketplace_deliver_data(
+                _FakeLedgerApi(hang),  # type: ignore[arg-type]
+                _MECH,
+                _SENDER,
+                requestIds=[],
+                datas=[],
+                deadline_seconds=_SHORT_DEADLINE,
+            )
+        elapsed = time.monotonic() - begin
+
+        assert result == {"data": b"\xab\xcd", **_INCONCLUSIVE}
+        assert elapsed < _PROMPT_RETURN_SECONDS

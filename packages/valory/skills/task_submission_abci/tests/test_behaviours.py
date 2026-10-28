@@ -32,6 +32,10 @@ from packages.valory.contracts.complementary_service_metadata.contract import (
     ComplementaryServiceMetadata,
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
+from packages.valory.contracts.olas_mech.contract import (
+    SIMULATION_RPC_DEADLINE_SECONDS,
+    SIMULATION_TIMED_OUT_KEY,
+)
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.task_execution.behaviours import (
     PREDICT_API_EVENTS,
@@ -61,7 +65,9 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     SETTLEMENT_OUTCOME_CONTRACT_ERROR,
     SETTLEMENT_OUTCOME_DROPPED,
     SETTLEMENT_OUTCOME_SETTLED,
+    SETTLEMENT_OUTCOME_SIM_DEFERRED,
     SETTLEMENT_OUTCOME_SIM_FAILED,
+    SIMULATION_ROUND_BUDGET_FRACTION,
     SOURCE_OFFCHAIN,
     SOURCE_ONCHAIN,
     TaskExecutionBaseBehaviour,
@@ -2970,6 +2976,293 @@ class TestGetMarketplaceTasksDeliverData:
         assert by_outcome[(SETTLEMENT_OUTCOME_SIM_FAILED, "0xBAD")] == 1
         assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xBAD")] == 0
         assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xGOOD")] == 1
+
+
+# ---------------------------------------------------------------------------
+# Inconclusive deliver simulations and the per-round simulation budget
+# ---------------------------------------------------------------------------
+
+_SIM_PERIOD = 4
+
+
+def _sim_body(data: bytes, ok: bool, timed_out: bool = False) -> Dict[str, Any]:
+    """Return a deliver-data contract body carrying a simulation verdict."""
+    return {"data": data, "simulation_ok": ok, SIMULATION_TIMED_OUT_KEY: timed_out}
+
+
+def _make_sim_b(
+    local_tasks: List[Dict[str, Any]], round_timeout_seconds: float = 30.0
+) -> "_DummyTransPrep":
+    """Return a tx-prep behaviour whose local and synced done tasks are ``local_tasks``."""
+    ctx = _make_full_ctx(
+        done_tasks=[dict(task) for task in local_tasks],
+        round_timeout_seconds=round_timeout_seconds,
+    )
+    b = _DummyTransPrep(name="b", skill_context=ctx)
+    mock_sd = MagicMock()
+    mock_sd.done_tasks = local_tasks
+    mock_sd.safe_contract_address = "0xSAFE"
+    mock_sd.period_count = _SIM_PERIOD
+    b._synchronized_data = mock_sd
+    return b
+
+
+def _counts(mock_count: MagicMock) -> Dict[Tuple[str, str], int]:
+    """Map ``(outcome, mech_address)`` to the amount ``count_settlement`` was called with."""
+    return {(c.args[0], c.args[2]): c.args[3] for c in mock_count.call_args_list}
+
+
+def _charged(b: Any) -> List[str]:
+    """Return the ids of local done tasks that carry a settlement attempt."""
+    return [
+        str(task["request_id"])
+        for task in b.context.shared_state[DONE_TASKS]
+        if SETTLEMENT_ATTEMPTS_KEY in task
+    ]
+
+
+class TestSimulationBudget:
+    """The deadline handed to each simulation shrinks with the round's budget."""
+
+    def test_deadline_is_the_per_call_bound_before_a_budget_starts(self) -> None:
+        """Without a started budget each simulation gets the full per-call bound."""
+        b = _make_sim_b([])
+        assert b.next_simulation_deadline() == SIMULATION_RPC_DEADLINE_SECONDS
+
+    def test_deadline_is_capped_by_the_per_call_bound(self) -> None:
+        """A large budget still bounds each call at the per-call deadline."""
+        b = _make_sim_b([], round_timeout_seconds=150.0)
+        b.start_simulation_budget()
+        assert b.next_simulation_deadline() == SIMULATION_RPC_DEADLINE_SECONDS
+
+    def test_deadline_is_capped_by_the_remaining_budget(self) -> None:
+        """A small round leaves less than the per-call bound for the next call."""
+        b = _make_sim_b([], round_timeout_seconds=4.0)
+        b.start_simulation_budget()
+        deadline = b.next_simulation_deadline()
+        assert deadline is not None
+        assert 0 < deadline <= 4.0 * SIMULATION_ROUND_BUDGET_FRACTION
+
+    @pytest.mark.parametrize("round_timeout_seconds", [0.0, -1.0])
+    def test_deadline_is_none_once_the_budget_is_spent(
+        self, round_timeout_seconds: float
+    ) -> None:
+        """No time left in the budget means the next simulation is not started."""
+        b = _make_sim_b([], round_timeout_seconds=round_timeout_seconds)
+        b.start_simulation_budget()
+        assert b.next_simulation_deadline() is None
+
+
+class TestInconclusiveSimulationDefers:
+    """An inconclusive simulation keeps the task for the next period, uncharged."""
+
+    @staticmethod
+    def _offchain_task(request_id: str, sender: str) -> Dict[str, Any]:
+        return {
+            "request_id": request_id,
+            IS_OFFCHAIN: True,
+            NONCE: 1,
+            SENDER: sender,
+            "ipfs_hash": "0x" + "ab" * 16,
+            "signature": "0x" + "cd" * 32,
+            "task_result": "de" * 16,
+            "delivery_rate": 100,
+        }
+
+    @staticmethod
+    def _marketplace_task(request_id: int, mech: str) -> Dict[str, Any]:
+        return {
+            MECH_ADDRESS: mech,
+            "request_id": request_id,
+            "requestId": request_id,
+            "task_result": "de" * 16,
+        }
+
+    def test_offchain_timeout_defers_only_that_group(self) -> None:
+        """A timed-out requester group is deferred; the other group is delivered."""
+        tasks = [
+            self._offchain_task("r-ok", "0xOK"),
+            self._offchain_task("r-slow", "0xSLOW"),
+        ]
+        b = _make_sim_b(tasks)
+        by_requester = {
+            "0xOK": _state_contract_msg(_sim_body(b"\x01", ok=True)),
+            "0xSLOW": _state_contract_msg(_sim_body(b"\x02", False, timed_out=True)),
+        }
+
+        def _respond(*_args: Any, **kwargs: Any) -> Any:
+            return _gen_returning(by_requester[kwargs["requester"]])()
+
+        with (
+            patch.object(b, "get_contract_api_response", side_effect=_respond),
+            patch.object(b, "count_settlement") as mock_count,
+        ):
+            tx_list, included = _run_gen(b._get_offchain_tasks_deliver_data())
+
+        assert [tx["data"] for tx in tx_list] == [b"\x01"]
+        assert included == ["r-ok"]
+        assert _charged(b) == []
+        counts = _counts(mock_count)
+        assert counts[(SETTLEMENT_OUTCOME_SIM_DEFERRED, "0xMECH")] == 1
+        assert counts.get((SETTLEMENT_OUTCOME_SIM_FAILED, "0xMECH"), 0) == 0
+
+    def test_offchain_revert_is_still_charged(self) -> None:
+        """A conclusive failure keeps charging an attempt, unlike a timeout."""
+        b = _make_sim_b([self._offchain_task("r-bad", "0xBAD")])
+        msg = _state_contract_msg(_sim_body(b"\x02", ok=False))
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(msg)
+        ):
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result == ([], [])
+        assert _charged(b) == ["r-bad"]
+
+    def test_marketplace_timeout_defers_only_that_mech(self) -> None:
+        """A timed-out mech group is deferred; the other mech is delivered."""
+        tasks = [
+            self._marketplace_task(1, "0xSLOW"),
+            self._marketplace_task(2, "0xOK"),
+        ]
+        b = _make_sim_b(tasks)
+        by_mech = {
+            "0xSLOW": _state_contract_msg(_sim_body(b"\x01", False, timed_out=True)),
+            "0xOK": _state_contract_msg(_sim_body(b"\x02", ok=True)),
+        }
+
+        def _respond(*_args: Any, **kwargs: Any) -> Any:
+            return _gen_returning(by_mech[kwargs["contract_address"]])()
+
+        with (
+            patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
+            patch.object(b, "get_contract_api_response", side_effect=_respond),
+            patch.object(b, "count_settlement") as mock_count,
+        ):
+            tx_list, included = _run_gen(b._get_marketplace_tasks_deliver_data(tasks))
+
+        assert [tx["to"] for tx in tx_list] == ["0xOK"]
+        assert included == ["2"]
+        assert _charged(b) == []
+        assert _counts(mock_count)[(SETTLEMENT_OUTCOME_SIM_DEFERRED, "0xSLOW")] == 1
+
+    def test_marketplace_simulation_gets_the_round_deadline(self) -> None:
+        """The deadline from the round budget reaches the deliver-data call."""
+        tasks = [self._marketplace_task(1, "0xOK")]
+        b = _make_sim_b(tasks, round_timeout_seconds=4.0)
+        b.start_simulation_budget()
+        msg = _state_contract_msg(_sim_body(b"\x01", ok=True))
+        with (
+            patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(msg)
+            ) as mock_call,
+        ):
+            _run_gen(b._get_marketplace_tasks_deliver_data(tasks))
+        deadline = mock_call.call_args.kwargs["deadline_seconds"]
+        assert 0 < deadline <= 4.0 * SIMULATION_ROUND_BUDGET_FRACTION
+
+    def test_spent_budget_defers_without_simulating(self) -> None:
+        """Once the budget is spent no deliver-data call is made and the group is deferred."""
+        b = _make_sim_b([self._offchain_task("r1", "0xSENDER")], 0.0)
+        b.start_simulation_budget()
+        with (
+            patch.object(b, "get_contract_api_response") as mock_call,
+            patch.object(b, "count_settlement") as mock_count,
+        ):
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result == ([], [])
+        mock_call.assert_not_called()
+        assert _charged(b) == []
+        assert _counts(mock_count)[(SETTLEMENT_OUTCOME_SIM_DEFERRED, "0xMECH")] == 1
+
+    def _legacy_payload(self, b: Any, deliver_tx: Any) -> Tuple[str, MagicMock]:
+        usage_tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
+        with (
+            patch.object(
+                b, "get_mech_update_hash_tx", side_effect=_gen_returning(None)
+            ),
+            patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
+            patch.object(
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
+            ),
+            patch.object(
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
+            ),
+            patch.object(
+                b, "_get_deliver_tx", side_effect=_gen_returning(deliver_tx)
+            ) as mock_deliver,
+            patch.object(
+                b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
+            ),
+            patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
+        ):
+            return _run_gen(b.get_payload_content()), mock_deliver
+
+    def test_legacy_timeout_is_excluded_and_uncharged(self) -> None:
+        """A timed-out legacy deliver is left out of the payload and not charged."""
+        b = _make_sim_b([{"is_marketplace_mech": False, "request_id": "r1"}])
+        deliver_tx = {"to": "0xMECH", "value": 0, "data": b"\x00"}
+        deliver_tx.update(_sim_body(b"\x00", False, timed_out=True))
+        result, _ = self._legacy_payload(b, deliver_tx)
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": [],
+        }
+        assert _charged(b) == []
+
+    def test_payload_round_starts_a_fresh_budget(self) -> None:
+        """``get_payload_content`` starts the budget, so a zero-length round simulates nothing."""
+        b = _make_sim_b([{"is_marketplace_mech": False, "request_id": "r1"}], 0.0)
+        deliver_tx = {"to": "0xMECH", "value": 0, "data": b"\x00"}
+        deliver_tx.update(_sim_body(b"\x00", ok=True))
+        result, mock_deliver = self._legacy_payload(b, deliver_tx)
+        mock_deliver.assert_not_called()
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": [],
+        }
+        assert _charged(b) == []
+
+    def test_split_profits_skipped_when_budget_is_spent(self) -> None:
+        """Profit splitting does not simulate once the round's budget is spent."""
+        b = _make_sim_b([], round_timeout_seconds=0.0)
+        b.start_simulation_budget()
+        mech_info = (b"\x00" * 32, "0xTRACK", 1000)
+        with (
+            patch.object(b, "_should_split_profits", side_effect=_gen_returning(True)),
+            patch.object(b, "_get_mech_info", side_effect=_gen_returning(mech_info)),
+            patch.object(b, "_calculate_mech_profits", side_effect=_gen_returning(900)),
+            patch.object(b, "_get_process_payment_tx") as mock_payment,
+        ):
+            result = _run_gen(b.get_split_profit_txs())
+        assert result is None
+        mock_payment.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("body", "expected"),
+        [
+            (_sim_body(b"\x01", False, timed_out=True), True),
+            (_sim_body(b"\x01", ok=True), False),
+            ({"data": b"\x01", "simulation_ok": True}, False),
+        ],
+    )
+    def test_deliver_tx_carries_the_timeout_verdict(
+        self, body: Dict[str, Any], expected: bool
+    ) -> None:
+        """The deliver tx reports the timeout flag, defaulting to conclusive when absent."""
+        b = _make_sim_b([])
+        task = {"mech_address": "0xMECH", "request_id": "r1", "task_result": b"\xaa"}
+        with patch.object(
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_state_contract_msg(body)),
+        ) as mock_call:
+            tx = _run_gen(b._get_deliver_marketplace_tx(task, 3.5))
+        assert tx[SIMULATION_TIMED_OUT_KEY] is expected
+        assert mock_call.call_args.kwargs["deadline_seconds"] == 3.5
 
 
 # ---------------------------------------------------------------------------
