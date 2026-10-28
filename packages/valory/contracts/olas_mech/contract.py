@@ -48,7 +48,8 @@ _logger = logging.getLogger(
 BlockIdentifier = Union[int, str]
 
 # eth.call has no wall-clock bound; provider retries multiply the per-request timeout.
-SIMULATION_RPC_DEADLINE_SECONDS = 10.0
+# Fits two 10s ledger-connection request attempts, so one retry can complete.
+SIMULATION_RPC_DEADLINE_SECONDS = 25.0
 # Simulations allowed in flight at once, abandoned ones included.
 MAX_INFLIGHT_SIMULATIONS = 4
 SIMULATION_OK_KEY = "simulation_ok"

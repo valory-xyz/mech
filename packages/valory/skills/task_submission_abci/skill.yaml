@@ -31,14 +31,14 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/balance_tracker:0.1.0:bafybeigywpbrv6rmzs4u4drz7dvwo33d656nuyv3yng4ilfuyd2aa6yi6q
+- valory/balance_tracker:0.1.0:bafybeibmuxixgvaxmtxd3757pio3toiyghe6shpnvpdsribfystqp3tirq
 - valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
 - valory/erc20:0.1.0:bafybeigafpclygxbid3tbtavpjtz4rxqi4j7uwqlhxbumdm6itzmat6m3m
 - valory/gnosis_safe:0.1.0:bafybeifv2ajl76hvtpdtcv2alkislkqr5t7jcyspd5cimmnkfhnyemeux4
 - valory/hash_checkpoint:0.1.0:bafybeickz4ack57gvznbaq74stt2tnyeng3l5bf7rlr5jdfnitku7mvrde
 - valory/mech_marketplace:0.1.0:bafybeidk67435jzze4pyrqjixspubbsb2rvpe7jobnhttxavi3s3upu7ne
 - valory/multisend:0.1.0:bafybeibyx4c6bpkragj5j2augv27til6xrdlnpgyrlttg5dsccxje4yis4
-- valory/olas_mech:0.1.0:bafybeibceheihpj5murziawzb7ghpukmi3nigxno7xiazquj3nysp5cdh4
+- valory/olas_mech:0.1.0:bafybeifwr4bhrqqlv6quxll5gmh6tdzfdgfejfjc2juipda6jw552mvtaq
 - valory/service_registry:0.1.0:bafybeicdonzmb3hfltzil27ylfu6tdiiftixbquosfyamzgpkilfoh5fkm
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
@@ -46,7 +46,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiedcsiiv4s3iu4uilbbys3yemzs2vvkblbwtumnrcwqbnalgiv5pi
-- valory/task_execution:0.1.0:bafybeicwtmu7dyb4byhfg2543oncqth4dr3rhrgmqef3fitbzfoqnqz5pu
+- valory/task_execution:0.1.0:bafybeidqsh6uoerhdjagabhuqazrnbzi7dk4qporrmcl523snp3prldcvq
 - valory/transaction_settlement_abci:0.1.0:bafybeidkkgo6tmpybsmzun3tnxrfzdkjvtvaxgqhx52yw3657tn25ybkri
 behaviours:
   main:

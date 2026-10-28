@@ -8,9 +8,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihlplpj6vl7iovtja5zzrhz6gm2ixtvvhmxgbnvpola3kkj2ma7uq
   build/AgentMech.json: bafybeigtikt7m5nyhlsxscgfciejkfvot56a7gbwe2og6dziwzvgkvo7hq
-  contract.py: bafybeiawrri22li2mnfy42y56ahk7zegoav4ohcym47ck6srgfqppc4ssi
+  contract.py: bafybeic2wljdkagbnyptou6s6pspunjpbtfejxm56fjnoxxosscyc7slqy
   tests/__init__.py: bafybeigs2gce4kkhgh4tf5e7mls2gcjq6j343d6usa3les75euruwvonre
-  tests/test_contract.py: bafybeigctcy2wlqj2c3dn4icpcqcmjvv2k72gqropszfmrilvgfdc33jim
+  tests/test_contract.py: bafybeihltzh6wqtqw246ery32mdsrwj4re47qxfevrhrtyyj6qooefrlie
 fingerprint_ignore_patterns: []
 class_name: OlasMechContract
 contract_interface_paths:

@@ -21,17 +21,20 @@
 
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Iterator, List
 from unittest.mock import patch
 
 import pytest
+import yaml
 
 from packages.valory.contracts.olas_mech import contract as contract_module
 from packages.valory.contracts.olas_mech.contract import (
     MAX_INFLIGHT_SIMULATIONS,
     OlasMechContract,
     SIMULATION_OK_KEY,
+    SIMULATION_RPC_DEADLINE_SECONDS,
     SIMULATION_TIMED_OUT_KEY,
     simulate_with_deadline,
 )
@@ -42,6 +45,9 @@ _SHORT_DEADLINE = 0.2
 # Generous upper bound on how long a bounded call may take to return.
 _PROMPT_RETURN_SECONDS = 1.5
 _RELEASE_WAIT_SECONDS = 5.0
+_LEDGER_CONNECTION_YAML = (
+    Path(__file__).parents[3] / "connections" / "ledger" / "connection.yaml"
+)
 
 _OK = {SIMULATION_OK_KEY: True, SIMULATION_TIMED_OUT_KEY: False}
 _FAILED = {SIMULATION_OK_KEY: False, SIMULATION_TIMED_OUT_KEY: False}
@@ -207,6 +213,21 @@ class TestSimulateWithDeadline:
         while result != _OK and time.monotonic() < deadline:
             result = _simulate(_FakeLedgerApi(lambda: b""))
         assert result == _OK
+
+
+def test_default_deadline_fits_a_retried_ledger_request() -> None:
+    """The default deadline outlasts two request attempts of the ledger connection.
+
+    A shorter deadline fires together with the first attempt's timeout, so a
+    request that stalls once is reported inconclusive before its retry runs.
+    """
+    with open(_LEDGER_CONNECTION_YAML, encoding="utf-8") as f:
+        config = yaml.safe_load(f)["config"]
+    request_timeouts = [
+        api["timeout"] for api in config["ledger_apis"].values() if "timeout" in api
+    ]
+    assert request_timeouts
+    assert SIMULATION_RPC_DEADLINE_SECONDS > 2 * max(request_timeouts)
 
 
 class TestDeliverDataCarriesTheVerdict:

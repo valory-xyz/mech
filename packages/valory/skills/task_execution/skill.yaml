@@ -45,9 +45,9 @@ connections:
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 contracts:
-- valory/balance_tracker:0.1.0:bafybeigywpbrv6rmzs4u4drz7dvwo33d656nuyv3yng4ilfuyd2aa6yi6q
+- valory/balance_tracker:0.1.0:bafybeibmuxixgvaxmtxd3757pio3toiyghe6shpnvpdsribfystqp3tirq
 - valory/mech_marketplace:0.1.0:bafybeidk67435jzze4pyrqjixspubbsb2rvpe7jobnhttxavi3s3upu7ne
-- valory/olas_mech:0.1.0:bafybeibceheihpj5murziawzb7ghpukmi3nigxno7xiazquj3nysp5cdh4
+- valory/olas_mech:0.1.0:bafybeifwr4bhrqqlv6quxll5gmh6tdzfdgfejfjc2juipda6jw552mvtaq
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
