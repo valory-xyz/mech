@@ -20,14 +20,17 @@
 """This module contains the dynamic_contribution contract definition."""
 
 import logging
+import re
+import threading
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Union, cast
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
+from web3.exceptions import ContractLogicError
 
 from packages.valory.contracts.mech_marketplace.contract import (
     DELIVERY_RATE_INDEX,
@@ -45,6 +48,138 @@ _logger = logging.getLogger(
 # dicts; a dedicated local alias keeps the public signatures readable without
 # reintroducing the web3.types import.
 BlockIdentifier = Union[int, str]
+
+# eth.call has no wall-clock bound; provider retries multiply the per-request timeout.
+# Fits two 10s ledger-connection request attempts, so one retry can complete.
+SIMULATION_RPC_DEADLINE_SECONDS = 25.0
+# Simulations allowed in flight at once, abandoned ones included.
+MAX_INFLIGHT_SIMULATIONS = 4
+SIMULATION_OK_KEY = "simulation_ok"
+SIMULATION_TIMED_OUT_KEY = "simulation_timed_out"
+
+_inflight_simulations = threading.BoundedSemaphore(MAX_INFLIGHT_SIMULATIONS)
+# (to, data) of each simulation still running; at most one per call at a time.
+_inflight_calls: Set[Tuple[str, str]] = set()
+_inflight_calls_lock = threading.Lock()
+_HEX_REVERT_DATA = re.compile(r"0x[0-9a-fA-F]*")
+_PREFIXED_REVERT_DATA = "Reverted "
+
+
+def _simulation_result(ok: bool, timed_out: bool = False) -> Dict[str, bool]:
+    """Build the simulation verdict carried in contract responses.
+
+    :param ok: whether the simulated call succeeded.
+    :param timed_out: whether the outcome is inconclusive (see ``simulate_with_deadline``).
+    :return: ``{SIMULATION_OK_KEY: ok, SIMULATION_TIMED_OUT_KEY: timed_out}``.
+    """
+    return {SIMULATION_OK_KEY: ok, SIMULATION_TIMED_OUT_KEY: timed_out}
+
+
+def _is_revert(error: Exception) -> bool:
+    """Return whether ``error`` is a revert reported by the node.
+
+    web3 also raises ``ContractLogicError`` for JSON-RPC errors whose ``data``
+    is a dict, ``null`` or plain text, so the class alone is not enough. A
+    revert carries hex or ``Reverted``-prefixed revert data, or non-dict data
+    with "revert" in the message.
+
+    :param error: the exception raised by ``eth_call``.
+    :return: ``True`` only for a revert.
+    """
+    if not isinstance(error, ContractLogicError):
+        return False
+    data = error.data
+    if isinstance(data, dict):
+        return False
+    if isinstance(data, str) and (
+        _HEX_REVERT_DATA.fullmatch(data) or data.startswith(_PREFIXED_REVERT_DATA)
+    ):
+        return True
+    return "revert" in str(error.message or "").lower()
+
+
+def simulate_with_deadline(
+    ledger_api: EthereumApi,
+    contract_address: str,
+    sender_address: str,
+    data: str,
+    deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
+) -> Dict[str, bool]:
+    """Simulate ``data`` with ``eth_call``, returning within ``deadline_seconds``.
+
+    Only success or a revert (see ``_is_revert``) is conclusive. Anything else
+    is inconclusive (``simulation_timed_out=True``, ``simulation_ok=False``):
+    the call overruns the deadline, raises any other error (transport failures,
+    JSON-RPC errors such as rate limits), or does not start because the same
+    call is still running or ``MAX_INFLIGHT_SIMULATIONS`` calls are.
+    Calls run on daemon threads, so an abandoned one never delays process exit.
+
+    :param ledger_api: the ledger api.
+    :param contract_address: the address the simulated call is sent to.
+    :param sender_address: the address the simulated call is sent from.
+    :param data: the calldata to simulate, hex-encoded.
+    :param deadline_seconds: wall-clock upper bound for the call, in seconds.
+    :return: the verdict built by ``_simulation_result``.
+    """
+    call_key = (contract_address.lower(), data)
+    with _inflight_calls_lock:
+        if call_key in _inflight_calls:
+            _logger.warning(
+                "Simulation not started: an earlier simulation of the same call "
+                "is still in flight; result inconclusive."
+            )
+            return _simulation_result(ok=False, timed_out=True)
+        if not _inflight_simulations.acquire(blocking=False):
+            _logger.warning(
+                f"Simulation not started: {MAX_INFLIGHT_SIMULATIONS} earlier "
+                f"simulations are still in flight; result inconclusive."
+            )
+            return _simulation_result(ok=False, timed_out=True)
+        _inflight_calls.add(call_key)
+
+    errors: List[Exception] = []
+    finished = threading.Event()
+
+    def _release() -> None:
+        with _inflight_calls_lock:
+            _inflight_calls.discard(call_key)
+            _inflight_simulations.release()
+
+    def _call() -> None:
+        try:
+            ledger_api.api.eth.call(
+                {
+                    "from": ledger_api.api.to_checksum_address(sender_address),
+                    "to": ledger_api.api.to_checksum_address(contract_address),
+                    "data": data,
+                }
+            )
+        except Exception as e:  # pylint: disable=broad-except
+            errors.append(e)
+        finally:
+            _release()
+            finished.set()
+
+    try:
+        threading.Thread(target=_call, name="olas-mech-simulate", daemon=True).start()
+    except RuntimeError as e:
+        _release()
+        _logger.warning(f"Simulation not started: {e}; result inconclusive.")
+        return _simulation_result(ok=False, timed_out=True)
+    if not finished.wait(deadline_seconds):
+        _logger.warning(
+            f"Simulation did not return within {deadline_seconds}s; "
+            f"result inconclusive."
+        )
+        return _simulation_result(ok=False, timed_out=True)
+    if not errors:
+        return _simulation_result(ok=True)
+    if _is_revert(errors[0]):
+        _logger.info(f"Simulation failed: {errors[0]}")
+        return _simulation_result(ok=False)
+    _logger.warning(f"Simulation did not complete; result inconclusive: {errors[0]!r}")
+    return _simulation_result(ok=False, timed_out=True)
+
 
 PAYMENT_TYPE_NATIVE_NVM = (
     "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
@@ -244,6 +379,7 @@ class OlasMechContract(Contract):
         request_id: int,
         data: str,
         request_id_nonce: Optional[int],
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -254,6 +390,7 @@ class OlasMechContract(Contract):
         :param request_id: the id of the target request
         :param data: the response data
         :param request_id_nonce: request id with nonce, to ensure uniqueness on-chain.
+        :param deadline_seconds: wall-clock bound for the deliver simulation.
         :return: the deliver data
         """
         ledger_api = cast(EthereumApi, ledger_api)
@@ -292,10 +429,10 @@ class OlasMechContract(Contract):
                 abi_element_identifier="deliver", args=[request_id, bytes.fromhex(data)]
             )
 
-        simulation_ok = cls.simulate_tx(
-            ledger_api, contract_address, sender_address, data
-        ).pop("data")
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, data, deadline_seconds
+        )
+        return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_request_events(
@@ -466,22 +603,24 @@ class OlasMechContract(Contract):
         contract_address: str,
         sender_address: str,
         data: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
-        """Simulate the transaction."""
-        try:
-            ledger_api.api.eth.call(
-                {
-                    "from": ledger_api.api.to_checksum_address(sender_address),
-                    "to": ledger_api.api.to_checksum_address(contract_address),
-                    "data": data,
-                }
-            )
-            simulation_ok = True
-        except Exception as e:
-            _logger.info(f"Simulation failed: {str(e)}")
-            simulation_ok = False
+        """Simulate the transaction under a wall-clock deadline.
 
-        return dict(data=simulation_ok)
+        :param ledger_api: the ledger api.
+        :param contract_address: the mech contract address.
+        :param sender_address: the address the simulated call is sent from.
+        :param data: the calldata to simulate, hex-encoded.
+        :param deadline_seconds: wall-clock upper bound for the call, in seconds.
+        :return: ``{"data": <simulation_ok>, "simulation_timed_out": <bool>}``.
+        """
+        result = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, data, deadline_seconds
+        )
+        return {
+            "data": result[SIMULATION_OK_KEY],
+            SIMULATION_TIMED_OUT_KEY: result[SIMULATION_TIMED_OUT_KEY],
+        }
 
     @classmethod
     def get_deliver_to_market_tx(
@@ -493,6 +632,7 @@ class OlasMechContract(Contract):
         data: str,
         mech_staking_instance: str,
         mech_service_id: int,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -510,10 +650,10 @@ class OlasMechContract(Contract):
                 mech_service_id,
             ],
         )
-        simulation_ok = cls.simulate_tx(
-            ledger_api, contract_address, sender_address, tx_data
-        ).pop("data")
-        return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, tx_data, deadline_seconds
+        )
+        return {"data": bytes.fromhex(tx_data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_offchain_deliver_data(
@@ -525,6 +665,7 @@ class OlasMechContract(Contract):
         deliverWithSignatures: List[Dict[str, List]],
         deliveryRates: List[int],
         paymentData: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get offchain deliver tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -539,10 +680,10 @@ class OlasMechContract(Contract):
             ],
         )
 
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
-            "data"
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender, data, deadline_seconds
         )
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
@@ -703,6 +844,7 @@ class OlasMechContract(Contract):
         sender: str,
         requestIds: List,
         datas: List,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -715,10 +857,10 @@ class OlasMechContract(Contract):
             ],
         )
 
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
-            "data"
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender, data, deadline_seconds
         )
-        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def get_delivery_rate(

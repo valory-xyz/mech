@@ -126,6 +126,7 @@ def _make_full_ctx(
         multisend_address="0xMULTI",
         mech_staking_instance_address="0xSTAKE",
         mech_max_delivery_rate=10,
+        round_timeout_seconds=30.0,
     )
     defaults.update(overrides)
     for attr, val in defaults.items():

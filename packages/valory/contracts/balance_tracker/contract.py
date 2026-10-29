@@ -27,6 +27,13 @@ from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
 
+from packages.valory.contracts.olas_mech.contract import (
+    SIMULATION_OK_KEY,
+    SIMULATION_RPC_DEADLINE_SECONDS,
+    SIMULATION_TIMED_OUT_KEY,
+    simulate_with_deadline,
+)
+
 PUBLIC_ID = PublicId.from_str("valory/balance_tracker:0.1.0")
 
 _logger = logging.getLogger(
@@ -98,22 +105,24 @@ class BalanceTrackerContract(Contract):
         contract_address: str,
         sender_address: str,
         data: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
-        """Simulate the transaction."""
-        try:
-            ledger_api.api.eth.call(
-                {
-                    "from": ledger_api.api.to_checksum_address(sender_address),
-                    "to": ledger_api.api.to_checksum_address(contract_address),
-                    "data": data,
-                }
-            )
-            simulation_ok = True
-        except Exception as e:
-            _logger.info(f"Simulation failed: {str(e)}")
-            simulation_ok = False
+        """Simulate the transaction under a wall-clock deadline.
 
-        return dict(data=simulation_ok)
+        :param ledger_api: the ledger api.
+        :param contract_address: the balance tracker address.
+        :param sender_address: the address the simulated call is sent from.
+        :param data: the calldata to simulate, hex-encoded.
+        :param deadline_seconds: wall-clock upper bound for the call, in seconds.
+        :return: ``{"data": <simulation_ok>, "simulation_timed_out": <bool>}``.
+        """
+        result = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, data, deadline_seconds
+        )
+        return {
+            "data": result[SIMULATION_OK_KEY],
+            SIMULATION_TIMED_OUT_KEY: result[SIMULATION_TIMED_OUT_KEY],
+        }
 
     @classmethod
     def get_process_payment_tx(
@@ -122,6 +131,7 @@ class BalanceTrackerContract(Contract):
         contract_address: str,
         sender_address: str,
         mech_address: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get tx data"""
 
@@ -130,10 +140,10 @@ class BalanceTrackerContract(Contract):
             abi_element_identifier="processPaymentByMultisig",
             args=[mech_address],
         )
-        simulation_ok = cls.simulate_tx(
-            ledger_api, contract_address, sender_address, tx_data
-        ).pop("data")
-        return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+        simulation = simulate_with_deadline(
+            ledger_api, contract_address, sender_address, tx_data, deadline_seconds
+        )
+        return {"data": bytes.fromhex(tx_data[2:]), **simulation}  # type: ignore
 
     @classmethod
     def build_deposit_for_data(

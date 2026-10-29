@@ -59,7 +59,12 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
-from packages.valory.contracts.olas_mech.contract import MechOperation, OlasMechContract
+from packages.valory.contracts.olas_mech.contract import (
+    MechOperation,
+    OlasMechContract,
+    SIMULATION_RPC_DEADLINE_SECONDS,
+    SIMULATION_TIMED_OUT_KEY,
+)
 from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -205,9 +210,12 @@ PREDICT_API_ROW_REJECTION_STATUSES = frozenset({400, 413, 422})
 
 # ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
 # instead of silently minting a new label value.
-SettlementOutcome = Literal["settled", "sim_failed", "dropped", "contract_error"]
+SettlementOutcome = Literal[
+    "settled", "sim_failed", "sim_deferred", "dropped", "contract_error"
+]
 SETTLEMENT_OUTCOME_SETTLED: SettlementOutcome = "settled"
 SETTLEMENT_OUTCOME_SIM_FAILED: SettlementOutcome = "sim_failed"
+SETTLEMENT_OUTCOME_SIM_DEFERRED: SettlementOutcome = "sim_deferred"
 SETTLEMENT_OUTCOME_DROPPED: SettlementOutcome = "dropped"
 SETTLEMENT_OUTCOME_CONTRACT_ERROR: SettlementOutcome = "contract_error"
 mech_settlement_total = Counter(
@@ -215,6 +223,9 @@ mech_settlement_total = Counter(
     "Per-task delivery settlement outcomes, counted once by the executing agent. "
     "outcome=settled: deliver landed in a confirmed Safe tx. "
     "sim_failed: deliver simulation failed this period, task kept for retry. "
+    "sim_deferred: deliver simulation inconclusive (RPC error or timeout, or the "
+    "round's simulation budget ran out), task kept for retry without charging an "
+    "attempt. "
     "dropped: skipped MAX_SETTLEMENT_ATTEMPTS periods, removed unpaid "
     "(one task per group per period, so the count includes collateral from "
     "a group-wide simulation failure). "
@@ -244,6 +255,10 @@ SETTLEMENT_ATTEMPT_PERIOD_KEY = "settlement_attempt_period"
 # poisoned by a single request recovers within ``len(group)`` periods at
 # the cost of up to that many good tasks.
 MAX_SETTLEMENT_ATTEMPTS = 3
+# Share of ``round_timeout_seconds`` that the deliver/payment simulations in one
+# tx-preparation round may take once one of them is inconclusive; the rest is
+# left for building the multisend and reaching consensus.
+SIMULATION_ROUND_BUDGET_FRACTION = 0.5
 # Shared-state key holding the tx hash whose settled tasks were last
 # counted, so a re-entered post-settlement round does not count twice.
 SETTLED_COUNTED_TX_KEY = "settled_counted_tx_hash"
@@ -304,6 +319,8 @@ class MarketplaceData(Enum):
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
+
+    _simulation_budget_ends_at: Optional[float] = None
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -542,6 +559,69 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         self.count_settlement(
             SETTLEMENT_OUTCOME_SIM_FAILED, source, mech_address, retried
         )
+
+    def defer_settlement(
+        self,
+        request_ids: List[str],
+        source: Source,
+        mech_address: str,
+        reason: str,
+    ) -> None:
+        """Keep ``request_ids`` for the next period without charging an attempt.
+
+        Used when the deliver simulation is inconclusive, so an RPC outage
+        never counts towards ``MAX_SETTLEMENT_ATTEMPTS``. Starts the round's
+        simulation budget if it is not running yet.
+
+        :param request_ids: ``str`` request ids in the deferred group.
+        :param source: ``SOURCE_OFFCHAIN`` or ``SOURCE_ONCHAIN``.
+        :param mech_address: the ``mech_address`` label value.
+        :param reason: why the simulation is inconclusive, for the log line.
+        """
+        self.context.logger.warning(
+            f"Deferring {source} deliver of request_ids={request_ids} to the "
+            f"next period: {reason}"
+        )
+        self.count_local_settlement(
+            SETTLEMENT_OUTCOME_SIM_DEFERRED, source, mech_address, request_ids
+        )
+        self.start_simulation_budget()
+
+    @property
+    def simulation_budget_seconds(self) -> float:
+        """Wall-clock seconds a round's simulations get once one is inconclusive."""
+        return self.params.round_timeout_seconds * SIMULATION_ROUND_BUDGET_FRACTION
+
+    def reset_simulation_budget(self) -> None:
+        """Stop this round's simulation budget until a simulation is inconclusive."""
+        self._simulation_budget_ends_at = None
+
+    def start_simulation_budget(self) -> None:
+        """Start this round's simulation budget unless it is already running.
+
+        The budget starts at the first inconclusive simulation, not at round
+        start: until then every agent has seen the same verdicts, so agents
+        with different RPC latencies still stop at the same group.
+        """
+        if self._simulation_budget_ends_at is None:
+            self._simulation_budget_ends_at = (
+                time.monotonic() + self.simulation_budget_seconds
+            )
+
+    def next_simulation_deadline(self) -> Optional[float]:
+        """Return the deadline for the next simulation, ``None`` once the budget is spent.
+
+        :return: seconds the next simulation may take, at most
+            ``SIMULATION_RPC_DEADLINE_SECONDS`` and the whole budget; ``None``
+            when this round's budget is spent.
+        """
+        if self._simulation_budget_ends_at is None:
+            remaining = self.simulation_budget_seconds
+        else:
+            remaining = self._simulation_budget_ends_at - time.monotonic()
+        if remaining <= 0:
+            return None
+        return min(SIMULATION_RPC_DEADLINE_SECONDS, remaining)
 
 
 def _event_request_id(event: Dict[str, Any]) -> Optional[str]:
@@ -977,8 +1057,15 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 )
                 return None
 
+            deadline = self.next_simulation_deadline()
+            if deadline is None:
+                self.context.logger.warning(
+                    "Simulation budget for this round is spent. "
+                    "Skipping splitting profits."
+                )
+                return None
             process_payment_tx = yield from self._get_process_payment_tx(
-                mech_address, balance_tracker_address
+                mech_address, balance_tracker_address, deadline
             )
             if process_payment_tx is None:
                 self.context.logger.error(
@@ -988,6 +1075,8 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 return None
 
             simulation_ok = process_payment_tx.pop("simulation_ok", False)
+            if process_payment_tx.pop(SIMULATION_TIMED_OUT_KEY, False):
+                self.start_simulation_budget()
             if not simulation_ok:
                 # the simulation failed, log a warning and skip split profit
                 self.context.logger.warning(
@@ -1188,7 +1277,10 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         return balance_tracker_address
 
     def _get_process_payment_tx(
-        self, address: str, balance_tracker: str
+        self,
+        address: str,
+        balance_tracker: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get the transfer tx."""
         contract_api_msg = yield from self.get_contract_api_response(
@@ -1198,6 +1290,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_callable="get_process_payment_tx",
             sender_address=self.synchronized_data.safe_contract_address,
             mech_address=address,
+            deadline_seconds=deadline_seconds,
             chain_id=self.params.default_chain_id,
         )
         if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
@@ -1206,13 +1299,13 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             )
             return None
 
-        data = cast(bytes, contract_api_msg.state.body["data"])
-        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+        body = contract_api_msg.state.body
         return {
             "to": balance_tracker,
             "value": ZERO_ETHER_VALUE,
-            "data": data,
-            "simulation_ok": simulation_ok,
+            "data": cast(bytes, body["data"]),
+            "simulation_ok": cast(bool, body["simulation_ok"]),
+            SIMULATION_TIMED_OUT_KEY: bool(body.get(SIMULATION_TIMED_OUT_KEY, False)),
         }
 
     def _calculate_mech_profits(
@@ -1753,6 +1846,7 @@ class TransactionPreparationBehaviour(
         """
         all_txs = []
         included_request_ids: List[str] = []
+        self.reset_simulation_budget()
         update_hash_tx = yield from self.get_mech_update_hash_tx()
         if update_hash_tx is not None:
             # in case of None, the agent should not update the hash
@@ -1798,13 +1892,31 @@ class TransactionPreparationBehaviour(
             if not done_task.get(IS_MARKETPLACE_MECH_KEY)
         ]
         for task in remaining_tasks:
-            deliver_tx = yield from self._get_deliver_tx(task)
+            task_mech_label = str(task.get(MECH_ADDRESS) or self.metrics_mech_label())
+            deadline = self.next_simulation_deadline()
+            if deadline is None:
+                self.defer_settlement(
+                    extract_request_ids([task]),
+                    SOURCE_ONCHAIN,
+                    task_mech_label,
+                    "simulation budget for this round is spent",
+                )
+                continue
+            deliver_tx = yield from self._get_deliver_tx(task, deadline)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
                 # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
 
             simulation_ok = deliver_tx.pop("simulation_ok", False)
+            if deliver_tx.pop(SIMULATION_TIMED_OUT_KEY, False):
+                self.defer_settlement(
+                    extract_request_ids([task]),
+                    SOURCE_ONCHAIN,
+                    task_mech_label,
+                    "deliver simulation was inconclusive",
+                )
+                continue
             if not simulation_ok:
                 # the simulation failed, log a warning and skip this deliver
                 self.context.logger.warning(
@@ -1813,7 +1925,7 @@ class TransactionPreparationBehaviour(
                 self.note_settlement_skipped(
                     extract_request_ids([task]),
                     SOURCE_ONCHAIN,
-                    str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
+                    task_mech_label,
                     self.synchronized_data.period_count,
                 )
                 continue
@@ -1926,6 +2038,7 @@ class TransactionPreparationBehaviour(
     def _get_agent_mech_deliver_tx(
         self,
         task_data: Dict[str, Any],
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> Generator[None, None, Optional[Dict]]:
         """Get the deliver tx for the mech delivery."""
         contract_api_msg = yield from self.get_contract_api_response(
@@ -1937,6 +2050,7 @@ class TransactionPreparationBehaviour(
             request_id=task_data["request_id"],
             data=task_data["task_result"],
             request_id_nonce=task_data["request_id_nonce"],
+            deadline_seconds=deadline_seconds,
             chain_id=self.params.default_chain_id,
         )
         if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
@@ -1945,18 +2059,14 @@ class TransactionPreparationBehaviour(
             )
             return None
 
-        data = cast(bytes, contract_api_msg.state.body["data"])
-        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-        return {
-            "to": task_data["mech_address"],
-            "value": ZERO_ETHER_VALUE,
-            "data": data,
-            "simulation_ok": simulation_ok,
-        }
+        return self._deliver_tx_from_body(
+            task_data["mech_address"], contract_api_msg.state.body
+        )
 
     def _get_deliver_marketplace_tx(
         self,
         task_data: Dict[str, Any],
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> Generator[None, None, Optional[Dict]]:
         """Get the deliver tx for the marketplace delivery."""
         contract_api_msg = yield from self.get_contract_api_response(
@@ -1969,6 +2079,7 @@ class TransactionPreparationBehaviour(
             data=task_data["task_result"],
             mech_staking_instance=self.params.mech_staking_instance_address,
             mech_service_id=self.params.on_chain_service_id,
+            deadline_seconds=deadline_seconds,
             chain_id=self.params.default_chain_id,
         )
         if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
@@ -1977,18 +2088,30 @@ class TransactionPreparationBehaviour(
             )
             return None
 
-        data = cast(bytes, contract_api_msg.state.body["data"])
-        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+        return self._deliver_tx_from_body(
+            task_data["mech_address"], contract_api_msg.state.body
+        )
 
+    @staticmethod
+    def _deliver_tx_from_body(to: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        """Build a deliver tx dict from a deliver-data contract response body.
+
+        :param to: the mech the deliver targets.
+        :param body: the contract response body.
+        :return: the tx dict, carrying the simulation verdict.
+        """
         return {
-            "to": task_data["mech_address"],
+            "to": to,
             "value": ZERO_ETHER_VALUE,
-            "data": data,
-            "simulation_ok": simulation_ok,
+            "data": cast(bytes, body["data"]),
+            "simulation_ok": cast(bool, body["simulation_ok"]),
+            SIMULATION_TIMED_OUT_KEY: bool(body.get(SIMULATION_TIMED_OUT_KEY, False)),
         }
 
     def _get_deliver_tx(
-        self, task_data: Dict[str, Any]
+        self,
+        task_data: Dict[str, Any],
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> Generator[None, None, Optional[Dict]]:
         """Get the deliver tx."""
         is_marketplace_mech = task_data.get("is_marketplace_mech", False)
@@ -1997,9 +2120,9 @@ class TransactionPreparationBehaviour(
             self.context.logger.info(
                 f"Delivering reqId {request_id} to marketplace mech contract."
             )
-            return self._get_deliver_marketplace_tx(task_data)
+            return self._get_deliver_marketplace_tx(task_data, deadline_seconds)
 
-        return self._get_agent_mech_deliver_tx(task_data)
+        return self._get_agent_mech_deliver_tx(task_data, deadline_seconds)
 
     def _get_offchain_tasks_deliver_data(
         self,
@@ -2085,6 +2208,17 @@ class TransactionPreparationBehaviour(
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"
                 )
+                group_request_ids = details[REQUEST_IDS_KEY]
+                deadline = self.next_simulation_deadline()
+                if deadline is None:
+                    self.defer_settlement(
+                        group_request_ids,
+                        SOURCE_OFFCHAIN,
+                        mech_address,
+                        "simulation budget for this round is spent",
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    continue
 
                 contract_api_msg = yield from self.get_contract_api_response(
                     performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
@@ -2092,6 +2226,7 @@ class TransactionPreparationBehaviour(
                     contract_id=str(OlasMechContract.contract_id),
                     contract_callable="get_offchain_deliver_data",
                     **contract_data,
+                    deadline_seconds=deadline,
                     chain_id=self.params.default_chain_id,
                 )
                 if (
@@ -2119,7 +2254,15 @@ class TransactionPreparationBehaviour(
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-                group_request_ids = details[REQUEST_IDS_KEY]
+                if contract_api_msg.state.body.get(SIMULATION_TIMED_OUT_KEY, False):
+                    self.defer_settlement(
+                        group_request_ids,
+                        SOURCE_OFFCHAIN,
+                        mech_address,
+                        "deliver simulation was inconclusive",
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    continue
                 if not simulation_ok:
                     self.context.logger.info(
                         f"Simulation failed for offchain deliver of request_ids="
@@ -2277,6 +2420,17 @@ class TransactionPreparationBehaviour(
                 self.context.logger.info(
                     f"Preparing marketplace deliver with data: {contract_data}"
                 )
+                group_request_ids = details[REQUEST_IDS_KEY]
+                deadline = self.next_simulation_deadline()
+                if deadline is None:
+                    self.defer_settlement(
+                        group_request_ids,
+                        SOURCE_ONCHAIN,
+                        mech,
+                        "simulation budget for this round is spent",
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    continue
 
                 contract_api_msg = yield from self.get_contract_api_response(
                     performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
@@ -2284,6 +2438,7 @@ class TransactionPreparationBehaviour(
                     contract_id=str(OlasMechContract.contract_id),
                     contract_callable="get_marketplace_deliver_data",
                     **contract_data,
+                    deadline_seconds=deadline,
                     chain_id=self.params.default_chain_id,
                 )
                 if (
@@ -2311,7 +2466,15 @@ class TransactionPreparationBehaviour(
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-                group_request_ids = details[REQUEST_IDS_KEY]
+                if contract_api_msg.state.body.get(SIMULATION_TIMED_OUT_KEY, False):
+                    self.defer_settlement(
+                        group_request_ids,
+                        SOURCE_ONCHAIN,
+                        mech,
+                        "deliver simulation was inconclusive",
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    continue
                 if not simulation_ok:
                     self.context.logger.info(
                         f"Simulation failed for onchain deliver of request_ids="

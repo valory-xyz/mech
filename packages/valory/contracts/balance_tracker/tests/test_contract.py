@@ -21,11 +21,19 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Callable
 from unittest.mock import patch
 
+import pytest
 from web3 import Web3
+from web3.exceptions import ContractLogicError, Web3RPCError
 
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
+from packages.valory.contracts.olas_mech.contract import (
+    SIMULATION_OK_KEY,
+    SIMULATION_TIMED_OUT_KEY,
+)
 
 _ABI_PATH = Path(__file__).parent.parent / "build" / "BalanceTracker.json"
 _ACCOUNT = "0x1000000000000000000000000000000000000001"
@@ -81,3 +89,52 @@ class TestBuildDepositForData:
                 amount=_AMOUNT,
             )
         assert int.from_bytes(result["data"][-32:], "big") == _AMOUNT
+
+
+def _ledger(eth_call: Callable[[Any], object]) -> SimpleNamespace:
+    """Return an ``EthereumApi`` stand-in whose ``eth.call`` runs ``eth_call``."""
+    return SimpleNamespace(
+        api=SimpleNamespace(
+            eth=SimpleNamespace(call=eth_call),
+            to_checksum_address=lambda address: address,
+        )
+    )
+
+
+def _raise(error: Exception) -> Callable[[Any], object]:
+    """Return an ``eth.call`` stand-in that raises ``error``."""
+
+    def _call(_tx: Any) -> object:
+        raise error
+
+    return _call
+
+
+class TestGetProcessPaymentTx:
+    """`get_process_payment_tx` returns the calldata with a bounded simulation verdict."""
+
+    @pytest.mark.parametrize(
+        ("eth_call", "ok", "timed_out"),
+        [
+            (lambda _tx: b"", True, False),
+            (_raise(ContractLogicError("execution reverted")), False, False),
+            (_raise(TimeoutError("read timed out")), False, True),
+            (_raise(Web3RPCError("rate limit exceeded")), False, True),
+        ],
+    )
+    def test_reports_the_simulation_verdict(
+        self, eth_call: Callable[[Any], object], ok: bool, timed_out: bool
+    ) -> None:
+        """A revert is a conclusive failure; timeouts and RPC errors are inconclusive."""
+        with patch.object(
+            BalanceTrackerContract, "get_instance", return_value=_web3_contract()
+        ):
+            result = BalanceTrackerContract.get_process_payment_tx(
+                ledger_api=_ledger(eth_call),  # type: ignore[arg-type]
+                contract_address=_ACCOUNT,
+                sender_address=_ACCOUNT,
+                mech_address=_ACCOUNT,
+            )
+        assert result[SIMULATION_OK_KEY] is ok
+        assert result[SIMULATION_TIMED_OUT_KEY] is timed_out
+        assert isinstance(result["data"], bytes)
