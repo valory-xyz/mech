@@ -3188,7 +3188,10 @@ class TestInconclusiveSimulationDefers:
         assert _charged(b) == []
         assert _counts(mock_count)[(SETTLEMENT_OUTCOME_SIM_DEFERRED, "0xMECH")] == 1
 
-    def _legacy_payload(self, b: Any, deliver_tx: Any) -> Tuple[str, MagicMock]:
+    def _legacy_payload(
+        self, b: Any, deliver_tx: Any = None, deliver: Any = None
+    ) -> Tuple[str, MagicMock]:
+        """Build the payload with only legacy delivers, from ``deliver_tx`` or ``deliver``."""
         usage_tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
         with (
             patch.object(
@@ -3206,7 +3209,7 @@ class TestInconclusiveSimulationDefers:
                 side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_deliver_tx", side_effect=_gen_returning(deliver_tx)
+                b, "_get_deliver_tx", side_effect=deliver or _gen_returning(deliver_tx)
             ) as mock_deliver,
             patch.object(
                 b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
@@ -3226,6 +3229,28 @@ class TestInconclusiveSimulationDefers:
             "included_request_ids": [],
         }
         assert _charged(b) == []
+
+    def test_payload_round_does_not_start_the_budget_eagerly(self) -> None:
+        """Healthy simulations past the budget's length all reach the vote payload."""
+        request_ids = ["r1", "r2", "r3", "r4"]
+        tasks = [{"is_marketplace_mech": False, "request_id": r} for r in request_ids]
+        b = _make_sim_b(tasks, round_timeout_seconds=150.0)
+        seconds_per_call = 24.0
+        clock = [0.0]
+
+        def _deliver(_task: Any, deadline: float) -> Any:
+            clock[0] += min(seconds_per_call, deadline)
+            deliver_tx = {"to": "0xMECH", "value": 0, "data": b"\x00"}
+            ok = deadline >= seconds_per_call
+            deliver_tx.update(_sim_body(b"\x00", ok, timed_out=not ok))
+            return _gen_returning(deliver_tx)()
+
+        with patch.object(beh_mod.time, "monotonic", lambda: clock[0]):
+            result, _ = self._legacy_payload(b, deliver=_deliver)
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": request_ids,
+        }
 
     def test_payload_round_resets_a_spent_budget(self) -> None:
         """A budget spent in an earlier round does not carry into the next one."""
