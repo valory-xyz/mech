@@ -12,14 +12,14 @@ fingerprint:
   dialogues.py: bafybeigph4dbt75rpfjoxp5zzplb4m5izwblbpt6qssnrvvl2joj6o5cke
   fsm_specification.yaml: bafybeih2b72kr7avbrmduezvbjfpo32h6w3mcucy44ri2aox5m6q6iae6q
   handlers.py: bafybeiftm574egtu7dxb2rdzdvut3ljoa6bei5y4ocxnpvj4lesz7yfpfq
-  models.py: bafybeich27tqu6jc34yk4bnjcjklsyx6krdy2vkyaz7nlyozt5nuzb2qle
+  models.py: bafybeidz3uijrjd5336t5yfhuneukcky44g2knyc5xjp3xs66nbcakijpy
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
   tests/conftest.py: bafybeiaqouyzclh4wvnf36jgcmgzm7k4snfghnm3v4yowb4pomyn6qvezu
   tests/test_behaviours.py: bafybeibjw3tusfxxmr3byy6sdmu7gefotya4xvhd7ia43ll7fgyqggx7ye
   tests/test_composition.py: bafybeihrzdjr7w4dght6bhstcni4zswp4rzgzkgx5bpx4lcesh46h6noqm
   tests/test_dialogues.py: bafybeiaicu6h4d3rppxbjhkifwlrfpjmxd6y4sdqnlskdjqijkct2tvhci
   tests/test_handlers.py: bafybeigbbq6itamleikkqsinopod2ionm4qqdhqn7mxdfgh5iik5lrq42a
-  tests/test_models.py: bafybeig63a2u7juz5gqrqsvgljxiyteughoibc6nzm3iyfzoaomy4wy6fm
+  tests/test_models.py: bafybeidkvlcaewm5kdsoe6mho5xwa6wd5osfkbxtw4nyse7xxgox4klmye
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
@@ -28,11 +28,11 @@ protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiedcsiiv4s3iu4uilbbys3yemzs2vvkblbwtumnrcwqbnalgiv5pi
-- valory/delivery_rate_abci:0.1.0:bafybeierhqnubpz4kxml3lqsgif3yxjqpqjke3iwlsamdukifs66clxoqq
+- valory/delivery_rate_abci:0.1.0:bafybeiaww7ahj7xt4hyxm726qy2ep7jadf6uqiz7lqqzvky4pilhf4zrxm
 - valory/registration_abci:0.1.0:bafybeiczrxjc4dvw35q6ve2sdozqsmamqrlrhaxj5fcvajd3cmgfzx34hm
 - valory/reset_pause_abci:0.1.0:bafybeig2zorapaqx6ubr3e63ujztidafzhstitgqdjocvec77ytr6jggzy
-- valory/task_execution:0.1.0:bafybeiaz2bnnpxiggvyiuhzbi3ls4nhc4sh6njfq4v5iowgb4hwb2r66wq
-- valory/task_submission_abci:0.1.0:bafybeiazrhkmddlf5yeldrwsmshhqoa4vb3acs65pj2wtogdqrp2bkkyqi
+- valory/task_execution:0.1.0:bafybeiasqeskglfut37y2eoes4zli5oqdh6rzck63367yw7uhf2r3pzo5u
+- valory/task_submission_abci:0.1.0:bafybeidbwth2i7gbxnpugxeaq6iyhuc4tkqkk7ljrt4wtja2cq7x2qavne
 - valory/termination_abci:0.1.0:bafybeifs63hjdekvstdanmiwyo3qzyn5qegkvmjemm4poago7x6lcly7ni
 - valory/transaction_settlement_abci:0.1.0:bafybeidkkgo6tmpybsmzun3tnxrfzdkjvtvaxgqhx52yw3657tn25ybkri
 behaviours:
@@ -87,7 +87,6 @@ models:
   params:
     args:
       agent_funding_amount: 200000000000000000
-      api_keys: {}
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'

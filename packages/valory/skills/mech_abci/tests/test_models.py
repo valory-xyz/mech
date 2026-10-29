@@ -18,10 +18,12 @@
 # ------------------------------------------------------------------------------
 """Tests for mech_abci.models."""
 
-from typing import Any
-from unittest.mock import patch
+from pathlib import Path
+from typing import Any, Tuple
+from unittest.mock import MagicMock, patch
 
 import pytest
+import yaml
 
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.mech_abci.models import (
@@ -176,3 +178,80 @@ class TestParamsErc8004Settings:
         """A misconfigured agent id stops the agent instead of serving a wrong proof."""
         with pytest.raises(ValueError, match="erc8004_agent_id"):
             self._make_params(erc8004_agent_id=-5, mech_events_chain_id=SAMPLE_CHAIN_ID)
+
+
+SKILL_YAML = Path(__file__).parents[1] / "skill.yaml"
+SAMPLE_MECH = "0x0000000000000000000000000000000000000001"
+SAMPLE_MAX_DELIVERY_RATE = 42
+SAMPLE_GAS_LIMIT = 123456
+SAMPLE_MULTISEND = "0x0000000000000000000000000000000000000002"
+
+# Keys in this skill's config that no Params in the MRO pops: the ones nothing
+# reads, plus ``default_chain_id``, which abstract_round_abci's BaseParams reads
+# without popping.
+UNREAD_SKILL_CONFIG_KEYS = frozenset(
+    {
+        "default_chain_id",
+        "ipfs_fetch_timeout",
+        "polling_interval",
+        "reset_period_count",
+        "tools_to_package_hash",
+        "tools_to_pricing",
+        "use_polling",
+    }
+)
+
+
+def _make_skill_params() -> Tuple[Params, MagicMock]:
+    """Build the real Params from this skill's config, with one mech configured.
+
+    :return: the params and the skill context's logger spy.
+    """
+    args = yaml.safe_load(SKILL_YAML.read_text())["models"]["params"]["args"]
+    args.update(
+        mech_to_config={
+            SAMPLE_MECH: {"use_dynamic_pricing": False, "is_marketplace_mech": True}
+        },
+        mech_to_max_delivery_rate={SAMPLE_MECH: SAMPLE_MAX_DELIVERY_RATE},
+        manual_gas_limit=SAMPLE_GAS_LIMIT,
+        multisend_address=SAMPLE_MULTISEND,
+        erc8004_agent_id=SAMPLE_AGENT_ID,
+        mech_events_chain_id=SAMPLE_CHAIN_ID,
+    )
+    skill_context = MagicMock()
+    skill_context.skill_id = "valory/mech_abci:0.1.0"
+    params = Params(name="params", skill_context=skill_context, **args)
+    return params, skill_context.logger
+
+
+class TestParamsConsumeConfig:
+    """The composed Params takes its keys out of kwargs before ``Model`` sees them."""
+
+    def test_params_consume_their_config_keys(self) -> None:
+        """Only keys that no class in the MRO pops reach the base ``Model``.
+
+        Without an explicit configuration the framework builds
+        ``params.config`` from exactly the kwargs that reach ``Model``.
+        """
+        params, _ = _make_skill_params()
+        assert set(params.config) == UNREAD_SKILL_CONFIG_KEYS
+
+    def test_unread_kwargs_warning_omits_api_keys(self) -> None:
+        """``api_keys`` belongs to task_execution, so this skill neither reads nor reports it."""
+        _, logger = _make_skill_params()
+        messages = [str(call.args[0]) for call in logger.warning.call_args_list]
+        assert messages, "expected the framework to report the unread keys"
+        assert all("api_keys" not in message for message in messages)
+
+    def test_keys_shared_across_the_mro_reach_every_reader(self) -> None:
+        """A key read by several parent Params keeps its value in each of them."""
+        params, _ = _make_skill_params()
+        assert params.mech_max_delivery_rate == SAMPLE_MAX_DELIVERY_RATE
+        assert params.mech_to_max_delivery_rate == {
+            SAMPLE_MECH: SAMPLE_MAX_DELIVERY_RATE
+        }
+        assert params.manual_gas_limit == SAMPLE_GAS_LIMIT
+        assert params.multisend_address == SAMPLE_MULTISEND
+        assert params.erc8004_agent_id == SAMPLE_AGENT_ID
+        assert params.mech_events_chain_id == SAMPLE_CHAIN_ID
+        assert params.agent_mech_contract_address == SAMPLE_MECH

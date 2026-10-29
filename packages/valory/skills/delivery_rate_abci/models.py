@@ -61,10 +61,10 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure_get(
+        self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure(
             "mech_to_max_delivery_rate", kwargs, Dict[str, int]
         )
-        self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
+        self.manual_gas_limit = self._ensure("manual_gas_limit", kwargs, int)
         self.multisend_address = self._ensure_get("multisend_address", kwargs, str)
         super().__init__(*args, **kwargs)
 
