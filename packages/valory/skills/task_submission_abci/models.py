@@ -100,7 +100,7 @@ class Params(BaseParams):
         # We are using 10_000 for 100% so 1000 == 0.1 for the service_owner_share
         self.service_owner_share = self._ensure("service_owner_share", kwargs, int)
         self.profit_split_balance = self._ensure("profit_split_balance", kwargs, int)
-        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure_get(
+        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure(
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
         self.mech_to_config: Dict[str, MechConfig] = {
@@ -154,13 +154,13 @@ class Params(BaseParams):
         # alertable rather than silent. False by default so an
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
-        self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
+        self.use_offchain: bool = bool(kwargs.pop("use_offchain", False))
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No
         # API key here — the EOA signature is the credential.
         self.predict_api_events_url: str = str(
-            kwargs.get("predict_api_events_url", "") or ""
+            kwargs.pop("predict_api_events_url", "") or ""
         )
         # Explicit short timeout on the predict-api POST. The framework's
         # default ``request_timeout`` would let a slow or hung endpoint
@@ -170,14 +170,14 @@ class Params(BaseParams):
         # healthy endpoint and surfaces a stuck endpoint as a dropped
         # batch on the next FSM cycle.
         self.predict_api_events_timeout_seconds: float = float(
-            kwargs.get("predict_api_events_timeout_seconds", 5.0) or 5.0
+            kwargs.pop("predict_api_events_timeout_seconds", 5.0) or 5.0
         )
         # Upper bound on the drainer's replay batch (rows settled before a
         # restart and never posted). Chunks a long predict-api outage into
         # one bounded POST per settled round instead of one ever-growing
         # request that the server would eventually refuse.
         self.predict_api_replay_batch_size: int = int(
-            kwargs.get("predict_api_replay_batch_size", 50) or 50
+            kwargs.pop("predict_api_replay_batch_size", 50) or 50
         )
         # On-chain undelivered-request sweep. The PostTxSettlement
         # behaviour walks ``shared_state[PENDING_TASKS]`` for tasks
@@ -190,7 +190,7 @@ class Params(BaseParams):
         # validated against a live deployment. See
         # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.2.
         self.mech_events_sweep_pending_enabled: bool = bool(
-            kwargs.get("mech_events_sweep_pending_enabled", False)
+            kwargs.pop("mech_events_sweep_pending_enabled", False)
         )
         # Max age in seconds before a pending task is treated as
         # undelivered. The contract's ``RequestInfo.responseTimeout`` is
@@ -200,7 +200,7 @@ class Params(BaseParams):
         # conservative upper bound covering typical mech timeouts; tune
         # per deployment if responseTimeout values differ.
         self.mech_events_sweep_max_age_seconds: float = float(
-            kwargs.get("mech_events_sweep_max_age_seconds", 3600.0) or 3600.0
+            kwargs.pop("mech_events_sweep_max_age_seconds", 3600.0) or 3600.0
         )
         # Chain id used to build request-only sweep events and to derive
         # the EIP-712 domain when a pure-sweep round emits no delivered
@@ -212,7 +212,7 @@ class Params(BaseParams):
         # whole batch (including any delivered events on a mixed round)
         # is silently dropped after the queue has already been mutated.
         # Same semantics and default as task_execution.
-        self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
+        self.mech_events_chain_id: int = int(kwargs.pop("mech_events_chain_id", 0) or 0)
         super().__init__(*args, **kwargs)
 
     @classmethod

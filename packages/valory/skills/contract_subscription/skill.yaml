@@ -11,9 +11,10 @@ fingerprint:
   behaviours.py: bafybeidul5bhhn63k4gu4ipbnucdziszfjkvakwi4tz5ydvcbou37rek7m
   dialogues.py: bafybeibqpn4xfrhjhh5nlhhks3rced3cfca6wvlzimsa37gfsa5kjzfsme
   handlers.py: bafybeifgqwue6eac7jnia7dxcxxnwhynpgbhtc3nkj55or7tas3zwadaju
-  models.py: bafybeibrvcmamdis6n57ivrtl7l45544bhrl6nz26iiz7ehq2idwmrd4v4
+  models.py: bafybeigv2e6lpxzgomayv2ne6y4pllvyd5pb7q2ymfjlx2swt4tqsyi3ei
   tests/__init__.py: bafybeiarpab6pcd7rkrhf6cve4s6linw3kpie4j3q6kz22iot3ca5gssfm
   tests/test_handlers.py: bafybeic7p3jll6ywtg3iphbs2spx3vnwaxqorjufkejdwrtxoja4mjmk74
+  tests/test_models.py: bafybeieatmteeykdajwouyn64cghqnluk2luhumsfdmeaitbunodkqctku
 fingerprint_ignore_patterns: []
 connections:
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
@@ -21,7 +22,7 @@ contracts: []
 protocols:
 - valory/websocket_client:0.1.0:bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q
 skills:
-- valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
+- valory/websocket_client:0.1.0:bafybeie74xbhnwy7yuayhyqlv4vb5muzhzl5pxb6obeqhxdww3nnwoqzhe
 behaviours:
   contract_subscriptions:
     args: {}
