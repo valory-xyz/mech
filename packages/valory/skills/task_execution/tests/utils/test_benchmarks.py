@@ -146,6 +146,10 @@ class TestTokenCounterCallbackCall:
             "x-ai/grok-4.3:online",
             "google/gemini-2.5-flash:online",
             "anthropic/claude-haiku-4.5:online",
+            # native provider ids, for the slots the jury calls directly
+            "gpt-6.1-sol",
+            "gemini-2.5-flash",
+            "claude-sonnet-5-5",
         )
         missing = [m for m in jury_models if m not in TokenCounterCallback.TOKEN_PRICES]
         assert not missing, f"unpriced jury voter models: {missing}"
@@ -158,6 +162,7 @@ class TestTokenCounterCallbackCall:
             ("claude-sonnet-5-5", 0.002, 0.010),
             ("openai/gpt-6.1-sol:online", 0.002, 0.010),
             ("anthropic/claude-sonnet-5.5:online", 0.002, 0.010),
+            ("gemini-2.5-flash", 0.0003, 0.0025),
         ],
     )
     def test_current_models_are_priced(
