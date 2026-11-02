@@ -48,6 +48,7 @@ class TokenCounterCallback:
         "claude-fable-5": {"input": 0.01, "output": 0.05},
         "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
         "claude-sonnet-5-5": {"input": 0.002, "output": 0.010},
+        "gemini-2.5-flash": {"input": 0.0003, "output": 0.0025},
         "cohere/command-r-plus": {"input": 0.003, "output": 0.015},
         "databricks/dbrx-instruct:nitro": {"input": 0.0009, "output": 0.0009},
         "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
