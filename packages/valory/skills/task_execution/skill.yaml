@@ -20,7 +20,7 @@ fingerprint:
   tests/test_preimage_buffer.py: bafybeifazhvm45fujuccedti3qm2thrwt4fp5hcbk3zar2nw4jqnlxnfae
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
-  tests/utils/test_benchmarks.py: bafybeiahk72xzswc4gtdlfzm5kwb446nlc443w3ng2cyiot6d2ficlomoe
+  tests/utils/test_benchmarks.py: bafybeie4votz43b3wslqpnyk3ohouajvlvwbc4yedrj2pa6jfyj2iyem7a
   tests/utils/test_cost_calculation.py: bafybeiglkqnmurf6ner2wy2k6vy4zmfehfgzh2ctzn4ae2t3qhoaqs7he4
   tests/utils/test_eip1271.py: bafybeieat4o4umh6kgxg3qfxkj55xjrd4maz4bgyzh6f233pgyjetgxqiu
   tests/utils/test_ipfs.py: bafybeie6mkn7wbtd6yjwakwhm6qbqsfqrnhuxmxmnk3ysd63vko6amwfoa
