@@ -205,6 +205,7 @@ def params_stub() -> SimpleNamespace:
         preimage_max_write_attempts=5,
         preimage_max_list_attempts=5,
         max_block_window=10_000,
+        max_prompt_bytes=models.DEFAULT_MAX_PROMPT_BYTES,
         task_deadline=15.0,
         timeout_limit=2,
         request_id_to_num_timeouts=defaultdict(int),

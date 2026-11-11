@@ -27,6 +27,9 @@ from aea.exceptions import enforce
 from aea.skills.base import Model
 
 from packages.valory.skills.abstract_round_abci.utils import check_type
+from packages.valory.skills.task_execution.utils.local_cid import (
+    _MAX_BLOCK_BYTES as SINGLE_BLOCK_BYTES,
+)
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 BASIS_POINTS = 10_000
@@ -46,6 +49,9 @@ PRICING_FAILED_FLOOR = "failed_floor"
 PRICING_SIGNED_CAP = "signed_cap"
 PRICING_NVM_FLOOR = "nvm_floor"
 PRICING_ONCHAIN_MAX = "onchain_max"
+# ``max_prompt_bytes`` when the deployment sets none: the bound on the UTF-8
+# byte length of a request's ``prompt`` field.
+DEFAULT_MAX_PROMPT_BYTES = 100_000
 
 
 @dataclasses.dataclass
@@ -341,6 +347,19 @@ class Params(Model):
         enforce(
             self.payment_token_decimals >= USD_DECIMALS,
             f"payment_token_decimals must be >= {USD_DECIMALS}",
+        )
+        # Bound on the UTF-8 byte length of a request's ``prompt``; a longer
+        # prompt is not executed. Kept below the single-block bound because
+        # off-chain request metadata, which wraps the prompt, must fit one block.
+        raw_max_prompt = kwargs.get("max_prompt_bytes")
+        self.max_prompt_bytes: int = (
+            DEFAULT_MAX_PROMPT_BYTES if raw_max_prompt is None else raw_max_prompt
+        )
+        enforce(
+            isinstance(self.max_prompt_bytes, int)
+            and not isinstance(self.max_prompt_bytes, bool)
+            and 0 < self.max_prompt_bytes < SINGLE_BLOCK_BYTES,
+            f"max_prompt_bytes must be an integer in (0, {SINGLE_BLOCK_BYTES})",
         )
         raw_fixed = kwargs.get("fixed_cost_per_request")
         self.fixed_cost_per_request: int = 0 if raw_fixed is None else int(raw_fixed)

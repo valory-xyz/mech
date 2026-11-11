@@ -182,7 +182,9 @@ SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
-MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+# Cap on the ``prompt`` field of a predict-api event. Independent of the
+# ``max_prompt_bytes`` param, which bounds the prompt a request may carry.
+MAX_EVENT_PROMPT_BYTES = 100_000
 # Wire field selecting the settlement path. Explicit-nonce tasks never touch
 # the sequential accepted/settling nonce sets: their replay protection is the
 # marketplace's per-request-id record, not the shared counter.
@@ -1873,13 +1875,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         prompt_bytes = len(task_data["prompt"].encode("utf-8"))
-        if prompt_bytes > MAX_PROMPT_BYTES:
+        max_prompt_bytes = self.params.max_prompt_bytes
+        if prompt_bytes > max_prompt_bytes:
             self.context.logger.warning(
                 f"Prompt for request {req_id} is {prompt_bytes} bytes, "
-                f"exceeds cap of {MAX_PROMPT_BYTES}. Skipping request."
+                f"exceeds cap of {max_prompt_bytes}. Skipping request."
             )
             self._fail_as_client_fault(
-                f"prompt is {prompt_bytes} bytes, over the {MAX_PROMPT_BYTES} "
+                f"prompt is {prompt_bytes} bytes, over the {max_prompt_bytes} "
                 "byte limit"
             )
             return
@@ -2709,8 +2712,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         else:
             prompt = str(request_data.get("prompt") or "")
         prompt_bytes = prompt.encode("utf-8")
-        if len(prompt_bytes) > MAX_PROMPT_BYTES:
-            prompt = prompt_bytes[:MAX_PROMPT_BYTES].decode("utf-8", errors="ignore")
+        if len(prompt_bytes) > MAX_EVENT_PROMPT_BYTES:
+            prompt = prompt_bytes[:MAX_EVENT_PROMPT_BYTES].decode(
+                "utf-8", errors="ignore"
+            )
         invalid = (
             bool(self._invalid_request)
             or self._tool_error_reason is not None

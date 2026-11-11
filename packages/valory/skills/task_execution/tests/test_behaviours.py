@@ -32,6 +32,7 @@ import pytest
 from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+from packages.valory.skills.task_execution.models import DEFAULT_MAX_PROMPT_BYTES
 from packages.valory.skills.task_execution.utils.request_id import (
     to_request_id_bytes32,
 )
@@ -3630,7 +3631,7 @@ def test_handle_get_task_rejects_prompt_over_cap(
         _track_mech_lookup(mech_lookup_calls),
     )
 
-    huge_prompt = "A" * (beh_mod.MAX_PROMPT_BYTES + 1)
+    huge_prompt = "A" * (DEFAULT_MAX_PROMPT_BYTES + 1)
     payload = json.dumps({"prompt": huge_prompt, "tool": "sum"})
     msg = SimpleNamespace(files={"task.json": payload})
 
@@ -3688,6 +3689,125 @@ def test_handle_get_task_populates_in_memory_requests(
     cached = behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS].get("77")
     assert cached is not None, "in_memory_requests not populated for request 77"
     assert json.loads(cached) == task_data
+
+
+# ---------------------------------------------------------------------------
+# Configurable prompt length bound
+# ---------------------------------------------------------------------------
+
+PROMPT_BOUND_REQ_ID = 78
+RAISED_MAX_PROMPT_BYTES = 250_000
+ONE_BYTE_CHAR = "A"
+TWO_BYTE_CHAR = "\u00e9"
+HALF_DEFAULT_MAX_PROMPT = DEFAULT_MAX_PROMPT_BYTES // 2
+
+
+def _feed_prompt_to_get_task(
+    behaviour: Any, monkeypatch: Any, prompt: str, max_prompt_bytes: int
+) -> Optional[str]:
+    """Run ``_handle_get_task`` on a prompt under a configured bound.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param prompt: the prompt carried by the request metadata.
+    :param max_prompt_bytes: the configured ``max_prompt_bytes``.
+    :return: the request metadata cached for execution, None if it was skipped.
+    """
+    behaviour.params.max_prompt_bytes = max_prompt_bytes
+    behaviour._executing_task = {"requestId": PROMPT_BOUND_REQ_ID}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+    behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS] = {}
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    payload = json.dumps({"prompt": prompt, "tool": SAMPLE_TOOL})
+    behaviour._handle_get_task(
+        SimpleNamespace(files={"task.json": payload}), MagicMock()
+    )
+    return behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS].get(
+        str(PROMPT_BOUND_REQ_ID)
+    )
+
+
+@pytest.mark.parametrize(
+    "prompt, max_prompt_bytes",
+    [
+        ("", DEFAULT_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * DEFAULT_MAX_PROMPT_BYTES, DEFAULT_MAX_PROMPT_BYTES),
+        (TWO_BYTE_CHAR * HALF_DEFAULT_MAX_PROMPT, DEFAULT_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * (DEFAULT_MAX_PROMPT_BYTES + 1), RAISED_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * RAISED_MAX_PROMPT_BYTES, RAISED_MAX_PROMPT_BYTES),
+    ],
+    ids=[
+        "empty_default_bound",
+        "at_default_bound",
+        "multibyte_at_default_bound",
+        "over_default_under_raised_bound",
+        "at_raised_bound",
+    ],
+)
+def test_handle_get_task_keeps_prompt_within_configured_bound(
+    behaviour: Any, monkeypatch: Any, prompt: str, max_prompt_bytes: int
+) -> None:
+    """A prompt whose UTF-8 length is within ``max_prompt_bytes`` is kept."""
+    cached = _feed_prompt_to_get_task(behaviour, monkeypatch, prompt, max_prompt_bytes)
+
+    assert cached is not None
+    assert json.loads(cached)["prompt"] == prompt
+
+
+@pytest.mark.parametrize(
+    "prompt, max_prompt_bytes",
+    [
+        (ONE_BYTE_CHAR * (DEFAULT_MAX_PROMPT_BYTES + 1), DEFAULT_MAX_PROMPT_BYTES),
+        (TWO_BYTE_CHAR * (HALF_DEFAULT_MAX_PROMPT + 1), DEFAULT_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * (RAISED_MAX_PROMPT_BYTES + 1), RAISED_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * 2, 1),
+    ],
+    ids=[
+        "one_byte_over_default_bound",
+        "multibyte_over_default_bound_in_bytes_only",
+        "one_byte_over_raised_bound",
+        "over_lowered_bound",
+    ],
+)
+def test_handle_get_task_skips_prompt_over_configured_bound(
+    behaviour: Any, monkeypatch: Any, prompt: str, max_prompt_bytes: int
+) -> None:
+    """A prompt whose UTF-8 length exceeds ``max_prompt_bytes`` is skipped."""
+    cached = _feed_prompt_to_get_task(behaviour, monkeypatch, prompt, max_prompt_bytes)
+
+    prompt_bytes = len(prompt.encode("utf-8"))
+    assert cached is None
+    assert behaviour._invalid_request is True
+    assert behaviour._client_fault is not None
+    assert behaviour._client_fault[0] == (
+        f"prompt is {prompt_bytes} bytes, over the {max_prompt_bytes} byte limit"
+    )
+
+
+def test_build_predict_api_event_prompt_cap_is_independent_of_request_bound(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The event prompt stays within its own cap under a raised request bound."""
+    params_stub.max_prompt_bytes = RAISED_MAX_PROMPT_BYTES
+    prompt = ONE_BYTE_CHAR + TWO_BYTE_CHAR * HALF_DEFAULT_MAX_PROMPT
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, {"prompt": prompt, "tool": SAMPLE_TOOL}
+    )
+
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+
+    # The cap falls inside the last two-byte character, which is dropped whole.
+    assert event["request"]["prompt"] == prompt[:-1]
+    assert (
+        len(event["request"]["prompt"].encode("utf-8"))
+        == beh_mod.MAX_EVENT_PROMPT_BYTES - 1
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -5720,9 +5840,9 @@ MALFORMED_CAP = 100
             "'tool' fields",
         ),
         (
-            json.dumps({"prompt": "x" * (beh_mod.MAX_PROMPT_BYTES + 1), "tool": "t"}),
-            f"prompt is {beh_mod.MAX_PROMPT_BYTES + 1} bytes, over the "
-            f"{beh_mod.MAX_PROMPT_BYTES} byte limit",
+            json.dumps({"prompt": "x" * (DEFAULT_MAX_PROMPT_BYTES + 1), "tool": "t"}),
+            f"prompt is {DEFAULT_MAX_PROMPT_BYTES + 1} bytes, over the "
+            f"{DEFAULT_MAX_PROMPT_BYTES} byte limit",
         ),
         (
             "x" * (beh_mod.IPFS_MAX_TASK_BYTES + 1),
