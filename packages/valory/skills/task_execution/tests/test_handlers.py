@@ -23,7 +23,7 @@ import json
 import time
 import urllib.parse
 from types import SimpleNamespace
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Optional, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -33,6 +33,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
+from packages.valory.skills.task_execution import models
 from packages.valory.skills.task_execution.behaviours import release_signed_caps
 from packages.valory.skills.task_execution.handlers import (
     ContractHandler,
@@ -5000,6 +5001,201 @@ def test_signed_requests_rejects_oversize_ipfs_data_with_distinct_reason(
     ), f"oversize body must report a distinct reason; got {payload['reason']!r}"
     assert payload["reason"] != hmod.IPFS_HASH_BODY_MISMATCH
     assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# The decoded prompt is bounded by ``max_prompt_bytes`` at accept time
+# ---------------------------------------------------------------------------
+
+# The highest ``max_prompt_bytes`` the params accept (one under the block).
+HIGHEST_PROMPT_BOUND = hmod.MAX_IPFS_DATA_BYTES - 1
+
+
+def _prompt_metadata(prompt: str, ensure_ascii: bool = False) -> str:
+    """Serialise request metadata carrying ``prompt`` as the client would.
+
+    :param prompt: the decoded prompt.
+    :param ensure_ascii: passed to ``json.dumps``; True escapes non-ASCII.
+    :return: the ``ipfs_data`` JSON string.
+    """
+    return json.dumps(
+        {"prompt": prompt, "tool": "some-tool"}, ensure_ascii=ensure_ascii
+    )
+
+
+def _post_prompt(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    ipfs_data: str,
+    request_id: str,
+    ipfs_hash: Optional[str] = None,
+) -> "tuple[SimpleNamespace, MagicMock]":
+    """Post a signed request and return the reply and balance stub.
+
+    Only the signature, nonce and balance boundaries are stubbed; the CID
+    binding and the prompt bound run for real.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param ipfs_data: the request metadata JSON.
+    :param request_id: the wire request id.
+    :param ipfs_hash: the posted hash; defaults to the CID of ``ipfs_data``.
+    :return: the HTTP reply and the balance-check mock.
+    """
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
+    balance_check = MagicMock(wraps=mh._check_offchain_requester_balance)
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", balance_check)
+    body = _make_signed_request_body(
+        request_id=request_id,
+        ipfs_data=ipfs_data,
+        ipfs_hash=ipfs_hash or _ipfs_hash_for(ipfs_data),
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    return handler_context.outbox.sent[-1], balance_check
+
+
+def _assert_refused_unqueued_and_uncharged(
+    handler_context: Any, resp: SimpleNamespace, balance_check: MagicMock, reason: str
+) -> Dict[str, Any]:
+    """Assert a 400 with ``reason`` that queued, reserved and recorded nothing.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param resp: the HTTP reply.
+    :param balance_check: the balance-check mock.
+    :param reason: the expected rejection reason.
+    :return: the decoded reply body.
+    """
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == reason
+    shared = handler_context.shared_state
+    assert shared["pending_tasks"] == []
+    assert not shared.get("in_memory_requests")
+    assert not shared.get(hmod.RESERVED_CAPS_BY_SENDER)
+    balance_check.assert_not_called()
+    return payload
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        pytest.param("a" * (models.DEFAULT_MAX_PROMPT_BYTES + 1), id="ascii_one_over"),
+        pytest.param(
+            "é" * (models.DEFAULT_MAX_PROMPT_BYTES // 2 + 1),
+            id="multibyte_under_in_chars_over_in_bytes",
+        ),
+    ],
+)
+def test_offchain_prompt_over_bound_is_refused_at_accept_uncharged(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, prompt: str
+) -> None:
+    """A prompt over ``max_prompt_bytes`` is refused before queueing or charging.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param prompt: a prompt one bound-unit over in UTF-8 bytes.
+    """
+    resp, balance_check = _post_prompt(
+        handler_context, http_dialogue, monkeypatch, _prompt_metadata(prompt), "9101"
+    )
+    payload = _assert_refused_unqueued_and_uncharged(
+        handler_context, resp, balance_check, hmod.PROMPT_OVER_LIMIT
+    )
+    assert payload["max_prompt_bytes"] == models.DEFAULT_MAX_PROMPT_BYTES
+
+
+@pytest.mark.parametrize(
+    ("bound", "prompt"),
+    [
+        pytest.param(
+            models.DEFAULT_MAX_PROMPT_BYTES,
+            "a" * models.DEFAULT_MAX_PROMPT_BYTES,
+            id="ascii_at_default_bound",
+        ),
+        pytest.param(
+            models.DEFAULT_MAX_PROMPT_BYTES,
+            "é" * (models.DEFAULT_MAX_PROMPT_BYTES // 2),
+            id="multibyte_at_default_bound",
+        ),
+        pytest.param(
+            2 * models.DEFAULT_MAX_PROMPT_BYTES,
+            "a" * (2 * models.DEFAULT_MAX_PROMPT_BYTES),
+            id="ascii_at_raised_bound",
+        ),
+        pytest.param(models.DEFAULT_MAX_PROMPT_BYTES, "", id="empty_prompt"),
+    ],
+)
+def test_offchain_prompt_within_bound_is_accepted_and_queued(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    bound: int,
+    prompt: str,
+) -> None:
+    """A prompt at or under the configured bound is accepted and queued.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param bound: the ``max_prompt_bytes`` the mech is configured with.
+    :param prompt: a prompt whose UTF-8 length is at most ``bound``.
+    """
+    monkeypatch.setattr(handler_context.params, "max_prompt_bytes", bound)
+    resp, _ = _post_prompt(
+        handler_context, http_dialogue, monkeypatch, _prompt_metadata(prompt), "9102"
+    )
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        pytest.param("\n" * 150_000, id="newlines_double_when_escaped"),
+        pytest.param("é" * 50_000, id="non_ascii_becomes_unicode_escapes"),
+    ],
+)
+def test_offchain_metadata_over_block_after_json_escaping_is_refused(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, prompt: str
+) -> None:
+    """The encoded metadata must fit one block even when the decoded prompt is within bound.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param prompt: a prompt within the bound whose JSON escaping overflows a block.
+    """
+    monkeypatch.setattr(
+        handler_context.params, "max_prompt_bytes", HIGHEST_PROMPT_BOUND
+    )
+    ipfs_data = _prompt_metadata(prompt, ensure_ascii=True)
+    assert models.prompt_byte_length(prompt) <= HIGHEST_PROMPT_BOUND
+    assert len(ipfs_data.encode("utf-8")) > hmod.MAX_IPFS_DATA_BYTES
+    # No single-block CID exists for this body, so any posted hash will do.
+    resp, balance_check = _post_prompt(
+        handler_context,
+        http_dialogue,
+        monkeypatch,
+        ipfs_data,
+        "9103",
+        ipfs_hash=_DEFAULT_IPFS_HASH,
+    )
+    _assert_refused_unqueued_and_uncharged(
+        handler_context, resp, balance_check, hmod.IPFS_DATA_OVERSIZE
+    )
+
+
+def test_requested_prompt_returns_none_without_a_string_prompt() -> None:
+    """Metadata without a string prompt yields None, leaving it to the execution check."""
+    assert hmod.requested_prompt('{"prompt": "hi"}') == "hi"
+    assert hmod.requested_prompt('{"prompt": 5}') is None
+    assert hmod.requested_prompt('["prompt"]') is None
+    assert hmod.requested_prompt("not json") is None
+    assert hmod.requested_prompt("") is None
 
 
 # ---------------------------------------------------------------------------

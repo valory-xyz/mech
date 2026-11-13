@@ -77,6 +77,7 @@ from packages.valory.skills.task_execution.models import (
     gross_up_for_fee,
     minimum_charge,
     offchain_metric_labels,
+    prompt_byte_length,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
@@ -1874,7 +1875,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return
 
-        prompt_bytes = len(task_data["prompt"].encode("utf-8"))
+        prompt_bytes = prompt_byte_length(task_data["prompt"])
         max_prompt_bytes = self.params.max_prompt_bytes
         if prompt_bytes > max_prompt_bytes:
             self.context.logger.warning(

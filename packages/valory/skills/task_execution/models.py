@@ -54,6 +54,18 @@ PRICING_ONCHAIN_MAX = "onchain_max"
 DEFAULT_MAX_PROMPT_BYTES = 100_000
 
 
+def prompt_byte_length(prompt: str) -> int:
+    """Return the size of ``prompt`` as measured against ``max_prompt_bytes``.
+
+    The off-chain accept check and the execution check both measure with
+    this, so a prompt one of them admits is never refused by the other.
+
+    :param prompt: the decoded ``prompt`` field of the request metadata.
+    :return: the UTF-8 byte length of the prompt.
+    """
+    return len(prompt.encode("utf-8"))
+
+
 @dataclasses.dataclass
 class MechConfig:
     """Mech config dataclass."""
@@ -348,9 +360,12 @@ class Params(Model):
             self.payment_token_decimals >= USD_DECIMALS,
             f"payment_token_decimals must be >= {USD_DECIMALS}",
         )
-        # Bound on the UTF-8 byte length of a request's ``prompt``; a longer
-        # prompt is not executed. Kept below the single-block bound because
-        # off-chain request metadata, which wraps the prompt, must fit one block.
+        # Bound on the UTF-8 byte length of a request's decoded ``prompt``. An
+        # off-chain request over it is refused at accept, uncharged; an
+        # on-chain one is not executed. Off-chain metadata is also bounded as
+        # a whole: the JSON-encoded ``ipfs_data`` (prompt plus wrapper, after
+        # escaping) must fit one block, so a value near the ceiling below can
+        # only be met by on-chain requests.
         raw_max_prompt = kwargs.get("max_prompt_bytes")
         self.max_prompt_bytes: int = (
             DEFAULT_MAX_PROMPT_BYTES if raw_max_prompt is None else raw_max_prompt

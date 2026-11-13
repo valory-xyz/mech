@@ -76,6 +76,7 @@ from packages.valory.skills.task_execution.models import (
     Params,
     minimum_charge,
     offchain_metric_labels,
+    prompt_byte_length,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.eip1271 import (
@@ -178,7 +179,7 @@ REQUEST_OUTCOME_DISABLED: RequestOutcome = "disabled"  # 503, use_offchain=false
 REQUEST_OUTCOME_BAD_REQUEST: RequestOutcome = "bad_request"  # 400
 REQUEST_OUTCOME_SIGNATURE_REJECTED: RequestOutcome = "signature_rejected"  # 401 / 503
 REQUEST_OUTCOME_PAYLOAD_REJECTED: RequestOutcome = (
-    "payload_rejected"  # 400, CID mismatch
+    "payload_rejected"  # 400, CID mismatch, oversize metadata or prompt
 )
 REQUEST_OUTCOME_SENDER_UNRESOLVED: RequestOutcome = "sender_unresolved"  # 503
 REQUEST_OUTCOME_NONCE_REJECTED: RequestOutcome = "nonce_rejected"  # 401 / 503
@@ -469,6 +470,10 @@ IPFS_HASH_BODY_MISMATCH = "ipfs_hash does not match ipfs_data content"
 # apart from a genuine content-hash disagreement.
 IPFS_DATA_OVERSIZE = "ipfs_data exceeds the single-block CID bound"
 
+# Rejection reason for metadata whose decoded ``prompt`` is over the
+# ``max_prompt_bytes`` param. The response also names the bound.
+PROMPT_OVER_LIMIT = "prompt exceeds the mech's max_prompt_bytes bound"
+
 # Single-block CID bound (256 KiB). Mirrors ``local_cid._MAX_BLOCK_BYTES``
 # and is used to range-check ``ipfs_data`` before ``compute_cidv1`` is
 # called so an oversize body surfaces as ``IPFS_DATA_OVERSIZE`` (accept
@@ -571,6 +576,20 @@ def requested_tool(ipfs_data: str) -> Optional[str]:
     return tool if isinstance(tool, str) else None
 
 
+def requested_prompt(ipfs_data: str) -> Optional[str]:
+    """Return the ``prompt`` in an off-chain request's metadata, if any.
+
+    :param ipfs_data: the request-metadata JSON carried in the body.
+    :return: the prompt, or None when the metadata carries no string prompt.
+    """
+    try:
+        parsed = json.loads(ipfs_data)
+    except (TypeError, ValueError):
+        return None
+    prompt = parsed.get("prompt") if isinstance(parsed, dict) else None
+    return prompt if isinstance(prompt, str) else None
+
+
 class Route(str, Enum):
     """Supported HTTP route names."""
 
@@ -640,6 +659,7 @@ class ResponseKey(str, Enum):
     PAYMENT_TYPE = "payment_type"
     ASSET_ADDRESS = "asset_address"
     MINIMUM_CAP = "minimum_cap"
+    MAX_PROMPT_BYTES = "max_prompt_bytes"
 
 
 # 402 challenge constants — surfaced so clients can branch on a stable label.
@@ -2597,6 +2617,23 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return
 
+        if not self._prompt_within_bound(
+            request_id, data.get(RequestKey.IPFS_DATA.value, "")
+        ):
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason=PROMPT_OVER_LIMIT,
+                status_code=HttpCode.BAD_REQUEST_CODE.value,
+                status_text="Bad request",
+                body_extras={
+                    ResponseKey.MAX_PROMPT_BYTES.value: self.params.max_prompt_bytes
+                },
+                outcome=REQUEST_OUTCOME_PAYLOAD_REJECTED,
+            )
+            return
+
         # Replay protection. Once the sig + CID gates have passed, the
         # accept-time trust base is enough to dedup exactly: every field
         # that changes the ``request_id`` is signed, so the same body
@@ -3018,6 +3055,31 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return False, IPFS_HASH_BODY_MISMATCH
         return True, ""
+
+    def _prompt_within_bound(self, request_id: str, ipfs_data: str) -> bool:
+        """Return False iff the decoded ``prompt`` is over ``max_prompt_bytes``.
+
+        Uses the measure and bound of the execution check, so a request
+        accepted here is never refused there for its prompt length. Metadata
+        without a string prompt passes; the execution check refuses it.
+
+        :param request_id: the off-chain request id (used only for the log line).
+        :param ipfs_data: the request-metadata JSON carried in the body.
+        :return: True when the prompt is absent or within the bound.
+        """
+        prompt = requested_prompt(ipfs_data)
+        prompt_bytes = 0 if prompt is None else prompt_byte_length(prompt)
+        max_prompt_bytes = self.params.max_prompt_bytes
+        if prompt_bytes <= max_prompt_bytes:
+            return True
+        self.context.logger.info(
+            "Offchain request %s refused: prompt is %d bytes, over the %d "
+            "byte bound.",
+            request_id,
+            prompt_bytes,
+            max_prompt_bytes,
+        )
+        return False
 
     def _is_duplicate_request(self, request_id: str) -> bool:
         """Return True iff ``request_id`` is already in an accepted state.
