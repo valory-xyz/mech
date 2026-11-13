@@ -162,6 +162,60 @@ def test_params_price_inputs_reject_out_of_range(
         m.Params(name="params", **params_kwargs)
 
 
+def test_params_max_prompt_bytes_defaults_when_unset(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """An unset or null ``max_prompt_bytes`` keeps the default bound."""
+    assert "max_prompt_bytes" not in params_kwargs
+    unset: m.Params = m.Params(name="params", **params_kwargs)
+    params_kwargs["max_prompt_bytes"] = None
+    null: m.Params = m.Params(name="params", **params_kwargs)
+
+    assert m.DEFAULT_MAX_PROMPT_BYTES == 100_000
+    assert unset.max_prompt_bytes == m.DEFAULT_MAX_PROMPT_BYTES
+    assert null.max_prompt_bytes == m.DEFAULT_MAX_PROMPT_BYTES
+
+
+@pytest.mark.parametrize("value", [1, 250_000, m.SINGLE_BLOCK_BYTES - 1])
+def test_params_max_prompt_bytes_accepts_values_below_single_block_bound(
+    params_kwargs: Dict[str, Any], value: int
+) -> None:
+    """A positive integer below the single-block bound is used as configured."""
+    params_kwargs["max_prompt_bytes"] = value
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.max_prompt_bytes == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0, -1, m.SINGLE_BLOCK_BYTES, m.SINGLE_BLOCK_BYTES + 1, 1.5, "250000", True, []],
+    ids=[
+        "zero",
+        "negative",
+        "single_block_bound",
+        "over_single_block_bound",
+        "float",
+        "string",
+        "bool",
+        "list",
+    ],
+)
+def test_params_max_prompt_bytes_rejects_values_outside_bound(
+    params_kwargs: Dict[str, Any], value: Any
+) -> None:
+    """A value that is not an integer in (0, single-block bound) fails at startup."""
+    params_kwargs["max_prompt_bytes"] = value
+    with pytest.raises(AEAEnforceError, match="max_prompt_bytes"):
+        m.Params(name="params", **params_kwargs)
+
+
+def test_single_block_bound_matches_offchain_request_bound() -> None:
+    """The bound ``max_prompt_bytes`` is checked against is the request-file bound."""
+    from packages.valory.skills.task_execution import handlers
+
+    assert m.SINGLE_BLOCK_BYTES == handlers.MAX_IPFS_DATA_BYTES == 256 * 1024
+
+
 def test_params_tools_pricing_keys_match_ok(params_kwargs: Dict[str, Any]) -> None:
     """
     When tools_to_pricing keys match tools_to_package_hash, initialization succeeds.
