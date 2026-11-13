@@ -139,16 +139,21 @@ class TestTokenCounterCallbackCall:
         assert cb.cost_dict["total_tokens"] == 1500
         assert cb.cost_dict["total_cost"] == pytest.approx(0.00125 + 0.0025 * 0.5)
 
-    def test_every_jury_voter_model_is_priced(self) -> None:
-        """resolve_market_jury's voter models must all be keys in the table."""
+    def test_every_jury_model_is_priced(self) -> None:
+        """resolve_market_jury's voter and judge models must all be priced."""
         jury_models = (
-            "openai/gpt-4.1:online",
+            "openai/gpt-6.1-sol:online",
             "x-ai/grok-4.3:online",
             "google/gemini-2.5-flash:online",
             "anthropic/claude-haiku-4.5:online",
+            "anthropic/claude-sonnet-5.5:online",
+            # native provider ids, for the slots the jury calls directly
+            "gpt-6.1-sol",
+            "gemini-2.5-flash",
+            "claude-sonnet-5-5",
         )
         missing = [m for m in jury_models if m not in TokenCounterCallback.TOKEN_PRICES]
-        assert not missing, f"unpriced jury voter models: {missing}"
+        assert not missing, f"unpriced jury models: {missing}"
 
     @pytest.mark.parametrize(
         "model, input_price, output_price",
@@ -158,6 +163,7 @@ class TestTokenCounterCallbackCall:
             ("claude-sonnet-5-5", 0.002, 0.010),
             ("openai/gpt-6.1-sol:online", 0.002, 0.010),
             ("anthropic/claude-sonnet-5.5:online", 0.002, 0.010),
+            ("gemini-2.5-flash", 0.0003, 0.0025),
         ],
     )
     def test_current_models_are_priced(
