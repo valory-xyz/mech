@@ -186,6 +186,42 @@ class TestTokenCounterCallbackCall:
             input_price + output_price
         )
 
+    def test_deepseek_flash_is_priced_at_its_listed_fireworks_rate(self) -> None:
+        """deepseek/deepseek-v4.1-flash accrues cost at 0.00045 / 0.0018 USD per 1k."""
+        model = "deepseek/deepseek-v4.1-flash"
+        input_tokens, output_tokens = 2000, 400
+        expected_input = input_tokens / PRICE_NUM_TOKENS * 0.00045
+        expected_output = output_tokens / PRICE_NUM_TOKENS * 0.0018
+        cb = TokenCounterCallback()
+        cb(
+            model,
+            _dummy_counter,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        assert cb.actual_model == model
+        assert cb.cost_dict["total_tokens"] == 2400
+        assert cb.cost_dict["input_cost"] == pytest.approx(expected_input)
+        assert cb.cost_dict["output_cost"] == pytest.approx(expected_output)
+        assert cb.cost_dict["total_cost"] == pytest.approx(
+            expected_input + expected_output
+        )
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "deepseek/deepseek-v4.1-flash:online",
+            "deepseek/deepseek-v4.1",
+            "deepseek-v4.1-flash",
+            "",
+        ],
+    )
+    def test_model_id_not_matching_a_key_exactly_raises(self, model: str) -> None:
+        """Lookup is by exact model id, so near-miss ids are not priced."""
+        cb = TokenCounterCallback()
+        with pytest.raises(ValueError, match="not supported"):
+            cb(model, _dummy_counter, input_tokens=10, output_tokens=10)
+
     def test_unsupported_model_raises_value_error(self) -> None:
         """Test __call__ raises ValueError for unsupported model."""
         cb = TokenCounterCallback()
