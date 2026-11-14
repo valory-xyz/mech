@@ -22,7 +22,7 @@ contracts: []
 protocols:
 - valory/websocket_client:0.1.0:bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q
 skills:
-- valory/websocket_client:0.1.0:bafybeie74xbhnwy7yuayhyqlv4vb5muzhzl5pxb6obeqhxdww3nnwoqzhe
+- valory/websocket_client:0.1.0:bafybeih6frksod5i3nuxhqqolkmswn64227a66hh6c7bqss6owiv6tmaaa
 behaviours:
   contract_subscriptions:
     args: {}

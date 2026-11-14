@@ -11,6 +11,8 @@ fingerprint:
   dialogues.py: bafybeifrkojenunhczquu2vyliqzzesdthtswxpbh3a63egbdiyzpk423q
   handlers.py: bafybeie24wlsyhzmyrsjuxcoleovnuduejomv3gri3bajzrsfj7ed76dku
   models.py: bafybeiezgfnz3d5rzny4qyfehmoyfqece54ak4elr6elag6idao4wc2pa4
+  tests/__init__.py: bafybeibl3iaekamob2cukssdsoegnkqxsbgdvstptmk52zuty7onvz5aau
+  tests/test_models.py: bafybeiedzmrsabcagg6xls5hpiu5czape4xfj4arhnjg4vfyillbz45r4y
 fingerprint_ignore_patterns: []
 connections:
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
