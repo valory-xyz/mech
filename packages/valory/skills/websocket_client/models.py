@@ -33,8 +33,8 @@ class Params(Model):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.websocket_provider = kwargs.get(
+        self.websocket_provider = kwargs.pop(
             "websocket_provider", DEFAULT_WEBSOCKET_PROVIDER
         )
-        self.subscription_id = kwargs.get("subscription_id", DEFAULT_SUBSCRIPTION_ID)
+        self.subscription_id = kwargs.pop("subscription_id", DEFAULT_SUBSCRIPTION_ID)
         super().__init__(*args, **kwargs)

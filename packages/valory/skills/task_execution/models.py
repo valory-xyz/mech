@@ -116,28 +116,28 @@ class Params(Model):
         self.req_to_callback: Dict[str, Callable] = {}
         self.req_to_error_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
-        self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure_get(
+        self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure(
             "mech_to_max_delivery_rate", kwargs, Dict[str, int]
         )
-        self.api_keys: Dict[str, List[str]] = self._ensure_get(
+        self.api_keys: Dict[str, List[str]] = self._ensure(
             "api_keys", kwargs, Dict[str, List[str]]
         )
-        self.tools_to_package_hash: Dict[str, str] = self._ensure_get(
+        self.tools_to_package_hash: Dict[str, str] = self._ensure(
             "tools_to_package_hash", kwargs, Dict[str, str]
         )
-        self.polling_interval = kwargs.get("polling_interval", 30.0)
-        self.task_deadline = kwargs.get("task_deadline", 240.0)
-        self.step_in_list_size = kwargs.get("step_in_list_size", 20)
-        self.num_agents = self._ensure_get("num_agents", kwargs, int)
+        self.polling_interval = kwargs.pop("polling_interval", 30.0)
+        self.task_deadline = kwargs.pop("task_deadline", 240.0)
+        self.step_in_list_size = kwargs.pop("step_in_list_size", 20)
+        self.num_agents = self._ensure("num_agents", kwargs, int)
         self.request_count: int = 0
-        self.cleanup_freq = kwargs.get("cleanup_freq", 50)
-        self.agent_index: int = self._ensure_get("agent_index", kwargs, int)
-        self.from_block_range: int = self._ensure_get("from_block_range", kwargs, int)
-        self.timeout_limit: int = self._ensure_get("timeout_limit", kwargs, int)
-        self.max_block_window: int = self._ensure_get("max_block_window", kwargs, int)
+        self.cleanup_freq = kwargs.pop("cleanup_freq", 50)
+        self.agent_index: int = self._ensure("agent_index", kwargs, int)
+        self.from_block_range: int = self._ensure("from_block_range", kwargs, int)
+        self.timeout_limit: int = self._ensure("timeout_limit", kwargs, int)
+        self.max_block_window: int = self._ensure("max_block_window", kwargs, int)
         # maps the request id to the number of times it has timed out
         self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
-        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure_get(
+        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure(
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
         self.mech_to_config: Dict[str, MechConfig] = {
@@ -150,7 +150,7 @@ class Params(Model):
         except IndexError:
             raise ValueError("No mech contract addresses found!")
 
-        self.mech_marketplace_address: str = self._ensure_get(
+        self.mech_marketplace_address: str = self._ensure(
             "mech_marketplace_address", kwargs, str
         )
         self.use_mech_marketplace = (
@@ -158,7 +158,7 @@ class Params(Model):
             and self.mech_marketplace_address != ZERO_ADDRESS
         )
         self.offchain_tx_list: List = list()
-        self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
+        self.default_chain_id: str = self._ensure("default_chain_id", kwargs, str)
         # EIP-155 integer chain id for the predict-api data lake write and the
         # EIP-712 domain. Separate from ``default_chain_id`` (the AEA alias
         # ``"gnosis"``) because the predict-api schema and the EIP-712 domain
@@ -168,12 +168,12 @@ class Params(Model):
         # which fails the predict-api server's per-chain marketplace
         # allowlist on first POST — operator-friendly: the row is rejected
         # at a known boundary rather than silently mis-tagged.
-        self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
-        self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
-        self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
-        self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
-        self.optimism_ledger_rpc: str = kwargs.get("optimism_ledger_rpc", "")
-        self.robinhood_ledger_rpc: str = kwargs.get("robinhood_ledger_rpc", "")
+        self.mech_events_chain_id: int = int(kwargs.pop("mech_events_chain_id", 0) or 0)
+        self.gnosis_ledger_rpc: str = kwargs.pop("gnosis_ledger_rpc", "")
+        self.polygon_ledger_rpc: str = kwargs.pop("polygon_ledger_rpc", "")
+        self.base_ledger_rpc: str = kwargs.pop("base_ledger_rpc", "")
+        self.optimism_ledger_rpc: str = kwargs.pop("optimism_ledger_rpc", "")
+        self.robinhood_ledger_rpc: str = kwargs.pop("robinhood_ledger_rpc", "")
         # Dual-purpose gate: controls BOTH offchain-request ingress AND
         # egress to the predict-api events endpoint (settlement writes for
         # both offchain-settled AND on-chain-settled requests). A mech is
@@ -188,14 +188,14 @@ class Params(Model):
         # own review round, not an env override on the current shape.
         # Default False = on-chain + IPFS only, no analytics writes,
         # unchanged for legacy deployments. Set True to enrol the mech.
-        self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
+        self.use_offchain: bool = bool(kwargs.pop("use_offchain", False))
         # Terms link the off-chain HTTP server advertises: as ``termsUrl`` in
         # the 402 challenge body and as a ``Link: <url>; rel="terms-of-service"``
         # header on the 402 and the 200. The skill default is the Valory Mech
         # Terms; an operator running their own mech sets it to their own terms,
         # or blank to advertise nothing. Keep it equal to the ``termsUrl`` in
         # the mech's published metadata.
-        self.mech_terms_url: str = str(kwargs.get("mech_terms_url", "") or "").strip()
+        self.mech_terms_url: str = str(kwargs.pop("mech_terms_url", "") or "").strip()
         # Off-chain preimage retention. On by default: each off-chain
         # (request, response) pair is mirrored into the kv_store together
         # with what a restart needs to replay the follow-up steps (on-chain
@@ -204,7 +204,7 @@ class Params(Model):
         # alongside use_offchain (on-chain deliveries are already public on
         # IPFS); the buffer is inert on a mech that takes no off-chain
         # requests. Set False to run without the durable buffer.
-        self.preimage_retention_enabled: bool = kwargs.get(
+        self.preimage_retention_enabled: bool = kwargs.pop(
             "preimage_retention_enabled", True
         )
         # Retention window for buffered preimages, in seconds (default 24h).
@@ -214,7 +214,7 @@ class Params(Model):
         # rather than growing without bound. The plaintext bytes may
         # remain recoverable from freed SQLite pages / WAL frames until
         # those slots are reused. See preimage.py module docstring.
-        self.preimage_retention_seconds: int = kwargs.get(
+        self.preimage_retention_seconds: int = kwargs.pop(
             "preimage_retention_seconds", 86400
         )
         # Hard cap for a delivered preimage whose follow-up steps (on-chain
@@ -222,26 +222,26 @@ class Params(Model):
         # past ``preimage_retention_seconds`` so the drainer can replay them
         # on the sweep; past the cap they are deleted with a WARNING. Only
         # matters when settlement is broken for that long (default 7 days).
-        self.preimage_incomplete_cap_seconds: int = kwargs.get(
+        self.preimage_incomplete_cap_seconds: int = kwargs.pop(
             "preimage_incomplete_cap_seconds", 7 * 86400
         )
         # How often the sweeper LISTs the namespace to prune expired entries.
-        self.preimage_sweep_interval: float = kwargs.get(
+        self.preimage_sweep_interval: float = kwargs.pop(
             "preimage_sweep_interval", 3600.0
         )
         # kv_store key namespace for preimages; the sweeper LISTs by this prefix.
-        self.preimage_key_prefix: str = kwargs.get(
+        self.preimage_key_prefix: str = kwargs.pop(
             "preimage_key_prefix", "mech_preimage/"
         )
         # Page size for the sweep LIST_REQUEST. Server clamps at 1000; the
         # default matches the server's own default so unmodified deployments
         # behave identically before/after the pagination wiring.
-        self.preimage_list_page_size: int = kwargs.get("preimage_list_page_size", 100)
+        self.preimage_list_page_size: int = kwargs.pop("preimage_list_page_size", 100)
         # Max kv_store write attempts per request_id before the buffer drops
         # the record + WARNs. Bounds a hot-loop retry against a persistently
         # unhealthy kv_store. 5 is generous for transient glitches; >5 is
         # almost certainly persistent and the record is best-effort audit.
-        self.preimage_max_write_attempts: int = kwargs.get(
+        self.preimage_max_write_attempts: int = kwargs.pop(
             "preimage_max_write_attempts", 5
         )
         # Max consecutive LIST ERRORs before the sweep gives up the current
@@ -249,10 +249,10 @@ class Params(Model):
         # sweep window (preimage_sweep_interval) is the natural backoff,
         # bounding what would otherwise be a per-tick LIST hot-loop against
         # a persistently failing kv_store.
-        self.preimage_max_list_attempts: int = kwargs.get(
+        self.preimage_max_list_attempts: int = kwargs.pop(
             "preimage_max_list_attempts", 5
         )
-        self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
+        self.tools_to_pricing: Dict[str, int] = kwargs.pop("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
@@ -261,15 +261,15 @@ class Params(Model):
         super().__init__(*args, **kwargs)
 
     @classmethod
-    def _ensure_get(cls, key: str, kwargs: Dict, type_: Any) -> Any:
-        """Ensure that the parameters are set, and return them without popping the key."""
+    def _ensure(cls, key: str, kwargs: Dict, type_: Any) -> Any:
+        """Ensure that the parameter is set and well-typed, and pop it from kwargs."""
         enforce("skill_context" in kwargs, "Only use on models!")
         skill_id = kwargs["skill_context"].skill_id
         enforce(
             key in kwargs,
             f"{key!r} of type {type_!r} required, but it is not set in `models.params.args` of `skill.yaml` of `{skill_id}`",
         )
-        value = kwargs.get(key, None)
+        value = kwargs.pop(key)
         try:
             check_type(key, value, type_)
         except TypeError:  # pragma: nocover
