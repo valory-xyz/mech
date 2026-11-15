@@ -136,7 +136,7 @@ class Params(TaskExecutionParams, SubscriptionParams, TerminationParams):  # typ
         :raises ValueError: when an agent id is set without a chain id
         """
         self.erc8004_agent_id: Optional[int] = parse_erc8004_agent_id(
-            kwargs.get("erc8004_agent_id")
+            kwargs.pop("erc8004_agent_id", None)
         )
         super().__init__(*args, **kwargs)
         if self.erc8004_agent_id is not None and self.mech_events_chain_id <= 0:

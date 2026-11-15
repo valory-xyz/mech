@@ -72,6 +72,8 @@ pytest_targets = [
     "packages/valory/skills/mech_abci/tests",
     "packages/valory/skills/task_submission_abci/tests",
     "packages/valory/skills/task_execution/tests",
+    "packages/valory/skills/contract_subscription/tests",
+    "packages/valory/skills/websocket_client/tests",
 ]
 # Auto-merged with packages.json third_party. Listed names are utility
 # skills whose handlers don't conform to the ABCI shape.

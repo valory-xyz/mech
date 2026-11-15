@@ -19,12 +19,99 @@
 
 """Tests for the task_execution skill's models."""
 
-from typing import Any, Dict, cast
+from types import SimpleNamespace
+from typing import Any, Dict, List, cast
+from unittest.mock import MagicMock
 
 import pytest
 from aea.exceptions import AEAEnforceError
 
 import packages.valory.skills.task_execution.models as m
+
+SAMPLE_API_KEYS = {"openai": ["sample-value-1", "sample-value-2"]}
+UNKNOWN_CONFIG_KEY = "not_a_task_execution_param"
+UNREAD_KWARGS_WARNING = "have not been set"
+
+# Every optional key Params reads, with values that Params stores unchanged.
+OPTIONAL_PARAMS: Dict[str, Any] = {
+    "step_in_list_size": 7,
+    "mech_events_chain_id": 100,
+    "gnosis_ledger_rpc": "http://gnosis.rpc",
+    "polygon_ledger_rpc": "http://polygon.rpc",
+    "base_ledger_rpc": "http://base.rpc",
+    "optimism_ledger_rpc": "http://optimism.rpc",
+    "robinhood_ledger_rpc": "http://robinhood.rpc",
+    "use_offchain": True,
+    "mech_terms_url": "https://example.com/terms",
+    "preimage_retention_enabled": False,
+    "preimage_retention_seconds": 60,
+    "preimage_incomplete_cap_seconds": 120,
+    "preimage_sweep_interval": 30.0,
+    "preimage_key_prefix": "sample_prefix/",
+    "preimage_list_page_size": 10,
+    "preimage_max_write_attempts": 2,
+    "preimage_max_list_attempts": 3,
+}
+
+
+def _unread_kwargs_warnings(logger: MagicMock) -> List[str]:
+    """Return the framework warnings listing kwargs that reached ``Model`` unread.
+
+    :param logger: the logger spy on the skill context.
+    :return: the matching warning messages.
+    """
+    messages = [str(call.args[0]) for call in logger.warning.call_args_list]
+    return [message for message in messages if UNREAD_KWARGS_WARNING in message]
+
+
+@pytest.fixture
+def logger_spy(params_kwargs: Dict[str, Any]) -> MagicMock:
+    """Swap the skill context for one whose logger records calls.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :return: the logger spy.
+    """
+    logger = MagicMock()
+    params_kwargs["skill_context"] = SimpleNamespace(
+        skill_id=params_kwargs["skill_context"].skill_id, logger=logger
+    )
+    return logger
+
+
+def test_params_consume_their_config_keys(
+    params_kwargs: Dict[str, Any], logger_spy: MagicMock
+) -> None:
+    """
+    Every key Params reads is taken out of kwargs before the base ``Model`` sees them.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :param logger_spy: logger recording the framework's warnings.
+    """
+    params_kwargs.update(OPTIONAL_PARAMS, api_keys=SAMPLE_API_KEYS)
+    p: m.Params = m.Params(name="params", **params_kwargs)
+
+    assert _unread_kwargs_warnings(logger_spy) == []
+    assert p.api_keys == SAMPLE_API_KEYS
+    for key, value in OPTIONAL_PARAMS.items():
+        assert getattr(p, key) == value, key
+
+
+def test_params_report_only_config_keys_they_do_not_read(
+    params_kwargs: Dict[str, Any], logger_spy: MagicMock
+) -> None:
+    """
+    A key Params does not know is the only one the framework reports as unread.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :param logger_spy: logger recording the framework's warnings.
+    """
+    params_kwargs.update(api_keys=SAMPLE_API_KEYS, **{UNKNOWN_CONFIG_KEY: 1})
+    m.Params(name="params", **params_kwargs)
+
+    (warning,) = _unread_kwargs_warnings(logger_spy)
+    assert UNKNOWN_CONFIG_KEY in warning
+    assert "api_keys" not in warning
+    assert SAMPLE_API_KEYS["openai"][0] not in warning
 
 
 def test_params_init_derivations(
@@ -211,8 +298,6 @@ def test_metrics_mech_address_prefers_marketplace_mech(
     :param fallback: ``agent_mech_contract_address``.
     :param expected: the label value.
     """
-    from types import SimpleNamespace
-
     params = cast(
         m.MetricsParams,
         SimpleNamespace(
@@ -226,8 +311,6 @@ def test_metrics_mech_address_prefers_marketplace_mech(
 
 def test_offchain_metric_labels_pairs_chain_with_marketplace_mech() -> None:
     """One helper feeds every off-chain series so the two skills cannot drift."""
-    from types import SimpleNamespace
-
     params = cast(
         m.MetricsParams,
         SimpleNamespace(
@@ -252,8 +335,6 @@ def test_metrics_mech_address_is_lower_cased_regardless_of_config_case() -> None
     task_execution lower-cases its mech keys and task_submission_abci keeps the
     configured case; both go through this helper, so it normalises.
     """
-    from types import SimpleNamespace
-
     params = cast(
         m.MetricsParams,
         SimpleNamespace(
