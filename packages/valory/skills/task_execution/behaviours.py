@@ -22,6 +22,7 @@
 import functools
 import json
 import math
+import os
 import threading
 import time
 from asyncio import Future
@@ -636,6 +637,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash = self.params.tools_to_package_hash
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
+        if self.params.openai_base_url:
+            os.environ["OPENAI_BASE_URL"] = self.params.openai_base_url
         # Initialise the off-chain preimage buffer's shared-state keys so the
         # accept hook (handler side), the sweeper (here) and the settlement
         # skill's stamps can read/write them. The retention flag is mirrored

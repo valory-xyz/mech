@@ -21,6 +21,7 @@
 
 import functools
 import json
+import os
 import re
 import time
 from concurrent.futures import Future
@@ -32,6 +33,7 @@ import pytest
 from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+from packages.valory.skills.task_execution.behaviours import TaskExecutionBehaviour
 from packages.valory.skills.task_execution.utils.request_id import (
     to_request_id_bytes32,
 )
@@ -5679,3 +5681,59 @@ def test_onchain_tool_exception_still_delivers(
     assert sent, "on-chain failure should still be uploaded and delivered"
     stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert stored.get("status") != "rejected"
+
+
+# ---------------------------------------------------------------------------
+# setup() propagates openai_base_url into the process env so the OpenAI SDK
+# picks it up at client instantiation time, in this process and in the pebble
+# worker processes it forks.
+# ---------------------------------------------------------------------------
+
+
+def test_setup_exports_openai_base_url_when_set(
+    context_stub: SimpleNamespace,
+    params_stub: SimpleNamespace,
+    monkeypatch: Any,
+) -> None:
+    """When openai_base_url is set, setup() puts it on os.environ."""
+    monkeypatch.delenv("OPENAI_BASE_URL", raising=False)
+    params_stub.openai_base_url = "https://proxy.example/mechs-openai/gw-key/v1"
+
+    b = TaskExecutionBehaviour(name="task_execution", skill_context=context_stub)
+    b.setup()
+
+    assert (
+        os.environ["OPENAI_BASE_URL"] == "https://proxy.example/mechs-openai/gw-key/v1"
+    )
+
+
+def test_setup_does_not_clear_openai_base_url_when_unset(
+    context_stub: SimpleNamespace,
+    params_stub: SimpleNamespace,
+    monkeypatch: Any,
+) -> None:
+    """Empty openai_base_url must not wipe a pre-existing env value."""
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://preset.example/v1")
+    params_stub.openai_base_url = ""
+
+    b = TaskExecutionBehaviour(name="task_execution", skill_context=context_stub)
+    b.setup()
+
+    assert os.environ["OPENAI_BASE_URL"] == "https://preset.example/v1"
+
+
+def test_setup_overwrites_existing_openai_base_url(
+    context_stub: SimpleNamespace,
+    params_stub: SimpleNamespace,
+    monkeypatch: Any,
+) -> None:
+    """The deployment value is authoritative over any shell-inherited one."""
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://preset.example/v1")
+    params_stub.openai_base_url = "https://proxy.example/mechs-openai/gw-key/v1"
+
+    b = TaskExecutionBehaviour(name="task_execution", skill_context=context_stub)
+    b.setup()
+
+    assert (
+        os.environ["OPENAI_BASE_URL"] == "https://proxy.example/mechs-openai/gw-key/v1"
+    )
