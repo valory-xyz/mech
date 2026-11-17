@@ -122,10 +122,6 @@ class Params(Model):
         self.api_keys: Dict[str, List[str]] = self._ensure(
             "api_keys", kwargs, Dict[str, List[str]]
         )
-        # Base URL the OpenAI SDK reads from the process env. Empty leaves
-        # the SDK default in place; when set, the skill exports it to
-        # os.environ at setup so tools (and their pebble worker processes)
-        # inherit it and route through the configured gateway.
         self.openai_base_url: str = kwargs.pop("openai_base_url", "") or ""
         self.tools_to_package_hash: Dict[str, str] = self._ensure(
             "tools_to_package_hash", kwargs, Dict[str, str]
