@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeig2jqnjlv6geiz7sxuttygxvepqvnwjdeuchfcf4s7fw2gubiuihe
+  behaviours.py: bafybeidpe554i6sw4en4hn52ffvjg4dldtpzoyqqjqylptybgwjh6bymsi
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
   handlers.py: bafybeidi5cfnrf4foura5frfgk747ed7zowwkd7tqofipkj3mzon44rgdm
-  models.py: bafybeicg3zltt6cyprzikyk7gcswwt2f7cqj5yrop4mvihxefub45lrd3u
+  models.py: bafybeidxsy44zsb6p7zy2l7ovggf5lp7tp3pmoukcb3fi4sy3wisbxsbzq
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeibx6vqfbqg6rhcqtmfcwgnuieiljlxgoan3kyanncu2ccfw76lxaq
-  tests/test_behaviours.py: bafybeigocs5v55pf7fiae2pzhpd2bws6jhp6dk3gnklom3kxx7q7epuf2m
+  tests/conftest.py: bafybeif2ptyu4abexkwngvnis2becrx2a7aaz4aeimgpndwvby3ow2jfui
+  tests/test_behaviours.py: bafybeihz6dzm7c7jvthdyyvxxrnpngkgfrp7uxwjzsycci2mvluvkhnure
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
   tests/test_handlers.py: bafybeie6yp55a4dg5bgovy6cqfbxju72yftqwccsy5ckb6hifdfa5smota
-  tests/test_models.py: bafybeidzusltg7bi57utiuslcoqe334snlzd2dlb4qbv5kmqwdvrggg64a
+  tests/test_models.py: bafybeieabbdmzd6ijrdhs5u3sgefksnuolnln2b2il2bs3eldccej66xmq
   tests/test_preimage_buffer.py: bafybeifazhvm45fujuccedti3qm2thrwt4fp5hcbk3zar2nw4jqnlxnfae
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
@@ -115,6 +115,7 @@ models:
       mech_to_config: {}
       mech_to_max_delivery_rate: {}
       num_agents: 4
+      openai_base_url: ''
       optimism_ledger_rpc: http://localhost:8545
       robinhood_ledger_rpc: http://localhost:8545
       polling_interval: 30.0

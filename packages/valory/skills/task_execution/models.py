@@ -122,6 +122,7 @@ class Params(Model):
         self.api_keys: Dict[str, List[str]] = self._ensure(
             "api_keys", kwargs, Dict[str, List[str]]
         )
+        self.openai_base_url: str = kwargs.pop("openai_base_url", "") or ""
         self.tools_to_package_hash: Dict[str, str] = self._ensure(
             "tools_to_package_hash", kwargs, Dict[str, str]
         )

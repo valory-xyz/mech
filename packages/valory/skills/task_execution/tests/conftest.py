@@ -164,6 +164,7 @@ def params_stub() -> SimpleNamespace:
         tools_to_package_hash={},  # {tool_name: ipfs_cid}
         tools_to_pricing={},  # {tool_name: price}
         api_keys={},
+        openai_base_url="",
         req_params=SimpleNamespace(from_block={}, last_polling={}),
         polling_interval=10.0,
         in_flight_req=False,
