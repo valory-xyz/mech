@@ -2396,6 +2396,34 @@ def test_signed_requests_stamps_receipt_time_on_enqueued_task(
     ]
 
 
+def test_signed_requests_store_the_sender_in_checksum_form(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The queued task carries the EIP-55 form of ``sender``, not the wire spelling.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    wire_sender = "0x3e45c17f8bd7f07f1e0e25c95389956e93ed663f"
+    checksum_sender = "0x3e45c17F8bd7F07f1e0e25C95389956e93eD663f"
+    monkeypatch.setattr(mh, "_resolve_sender_checksum", lambda sender: checksum_sender)
+    mh.setup()
+
+    body = _make_signed_request_body(request_id="9")
+    body["sender"] = wire_sender
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    task = handler_context.shared_state["pending_tasks"][0]
+    assert task["sender"] == checksum_sender
+
+
 def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
