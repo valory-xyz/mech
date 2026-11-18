@@ -3082,9 +3082,7 @@ class MechHttpHandler(AbstractResponseHandler):
         :param data: the request-body dict. Caller passes a copy of the
             parsed HTTP body with ``nonce`` coerced to ``int`` so the
             downstream lexicographic-vs-numeric sort discipline holds,
-            and ``sender`` in EIP-55 checksum form so every consumer of
-            the task (nonce maps, deliver grouping, the deliver calldata
-            encoder) sees one canonical address; the type is
+            and ``sender`` in EIP-55 checksum form; the type is
             ``Dict[str, Any]`` (not ``Dict[str, str]``) because the
             coerced ``nonce`` is an ``int``.
         :param sender_checksum: the sender address in checksum form.
