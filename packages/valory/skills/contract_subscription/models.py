@@ -32,7 +32,6 @@ class Params(BaseParams):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
+        self.use_polling = kwargs.pop("use_polling", False)
+        self.contract_address = kwargs.pop("contract_address", DEFAULT_CONTRACT_ADDRESS)
         super().__init__(*args, **kwargs)
-
-        self.use_polling = kwargs.get("use_polling", False)
-        self.contract_address = kwargs.get("contract_address", DEFAULT_CONTRACT_ADDRESS)

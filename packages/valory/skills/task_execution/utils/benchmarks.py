@@ -47,6 +47,7 @@ class TokenCounterCallback:
         "claude-sonnet-5-5": {"input": 0.002, "output": 0.010},
         # Google list prices, Standard tier, ai.google.dev/gemini-api/docs/pricing.
         # Output includes thinking tokens.
+        "gemini-2.5-flash": {"input": 0.0003, "output": 0.0025},
         "gemini-3.5-flash-lite": {"input": 0.0003, "output": 0.0025},
         # OpenRouter passes the provider list price through. The ":online" web
         # search is billed per request on top of the tokens and reaches the
@@ -58,6 +59,8 @@ class TokenCounterCallback:
         "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
         "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-5.5:online": {"input": 0.002, "output": 0.010},
+        # Highest-priced Fireworks endpoint, as provider.only may route to any of them.
+        "deepseek/deepseek-v4.1-flash": {"input": 0.00045, "output": 0.0018},
         # Self-hosted, so this is not a provider list price: it is the hosted
         # market rate for a 14B model, used as the per-token stand-in for a
         # server whose real cost is a flat hourly rate.
@@ -145,6 +148,7 @@ class TokenCounterCallback:
         """
         self.actual_model = model
         try:
+            # Keys match the requested model id exactly, suffixes included.
             if model not in TokenCounterCallback.TOKEN_PRICES:
                 self._record_unpriced_model(model, kwargs.get("call_cost"))
                 return
