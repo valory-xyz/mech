@@ -664,7 +664,7 @@ class OlasMechContract(Contract):
         requester: str,
         deliverWithSignatures: List[Dict[str, List]],
         deliveryRates: List[int],
-        paymentData: str,
+        paymentData: bytes,
         deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
     ) -> JSONLike:
         """Get offchain deliver tx data"""
@@ -673,7 +673,7 @@ class OlasMechContract(Contract):
         data = contract_instance.encode_abi(
             abi_element_identifier="deliverMarketplaceWithSignatures",
             args=[
-                requester,
+                ledger_api.api.to_checksum_address(requester),
                 deliverWithSignatures,
                 deliveryRates,
                 paymentData,

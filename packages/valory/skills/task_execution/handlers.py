@@ -2419,7 +2419,11 @@ class MechHttpHandler(AbstractResponseHandler):
         # spread copy keeps the source dict immutable and lets the
         # enqueue accept the wider ``Dict[str, Any]`` type without a
         # ``type: ignore``.
-        enqueue_data = {**data, RequestKey.NONCE.value: request_nonce}
+        enqueue_data = {
+            **data,
+            RequestKey.NONCE.value: request_nonce,
+            RequestKey.SENDER.value: sender_checksum,
+        }
 
         try:
             req = self._enqueue_offchain_request(
@@ -3077,9 +3081,12 @@ class MechHttpHandler(AbstractResponseHandler):
         :param request_delivery_rate: the requester-signed delivery rate.
         :param data: the request-body dict. Caller passes a copy of the
             parsed HTTP body with ``nonce`` coerced to ``int`` so the
-            downstream lexicographic-vs-numeric sort discipline holds;
-            the type is ``Dict[str, Any]`` (not ``Dict[str, str]``)
-            because the coerced ``nonce`` is an ``int``.
+            downstream lexicographic-vs-numeric sort discipline holds,
+            and ``sender`` in EIP-55 checksum form so every consumer of
+            the task (nonce maps, deliver grouping, the deliver calldata
+            encoder) sees one canonical address; the type is
+            ``Dict[str, Any]`` (not ``Dict[str, str]``) because the
+            coerced ``nonce`` is an ``int``.
         :param sender_checksum: the sender address in checksum form.
             Used to record the wire nonce in ``outstanding_nonces_by_sender``
             so the admission gate on subsequent accepts from the same
