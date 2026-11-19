@@ -168,6 +168,7 @@ def params_stub() -> SimpleNamespace:
         req_params=SimpleNamespace(from_block={}, last_polling={}),
         polling_interval=10.0,
         in_flight_req=False,
+        in_flight_read_req=False,
         req_to_callback={},
         req_to_error_callback={},
         req_to_deadline={},

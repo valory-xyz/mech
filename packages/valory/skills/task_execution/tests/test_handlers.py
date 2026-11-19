@@ -6694,3 +6694,504 @@ def test_fetch_offchain_request_info_does_not_stamp_a_rejection(
 
     assert ss[preimage.PREIMAGE_RECORDS]["7"][preimage.FIELD_FETCHED_AT] is None
     assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
+
+
+# ---------------------------------------------------------------------------
+# Marketplace read: scan bookmark and in-flight flag ownership
+# ---------------------------------------------------------------------------
+
+MARKETPLACE = "marketplace"
+BOOKMARK_BLOCK = 1_000_000
+SCANNED_HEAD = 1_500_000
+
+
+def _read_body(
+    reqs: Any = None,
+    last_scanned_block: Any = None,
+    timed_out: Any = None,
+    wait_for_timeout: Any = None,
+) -> Dict[str, Any]:
+    """Build a ``get_marketplace_undelivered_reqs`` response body.
+
+    :param reqs: the requests the scan found, if any.
+    :param last_scanned_block: the head the scan reached; omitted from the
+        body entirely when ``None``, which is the shape an older contract
+        returns.
+    :param timed_out: the timed-out requests echoed back by the scan.
+    :param wait_for_timeout: the wait-for-timeout entries the contract
+        echoes back, carrying the block they were first seen at.
+    :return: the body dict.
+    """
+    body: Dict[str, Any] = {
+        "data": list(reqs or []),
+        "wait_for_timeout_tasks": list(wait_for_timeout or []),
+        "timed_out_requests": list(timed_out or []),
+    }
+    if last_scanned_block is not None:
+        body["last_scanned_block"] = last_scanned_block
+    return body
+
+
+def _state_msg(body: Dict[str, Any]) -> SimpleNamespace:
+    """Wrap a body in a contract-API STATE reply.
+
+    :param body: the contract response body.
+    :return: the reply message stub.
+    """
+    return SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body),
+    )
+
+
+def _marketplace_req(block_number: int) -> Dict[str, Any]:
+    """Build a single marketplace request entry at a given block.
+
+    :param block_number: the block the request was emitted in.
+    :return: the request dict.
+    """
+    return {
+        "tx_hash": "0xfeed",
+        "block_number": block_number,
+        "priorityMech": "0xSomeOtherMech",
+        "requester": "0xR",
+        "numRequests": 1,
+        "requestIds": [b"\x09" * 32],
+        "requestDatas": [b"\x0a" * 32],
+        "status": 0,
+        "request_delivery_rate": 1,
+    }
+
+
+def _contract_handler(ctx: SimpleNamespace) -> ContractHandler:
+    """Build a set-up ContractHandler on a stub context.
+
+    :param ctx: the stub skill context.
+    :return: the handler.
+    """
+    ch = ContractHandler(name="contract", skill_context=ctx)
+    ch.setup()
+    return ch
+
+
+def test_read_without_requests_advances_bookmark_to_the_scanned_head_less_margin(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A scan that found nothing moves the bookmark up to the margin below its head."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(last_scanned_block=SCANNED_HEAD)))
+
+    assert (
+        params.req_params.from_block[MARKETPLACE]
+        == SCANNED_HEAD - hmod.SCAN_HEAD_LAG_BLOCKS
+    )
+
+
+def test_read_with_requests_advances_bookmark_past_the_highest_request_block(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A request mined past the scanned head carries the bookmark past itself."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+
+    ch = _contract_handler(handler_context)
+    reqs = [
+        _marketplace_req(SCANNED_HEAD + 10),
+        _marketplace_req(SCANNED_HEAD + 12),
+    ]
+    ch.handle(_state_msg(_read_body(reqs=reqs, last_scanned_block=SCANNED_HEAD)))
+
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 13
+
+
+def test_read_without_a_scanned_head_leaves_the_bookmark_untouched(
+    handler_context: SimpleNamespace,
+) -> None:
+    """An older contract body carries no head, so an empty scan cannot advance."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+
+    ch = _contract_handler(handler_context)
+    ch._handle_get_undelivered_reqs(_read_body())
+
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK
+
+
+@pytest.mark.parametrize(
+    "last_scanned_block, reqs_at, paired_head",
+    [
+        (BOOKMARK_BLOCK - 2, None, None),
+        (BOOKMARK_BLOCK - 2, BOOKMARK_BLOCK - 500, None),
+        (None, BOOKMARK_BLOCK - 500, None),
+        (None, None, BOOKMARK_BLOCK - 2),
+        (None, None, 0),
+        (BOOKMARK_BLOCK - 2, BOOKMARK_BLOCK - 500, BOOKMARK_BLOCK - 3),
+    ],
+)
+def test_bookmark_never_moves_backwards(
+    handler_context: SimpleNamespace,
+    last_scanned_block: Any,
+    reqs_at: Any,
+    paired_head: Any,
+) -> None:
+    """Neither a stale head nor an echoed older request pulls the bookmark back.
+
+    :param handler_context: the stub skill context.
+    :param last_scanned_block: the head reported by the reply, if any.
+    :param reqs_at: the block of the single request in the reply, if any.
+    :param paired_head: the head read before the scan went out, if any.
+    """
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = paired_head
+
+    ch = _contract_handler(handler_context)
+    reqs = [_marketplace_req(reqs_at)] if reqs_at is not None else None
+    ch._handle_get_undelivered_reqs(
+        _read_body(reqs=reqs, last_scanned_block=last_scanned_block)
+    )
+
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK
+
+
+def test_last_successful_read_reports_the_advanced_bookmark(
+    handler_context: SimpleNamespace,
+) -> None:
+    """The readiness probe sees the bookmark the read left behind, not the one it started from."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(last_scanned_block=SCANNED_HEAD)))
+
+    block_number, _ = handler_context.shared_state[hmod.LAST_SUCCESSFUL_READ]
+    assert block_number == SCANNED_HEAD - hmod.SCAN_HEAD_LAG_BLOCKS
+
+
+def test_read_reply_releases_only_the_read_flag_while_a_task_executes(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A read reply leaves the executor's flag alone."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    params.in_flight_req = True
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(last_scanned_block=SCANNED_HEAD)))
+
+    assert params.in_flight_read_req is False
+    assert params.in_flight_req is True
+    assert handler_context.shared_state[hmod.INFLIGHT_READ_TS] is None
+
+
+def test_read_error_reply_releases_only_the_read_flag_while_a_task_executes(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A failed read releases its own flag and leaves the executor's alone."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.in_flight_read_req = True
+    params.in_flight_req = True
+    handler_context.shared_state[hmod.INFLIGHT_READ_TS] = 1000.0
+
+    ch = _contract_handler(handler_context)
+    ch.handle(SimpleNamespace(performative=ContractApiMessage.Performative.GET_STATE))
+
+    assert params.in_flight_read_req is False
+    assert params.in_flight_req is True
+    assert handler_context.shared_state[hmod.INFLIGHT_READ_TS] is None
+    assert handler_context.shared_state[hmod.WAS_LAST_READ_SUCCESSFUL] is False
+
+
+@pytest.mark.parametrize(
+    "msg_factory",
+    [
+        lambda: _state_msg({"request_ids": []}),
+        lambda: SimpleNamespace(performative=ContractApiMessage.Performative.GET_STATE),
+    ],
+)
+def test_non_read_reply_releases_the_executor_flag(
+    handler_context: SimpleNamespace,
+    msg_factory: Any,
+) -> None:
+    """With no read outstanding, a contract reply still releases ``in_flight_req``.
+
+    :param handler_context: the stub skill context.
+    :param msg_factory: builds the reply under test (a status check and a
+        failed call).
+    """
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.in_flight_read_req = False
+    params.in_flight_req = True
+
+    ch = _contract_handler(handler_context)
+    ch.handle(msg_factory())
+
+    assert params.in_flight_req is False
+
+
+# ---------------------------------------------------------------------------
+# Marketplace read: the head paired with each scan
+# ---------------------------------------------------------------------------
+
+
+def test_empty_read_advances_bookmark_to_the_paired_head_less_margin(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A scan that found nothing advances to the margin below the head it was paired with."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body()))
+
+    assert (
+        params.req_params.from_block[MARKETPLACE]
+        == SCANNED_HEAD - hmod.SCAN_HEAD_LAG_BLOCKS
+    )
+
+
+def test_empty_read_without_a_paired_head_leaves_the_bookmark_untouched(
+    handler_context: SimpleNamespace,
+) -> None:
+    """With no head to advance to, an empty scan leaves the bookmark where it was."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body()))
+
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK
+
+
+def test_scanned_head_in_the_body_wins_over_the_paired_head(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A contract that reports its own scanned head is believed over the paired one."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(last_scanned_block=SCANNED_HEAD + 5_000)))
+
+    assert (
+        params.req_params.from_block[MARKETPLACE]
+        == SCANNED_HEAD + 5_000 - hmod.SCAN_HEAD_LAG_BLOCKS
+    )
+
+
+def test_request_beyond_the_paired_head_wins_over_it(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A request mined while the scan ran carries the bookmark past the paired head."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(reqs=[_marketplace_req(SCANNED_HEAD + 12)])))
+
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 13
+
+
+def test_echoed_wait_for_timeout_task_does_not_hold_the_bookmark_back(
+    handler_context: SimpleNamespace,
+) -> None:
+    """An entry echoed back from an old block cannot stop the bookmark reaching the head."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(
+        _state_msg(_read_body(wait_for_timeout=[_marketplace_req(BOOKMARK_BLOCK - 10)]))
+    )
+
+    assert (
+        params.req_params.from_block[MARKETPLACE]
+        == SCANNED_HEAD - hmod.SCAN_HEAD_LAG_BLOCKS
+    )
+
+
+@pytest.mark.parametrize(
+    "msg_factory",
+    [
+        lambda: _state_msg(_read_body()),
+        lambda: SimpleNamespace(performative=ContractApiMessage.Performative.GET_STATE),
+    ],
+)
+def test_read_reply_drops_the_paired_head(
+    handler_context: SimpleNamespace,
+    msg_factory: Any,
+) -> None:
+    """The head is consumed by the scan it was paired with, so the next scan reads its own.
+
+    :param handler_context: the stub skill context.
+    :param msg_factory: builds the reply under test (a scan that found
+        nothing and a failed scan).
+    """
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(msg_factory())
+
+    assert handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] is None
+
+
+def test_scan_head_reply_records_the_head_and_leaves_the_bookmark_alone(
+    handler_context: SimpleNamespace,
+) -> None:
+    """The scan-head read records a head; only the scan's own reply moves the bookmark."""
+    params: Any = handler_context.params
+    params.req_type = hmod.RequestType.SCAN_HEAD.value
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.from_block_range = 36_000
+    params.in_flight_read_req = True
+    params.in_flight_req = True
+
+    lh = LedgerHandler(name="ledger", skill_context=handler_context)
+    lh.setup()
+    lh.handle(
+        SimpleNamespace(
+            performative=LedgerApiMessage.Performative.STATE,
+            state=SimpleNamespace(body={"number": SCANNED_HEAD}),
+        )
+    )
+
+    assert handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] == SCANNED_HEAD
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK
+    assert params.req_params.from_block.get(hmod.RequestType.SCAN_HEAD.value) is None
+    assert params.in_flight_read_req is False
+    assert params.in_flight_req is True
+
+
+def test_scan_head_error_reply_releases_only_the_read_flag(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A failed scan-head read frees its own leg and records no head."""
+    params: Any = handler_context.params
+    params.req_type = hmod.RequestType.SCAN_HEAD.value
+    params.in_flight_read_req = True
+    params.in_flight_req = True
+
+    lh = LedgerHandler(name="ledger", skill_context=handler_context)
+    lh.setup()
+    lh.handle(SimpleNamespace(performative=LedgerApiMessage.Performative.GET_STATE))
+
+    assert handler_context.shared_state.get(hmod.MARKETPLACE_SCAN_HEAD) is None
+    assert params.in_flight_read_req is False
+    assert params.in_flight_req is True
+    # the scan never went out, so the cadence has to be stamped here or the
+    # next tick re-requests the head straight away
+    assert params.req_params.last_polling[MARKETPLACE] == pytest.approx(
+        time.time(), abs=5
+    )
+    assert handler_context.shared_state[hmod.WAS_LAST_READ_SUCCESSFUL] is False
+
+
+# ---------------------------------------------------------------------------
+# The head block the contract's batch loop never queries
+# ---------------------------------------------------------------------------
+
+SCAN_WINDOW = 10_000
+
+
+@pytest.mark.parametrize(
+    "start, head",
+    [
+        # nothing mined between polls: the batch loop produces no batch at all
+        (SCANNED_HEAD, SCANNED_HEAD),
+        # the span is an exact multiple of the window, so the last batch stops
+        # one block below the head instead of running to "latest"
+        (SCANNED_HEAD - SCAN_WINDOW, SCANNED_HEAD),
+        (SCANNED_HEAD - 2 * SCAN_WINDOW, SCANNED_HEAD),
+        # the head came from a node one block ahead of the one the scan ran on
+        (SCANNED_HEAD - 1, SCANNED_HEAD),
+    ],
+)
+def test_empty_read_leaves_the_head_block_for_the_next_scan(
+    handler_context: SimpleNamespace,
+    start: int,
+    head: int,
+) -> None:
+    """The bookmark never passes a head block the scan may not have queried.
+
+    :param handler_context: the stub skill context.
+    :param start: the block the scan started from.
+    :param head: the head the scan was paired with.
+    """
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = start
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = head
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body()))
+
+    new_start = params.req_params.from_block[MARKETPLACE]
+    # the head block is still inside the next scan's range
+    assert new_start <= head
+    assert new_start == max(start, head - hmod.SCAN_HEAD_LAG_BLOCKS)
+
+
+def test_request_in_the_margin_lifts_the_bookmark_past_itself(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A request inside the re-scanned margin is queued once, not on every scan."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    params.mech_to_max_delivery_rate = {params.agent_mech_contract_addresses[0]: 1}
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    in_margin = SCANNED_HEAD - (hmod.SCAN_HEAD_LAG_BLOCKS - 2)
+    req = _marketplace_req(in_margin)
+    req["priorityMech"] = params.agent_mech_contract_addresses[0]
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(reqs=[req])))
+
+    # the request rule wins over the margin, which would have put the
+    # bookmark below this block and re-scanned it
+    assert params.req_params.from_block[MARKETPLACE] == in_margin + 1
+    assert params.req_params.from_block[MARKETPLACE] > in_margin
+    assert len(ch.pending_tasks) == 1
+
+    # the next scan starts above the block, so the reply no longer carries it
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+    ch.handle(_state_msg(_read_body()))
+
+    assert len(ch.pending_tasks) == 1
