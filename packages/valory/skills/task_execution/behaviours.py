@@ -863,7 +863,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _get_payment_types(self) -> bool:
         """Get the payment types of the mechs in the timed out tasks, if not available in the cache."""
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or self.params.in_flight_read_req:
             return False
 
         to_request = {
@@ -935,7 +935,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         now = time.time()
 
         # This prevents readiness from going stale while we're legitimately busy.
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or self.params.in_flight_read_req:
             self.context.shared_state[INFLIGHT_READ_TS] = now
             return
 
@@ -963,7 +963,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.shared_state[INFLIGHT_READ_TS] = now
 
         self._check_undelivered_reqs_marketplace()
-        self.params.in_flight_req = True
+        self.params.in_flight_read_req = True
         self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 
     def _check_undelivered_reqs_marketplace(self) -> None:
@@ -1187,7 +1187,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         # there is an in flight request
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or self.params.in_flight_read_req:
             return
 
         # status check interval not reached

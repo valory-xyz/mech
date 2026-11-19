@@ -2843,8 +2843,9 @@ def test_check_for_new_marketplace_reqs_full_poll(
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """Full poll path sets in_flight_req, LAST_READ_ATTEMPT_TS, and INFLIGHT_READ_TS."""
+    """Full poll path raises only the read flag and stamps both read timestamps."""
     params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = False
     params_stub.use_mech_marketplace = True
     marketplace_key = beh_mod.RequestType.MARKETPLACE.value
     params_stub.req_params.from_block = {marketplace_key: 100}
@@ -2852,7 +2853,8 @@ def test_check_for_new_marketplace_reqs_full_poll(
     params_stub.polling_interval = 0.0
     monkeypatch.setattr(time, "time", lambda: 1000.0)
     behaviour._check_for_new_marketplace_reqs()
-    assert params_stub.in_flight_req is True
+    assert params_stub.in_flight_read_req is True
+    assert params_stub.in_flight_req is False
     assert shared_state.get(beh_mod.LAST_READ_ATTEMPT_TS) == 1000.0
     assert shared_state.get(beh_mod.INFLIGHT_READ_TS) == 1000.0
 
@@ -5737,3 +5739,123 @@ def test_setup_overwrites_existing_openai_base_url(
     assert (
         os.environ["OPENAI_BASE_URL"] == "https://proxy.example/mechs-openai/gw-key/v1"
     )
+
+
+# ---------------------------------------------------------------------------
+# The marketplace read and task pick-up are independent legs
+# ---------------------------------------------------------------------------
+
+OFFCHAIN_REQUEST_ID = 4242
+OFFCHAIN_PROMPT = '{"prompt": "hi", "tool": "sum"}'
+
+
+def _offchain_pending_task() -> Dict[str, Any]:
+    """Build an accepted off-chain task as the HTTP handler enqueues it.
+
+    :return: the pending-task dict.
+    """
+    return {
+        "requestId": OFFCHAIN_REQUEST_ID,
+        "request_delivery_rate": 1,
+        "data": b"ptr",
+        "contract_address": "0xmech",
+        "is_offchain": True,
+        "ipfs_data": OFFCHAIN_PROMPT,
+    }
+
+
+def test_execute_task_picks_up_offchain_task_while_the_read_is_outstanding(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable,
+) -> None:
+    """An outstanding chain read does not hold back off-chain pick-up."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = True
+    shared_state[beh_mod.PENDING_TASKS].append(_offchain_pending_task())
+    handled: List[Any] = []
+    monkeypatch.setattr(
+        behaviour, "_handle_get_task", lambda *a, **k: handled.append(True)
+    )
+
+    behaviour._execute_task()
+
+    assert shared_state[beh_mod.PENDING_TASKS] == []
+    assert behaviour._executing_task is not None
+    assert behaviour._executing_task["requestId"] == OFFCHAIN_REQUEST_ID
+    assert handled
+
+
+def test_execute_task_waits_while_a_task_leg_is_in_flight(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The executor's own flag still gates pick-up."""
+    params_stub.in_flight_req = True
+    params_stub.in_flight_read_req = False
+    shared_state[beh_mod.PENDING_TASKS].append(_offchain_pending_task())
+
+    behaviour._execute_task()
+
+    assert len(shared_state[beh_mod.PENDING_TASKS]) == 1
+    assert behaviour._executing_task is None
+
+
+def test_marketplace_read_is_not_dispatched_while_a_read_is_outstanding(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+) -> None:
+    """Only one marketplace read is outstanding at a time."""
+    marketplace_key = beh_mod.RequestType.MARKETPLACE.value
+    params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = True
+    params_stub.req_params.from_block = {marketplace_key: 100}
+    params_stub.req_params.last_polling = {marketplace_key: 0.0}
+    params_stub.polling_interval = 0.0
+    dispatched: List[Any] = []
+    monkeypatch.setattr(
+        behaviour,
+        "_check_undelivered_reqs_marketplace",
+        lambda: dispatched.append(True),
+    )
+
+    behaviour._check_for_new_marketplace_reqs()
+
+    assert dispatched == []
+
+
+def test_status_check_waits_while_the_read_is_outstanding(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The pending-status check does not add a second contract call to the read's."""
+    params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = True
+    params_stub.use_mech_marketplace = True
+    behaviour.last_status_check_time = 0.0
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {"requestId": 1, "request_delivery_rate": 1}
+    )
+    monkeypatch.setattr(time, "time", lambda: 1_000_000.0)
+
+    behaviour._update_pending_tasks()
+
+    assert behaviour.last_status_check_time == 0.0
+
+
+def test_payment_types_read_waits_while_the_read_is_outstanding(
+    behaviour: Any,
+    params_stub: Any,
+) -> None:
+    """The mech-types read does not add a second contract call to the read's."""
+    params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = True
+
+    assert behaviour._get_payment_types() is False

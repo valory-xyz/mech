@@ -501,6 +501,7 @@ class BodyKey(str, Enum):
     MECH_TYPES = "mech_types"
     TIMED_OUT_REQUESTS = "timed_out_requests"
     REQUESTER_BALANCE = "requester_balance"
+    LAST_SCANNED_BLOCK = "last_scanned_block"
 
 
 class RequestKey(str, Enum):
@@ -741,6 +742,21 @@ class ContractHandler(BaseHandler):
         """Get step_in_list_size"""
         return self.params.step_in_list_size
 
+    def _release_contract_api_request(self) -> None:
+        """Release the in-flight flag raised by the request this reply answers.
+
+        At most one contract-API request is outstanding at a time, so the
+        marketplace read's flag being up identifies this reply as the
+        read's. ``in_flight_req`` is left alone on that path: it can have
+        been raised by a task that started while the scan was still
+        running, and clearing it here would hand that task's slot away.
+        """
+        if self.params.in_flight_read_req:
+            self.params.in_flight_read_req = False
+            self.context.shared_state[INFLIGHT_READ_TS] = None
+            return
+        self.params.in_flight_req = False
+
     def handle(self, message: Message) -> None:
         """
         Implement the reaction to a contract message.
@@ -754,14 +770,16 @@ class ContractHandler(BaseHandler):
                 f"Contract API Message performative not recognized: {contract_api_msg.performative}"
             )
             self.set_was_last_read_successful(False)
-            self.params.in_flight_req = False
+            self._release_contract_api_request()
             return
 
         body = contract_api_msg.state.body
         self.context.logger.info(f"Contract state body keys={list(body.keys())}.")
 
-        if body.get(BodyKey.DATA.value) or body.get(
-            BodyKey.WAIT_FOR_TIMEOUT_TASKS.value
+        if (
+            BodyKey.LAST_SCANNED_BLOCK.value in body
+            or body.get(BodyKey.DATA.value)
+            or body.get(BodyKey.WAIT_FOR_TIMEOUT_TASKS.value)
         ):
             # handle the undelivered requests response from data and wait_for_timeout_tasks
             self._handle_get_undelivered_reqs(body)
@@ -784,9 +802,42 @@ class ContractHandler(BaseHandler):
                 f"The cache was updated with the new mech types: {body[BodyKey.MECH_TYPES.value]}."
             )
 
-        self.params.in_flight_req = False
+        self._release_contract_api_request()
         self.set_was_last_read_successful(True)
         self.on_message_handled(message)
+
+    def _advance_from_block(
+        self, body: Dict[str, Any], reqs: List[Dict[str, Any]]
+    ) -> None:
+        """Move the scan start block past the range the read covered.
+
+        The bookmark advances on every successful read: past the highest
+        request block when the read returned requests, otherwise past the
+        head the scan reached. A body without ``last_scanned_block`` leaves
+        an empty read's bookmark where it was. The bookmark only ever moves
+        forward, so a request echoed back from an older block (the
+        wait-for-timeout list carries them) cannot pull it back over a
+        range already scanned.
+
+        :param body: the contract response body.
+        :param reqs: the requests the read returned.
+        """
+        if reqs:
+            candidate = max(req["block_number"] for req in reqs) + 1
+        else:
+            last_scanned_block = body.get(BodyKey.LAST_SCANNED_BLOCK.value)
+            if last_scanned_block is None:
+                return
+            candidate = int(last_scanned_block) + 1
+
+        old_block = self.from_block
+        if old_block is not None and candidate <= old_block:
+            return
+
+        self.from_block = candidate
+        self.context.logger.info(
+            f"Advanced from_block {old_block} -> {self.from_block}."
+        )
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
@@ -806,7 +857,6 @@ class ContractHandler(BaseHandler):
         for req in timed_out_reqs:
             req.setdefault("enqueued_at_local", now)
         self.unprocessed_timed_out_tasks = timed_out_reqs
-        self.set_last_successful_read(self.from_block)
 
         self.context.logger.info(
             f"Loaded {len(self.unprocessed_timed_out_tasks)} timed out requests from contract.",
@@ -816,15 +866,13 @@ class ContractHandler(BaseHandler):
         reqs.extend(body.get(BodyKey.WAIT_FOR_TIMEOUT_TASKS.value, []))
 
         reqs_count = len(reqs)
+        self._advance_from_block(body, reqs)
+        self.set_last_successful_read(self.from_block)
         if reqs_count == 0:
             self.context.logger.info("No new requests returned from contract.")
             return
 
-        old_block = self.from_block
-        self.from_block = max(req["block_number"] for req in reqs) + 1
-        self.context.logger.info(
-            f"Received {reqs_count} requests. Advanced from_block {old_block} -> {self.from_block}."
-        )
+        self.context.logger.info(f"Received {reqs_count} requests.")
 
         filtered = [
             req

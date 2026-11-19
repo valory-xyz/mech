@@ -110,6 +110,16 @@ class Params(Model):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
         self.in_flight_req: bool = False
+        # Raised while the marketplace undelivered-requests read is
+        # outstanding. It is separate from ``in_flight_req`` so off-chain
+        # task pick-up does not wait behind a chain scan, and the read's
+        # response must clear only this flag: ``in_flight_req`` can belong
+        # to a task that started while the scan was still running.
+        # Every contract-API and ledger step other than task execution waits
+        # on both flags, so at most one contract-API request is outstanding
+        # at a time; the response handler dispatches on ``req_type`` and
+        # could not tell two of them apart.
+        self.in_flight_read_req: bool = False
         self.is_cold_start: bool = True
         self.req_params: RequestParams = RequestParams()
         self.req_type: Optional[str] = None
