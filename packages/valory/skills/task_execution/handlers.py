@@ -64,7 +64,9 @@ from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.task_execution.behaviours import (
+    MARKETPLACE_SCAN_HEAD,
     PREDICT_API_EVENTS,
+    RequestType,
     _release_outstanding_nonce,
 )
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
@@ -754,6 +756,9 @@ class ContractHandler(BaseHandler):
         if self.params.in_flight_read_req:
             self.params.in_flight_read_req = False
             self.context.shared_state[INFLIGHT_READ_TS] = None
+            # The head was paired with the scan this reply answers; the
+            # next scan reads its own.
+            self.context.shared_state[MARKETPLACE_SCAN_HEAD] = None
             return
         self.params.in_flight_req = False
 
@@ -777,11 +782,15 @@ class ContractHandler(BaseHandler):
         self.context.logger.info(f"Contract state body keys={list(body.keys())}.")
 
         if (
-            BodyKey.LAST_SCANNED_BLOCK.value in body
+            self.params.in_flight_read_req
             or body.get(BodyKey.DATA.value)
             or body.get(BodyKey.WAIT_FOR_TIMEOUT_TASKS.value)
         ):
-            # handle the undelivered requests response from data and wait_for_timeout_tasks
+            # A marketplace scan that found nothing returns every list
+            # empty, so the read's own in-flight flag is what identifies
+            # the reply; the body keys only recognise one that found
+            # something. At most one contract-API request is outstanding at
+            # a time, so the flag cannot belong to another reply.
             self._handle_get_undelivered_reqs(body)
         if BodyKey.REQUEST_IDS.value in body:
             # handle the request id status check response
@@ -813,11 +822,13 @@ class ContractHandler(BaseHandler):
 
         The bookmark advances on every successful read: past the highest
         request block when the read returned requests, otherwise past the
-        head the scan reached. A body without ``last_scanned_block`` leaves
-        an empty read's bookmark where it was. The bookmark only ever moves
-        forward, so a request echoed back from an older block (the
-        wait-for-timeout list carries them) cannot pull it back over a
-        range already scanned.
+        head the scan covered. That head is ``last_scanned_block`` when the
+        contract reports it, else the head read just before the scan was
+        dispatched (``MARKETPLACE_SCAN_HEAD``), which is never ahead of the
+        head the contract scanned to. The bookmark only ever moves forward,
+        so neither a stale head nor a request echoed back from an older
+        block (the wait-for-timeout list carries them) can pull it back
+        over a range already scanned.
 
         :param body: the contract response body.
         :param reqs: the requests the read returned.
@@ -825,10 +836,12 @@ class ContractHandler(BaseHandler):
         if reqs:
             candidate = max(req["block_number"] for req in reqs) + 1
         else:
-            last_scanned_block = body.get(BodyKey.LAST_SCANNED_BLOCK.value)
-            if last_scanned_block is None:
+            scanned_head = body.get(BodyKey.LAST_SCANNED_BLOCK.value)
+            if scanned_head is None:
+                scanned_head = self.context.shared_state.get(MARKETPLACE_SCAN_HEAD)
+            if scanned_head is None:
                 return
-            candidate = int(last_scanned_block) + 1
+            candidate = int(scanned_head) + 1
 
         old_block = self.from_block
         if old_block is not None and candidate <= old_block:
@@ -979,6 +992,18 @@ class LedgerHandler(BaseHandler):
 
     SUPPORTED_PROTOCOL = LedgerApiMessage.protocol_id
 
+    def _release_ledger_request(self) -> None:
+        """Release the in-flight flag raised by the request this reply answers.
+
+        The scan-head read belongs to the marketplace read leg and raises
+        ``in_flight_read_req``, so task execution does not wait for it. The
+        cold-start ``from_block`` read raises ``in_flight_req``.
+        """
+        if self.params.req_type == RequestType.SCAN_HEAD.value:
+            self.params.in_flight_read_req = False
+            return
+        self.params.in_flight_req = False
+
     def handle(self, message: Message) -> None:
         """
         Implement the reaction to a ledger message.
@@ -991,17 +1016,28 @@ class LedgerHandler(BaseHandler):
             self.context.logger.warning(
                 f"Ledger API Message performative not recognized: {ledger_api_msg.performative}"
             )
-            self.params.in_flight_req = False
+            self._release_ledger_request()
             return
 
         block_number = ledger_api_msg.state.body["number"]
+        if self.params.req_type == RequestType.SCAN_HEAD.value:
+            # Pairs this head with the scan about to be dispatched. The
+            # bookmark is untouched here; it moves when that scan replies.
+            self.context.shared_state[MARKETPLACE_SCAN_HEAD] = block_number
+            self.context.logger.info(
+                f"Marketplace scan head recorded at block {block_number}."
+            )
+            self._release_ledger_request()
+            self.on_message_handled(message)
+            return
+
         old_from_block = self.from_block
         self.from_block = block_number - self.params.from_block_range
         self.context.logger.info(
             f"Block with number {block_number} received. Updated from_block: {old_from_block} -> {self.from_block}"
         )
 
-        self.params.in_flight_req = False
+        self._release_ledger_request()
         self.on_message_handled(message)
 
 

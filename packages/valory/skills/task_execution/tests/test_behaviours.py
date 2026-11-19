@@ -5859,3 +5859,141 @@ def test_payment_types_read_waits_while_the_read_is_outstanding(
     params_stub.in_flight_read_req = True
 
     assert behaviour._get_payment_types() is False
+
+
+# ---------------------------------------------------------------------------
+# The head read paired with each marketplace scan
+# ---------------------------------------------------------------------------
+
+PAIRED_HEAD = 1_500_000
+
+
+def _due_poll(params_stub: Any, from_block: int = 100) -> str:
+    """Put the poll cadence and bookmark in a state where a scan is due.
+
+    :param params_stub: the params fixture to configure.
+    :param from_block: the bookmark the scan would start from.
+    :return: the marketplace request-type key.
+    """
+    marketplace_key = beh_mod.RequestType.MARKETPLACE.value
+    params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = False
+    params_stub.use_mech_marketplace = True
+    params_stub.req_params.from_block = {marketplace_key: from_block}
+    params_stub.req_params.last_polling = {marketplace_key: 0.0}
+    params_stub.polling_interval = 0.0
+    return marketplace_key
+
+
+def test_poll_reads_the_head_before_dispatching_the_scan(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """With no head paired yet, the poll reads the head and holds the scan back."""
+    marketplace_key = _due_poll(params_stub)
+    dispatched: List[Any] = []
+    monkeypatch.setattr(
+        behaviour,
+        "_check_undelivered_reqs_marketplace",
+        lambda: dispatched.append(True),
+    )
+
+    behaviour._check_for_new_marketplace_reqs()
+
+    assert dispatched == []
+    assert params_stub.req_type == beh_mod.RequestType.SCAN_HEAD.value
+    assert params_stub.in_flight_read_req is True
+    assert params_stub.in_flight_req is False
+    # the cadence is not consumed, so the next tick still sees a poll as due
+    assert params_stub.req_params.last_polling[marketplace_key] == 0.0
+    assert shared_state.get(beh_mod.MARKETPLACE_SCAN_HEAD) is None
+
+
+def test_poll_dispatches_the_scan_once_a_head_is_paired(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """With a head paired, the poll dispatches the scan and consumes the cadence."""
+    marketplace_key = _due_poll(params_stub)
+    shared_state[beh_mod.MARKETPLACE_SCAN_HEAD] = PAIRED_HEAD
+    dispatched: List[Any] = []
+    monkeypatch.setattr(
+        behaviour,
+        "_check_undelivered_reqs_marketplace",
+        lambda: dispatched.append(True),
+    )
+    head_reads: List[Any] = []
+    monkeypatch.setattr(
+        behaviour, "_request_scan_head", lambda: head_reads.append(True)
+    )
+    monkeypatch.setattr(time, "time", lambda: 2000.0)
+
+    behaviour._check_for_new_marketplace_reqs()
+
+    assert dispatched == [True]
+    assert head_reads == []
+    assert params_stub.in_flight_read_req is True
+    assert params_stub.req_params.last_polling[marketplace_key] == 2000.0
+
+
+def test_head_read_and_scan_never_overlap(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+) -> None:
+    """While either leg of the read is outstanding, neither is dispatched again."""
+    _due_poll(params_stub)
+    params_stub.in_flight_read_req = True
+    dispatched: List[Any] = []
+    monkeypatch.setattr(
+        behaviour,
+        "_check_undelivered_reqs_marketplace",
+        lambda: dispatched.append("scan"),
+    )
+    monkeypatch.setattr(
+        behaviour, "_request_scan_head", lambda: dispatched.append("head")
+    )
+
+    behaviour._check_for_new_marketplace_reqs()
+
+    assert dispatched == []
+
+
+def test_execute_task_picks_up_offchain_task_while_the_head_read_is_outstanding(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable,
+) -> None:
+    """The head read is part of the read leg, so pick-up does not wait for it either."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.in_flight_read_req = True
+    params_stub.req_type = beh_mod.RequestType.SCAN_HEAD.value
+    shared_state[beh_mod.PENDING_TASKS].append(_offchain_pending_task())
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+
+    behaviour._execute_task()
+
+    assert shared_state[beh_mod.PENDING_TASKS] == []
+    assert behaviour._executing_task is not None
+
+
+def test_cold_start_head_read_owns_the_marketplace_request_type(
+    behaviour: Any,
+    params_stub: Any,
+) -> None:
+    """The cold-start bookmark read is tagged marketplace, not scan-head."""
+    params_stub.req_type = None
+    params_stub.in_flight_req = False
+
+    behaviour._populate_from_block()
+
+    assert params_stub.req_type == beh_mod.RequestType.MARKETPLACE.value
+    assert params_stub.in_flight_req is True
+    assert params_stub.in_flight_read_req is False

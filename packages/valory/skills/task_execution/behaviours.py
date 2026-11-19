@@ -93,6 +93,10 @@ PAYMENT_INFO = "payment_info"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
+# The chain head read just before a marketplace scan is dispatched, and the
+# block the scan's bookmark advances to when the scan finds nothing. Cleared
+# when that scan's reply lands, so every scan is paired with its own head.
+MARKETPLACE_SCAN_HEAD = "marketplace_scan_head"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 PREDICT_API_EVENTS = "predict_api_events"
 PREDICT_API_EVENT_TTL_SECONDS = 24 * 60 * 60
@@ -453,6 +457,7 @@ class RequestType(Enum):
 
     LEGACY = "legacy"
     MARKETPLACE = "marketplace"
+    SCAN_HEAD = "scan_head"
 
 
 @dataclass(init=False)
@@ -689,6 +694,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._process_preimage_buffer()
 
     @property
+    def marketplace_scan_head(self) -> Optional[int]:
+        """Get the chain head paired with the next marketplace scan."""
+        return self.context.shared_state.get(MARKETPLACE_SCAN_HEAD)
+
+    @property
     def payment_model(self) -> Optional[Any]:
         """Get the mech's payment model."""
         return self.context.shared_state.get(PAYMENT_MODEL)
@@ -846,8 +856,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._all_tools[tool_req] = tool_py, callable_method, component_yaml
         self._inflight_tool_req = None
 
-    def _populate_from_block(self) -> None:
-        """Populate from_block"""
+    def _request_latest_block(self) -> None:
+        """Put a ``get_block("latest")`` request on the outbox."""
         ledger_api_msg, _ = self.context.ledger_dialogues.create(
             performative=LedgerApiMessage.Performative.GET_STATE,
             callable="get_block",
@@ -859,7 +869,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             args=(),
         )
         self.context.outbox.put_message(message=ledger_api_msg)
+
+    def _populate_from_block(self) -> None:
+        """Populate from_block"""
+        self.params.req_type = RequestType.MARKETPLACE.value
+        self._request_latest_block()
         self.params.in_flight_req = True
+
+    def _request_scan_head(self) -> None:
+        """Read the chain head the next marketplace scan will start from.
+
+        The head is read before the scan is dispatched, so it is never
+        ahead of the head the contract reads for itself. The bookmark can
+        therefore be advanced to it on a scan that returned no requests
+        without skipping a block: whatever is mined between the two reads
+        falls inside the next scan's range.
+        """
+        self.params.req_type = RequestType.SCAN_HEAD.value
+        self._request_latest_block()
+        self.params.in_flight_read_req = True
 
     def _get_payment_types(self) -> bool:
         """Get the payment types of the mechs in the timed out tasks, if not available in the cache."""
@@ -954,13 +982,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
-            self.params.req_type = RequestType.MARKETPLACE.value
             self.context.shared_state[LAST_READ_ATTEMPT_TS] = now
             return
 
         # We are actually going to poll → stamp both attempt and inflight.
         self.context.shared_state[LAST_READ_ATTEMPT_TS] = now
         self.context.shared_state[INFLIGHT_READ_TS] = now
+
+        if self.marketplace_scan_head is None:
+            # Pair the scan with a head read first. ``last_polling`` is
+            # stamped only once the scan itself goes out, so the next tick
+            # still sees a poll as due and dispatches it.
+            self._request_scan_head()
+            return
 
         self._check_undelivered_reqs_marketplace()
         self.params.in_flight_read_req = True

@@ -6820,28 +6820,33 @@ def test_read_without_a_scanned_head_leaves_the_bookmark_untouched(
 
 
 @pytest.mark.parametrize(
-    "last_scanned_block, reqs_at",
+    "last_scanned_block, reqs_at, paired_head",
     [
-        (BOOKMARK_BLOCK - 2, None),
-        (BOOKMARK_BLOCK - 2, BOOKMARK_BLOCK - 500),
-        (None, BOOKMARK_BLOCK - 500),
-        (SCANNED_HEAD, BOOKMARK_BLOCK - 500),
+        (BOOKMARK_BLOCK - 2, None, None),
+        (BOOKMARK_BLOCK - 2, BOOKMARK_BLOCK - 500, None),
+        (None, BOOKMARK_BLOCK - 500, None),
+        (SCANNED_HEAD, BOOKMARK_BLOCK - 500, None),
+        (None, None, BOOKMARK_BLOCK - 2),
+        (None, None, 0),
     ],
 )
 def test_bookmark_never_moves_backwards(
     handler_context: SimpleNamespace,
     last_scanned_block: Any,
     reqs_at: Any,
+    paired_head: Any,
 ) -> None:
-    """Neither an older head nor an echoed older request pulls the bookmark back.
+    """Neither a stale head nor an echoed older request pulls the bookmark back.
 
     :param handler_context: the stub skill context.
     :param last_scanned_block: the head reported by the reply, if any.
     :param reqs_at: the block of the single request in the reply, if any.
+    :param paired_head: the head read before the scan went out, if any.
     """
     params: Any = handler_context.params
     params.req_type = MARKETPLACE
     params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = paired_head
 
     ch = _contract_handler(handler_context)
     reqs = [_marketplace_req(reqs_at)] if reqs_at is not None else None
@@ -6931,3 +6936,145 @@ def test_non_read_reply_releases_the_executor_flag(
     ch.handle(msg_factory())
 
     assert params.in_flight_req is False
+
+
+# ---------------------------------------------------------------------------
+# Marketplace read: the head paired with each scan
+# ---------------------------------------------------------------------------
+
+
+def test_empty_read_advances_bookmark_to_the_paired_head(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A scan that found nothing advances the bookmark past the head it was paired with."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body()))
+
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 1
+
+
+def test_empty_read_without_a_paired_head_leaves_the_bookmark_untouched(
+    handler_context: SimpleNamespace,
+) -> None:
+    """With no head to advance to, an empty scan leaves the bookmark where it was."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body()))
+
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK
+
+
+def test_scanned_head_in_the_body_wins_over_the_paired_head(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A contract that reports its own scanned head is believed over the paired one."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(last_scanned_block=SCANNED_HEAD + 5_000)))
+
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 5_001
+
+
+def test_read_with_requests_ignores_the_paired_head(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A scan that found requests follows the requests, not the head."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(_state_msg(_read_body(reqs=[_marketplace_req(BOOKMARK_BLOCK + 12)])))
+
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK + 13
+
+
+@pytest.mark.parametrize(
+    "msg_factory",
+    [
+        lambda: _state_msg(_read_body()),
+        lambda: SimpleNamespace(performative=ContractApiMessage.Performative.GET_STATE),
+    ],
+)
+def test_read_reply_drops_the_paired_head(
+    handler_context: SimpleNamespace,
+    msg_factory: Any,
+) -> None:
+    """The head is consumed by the scan it was paired with, so the next scan reads its own.
+
+    :param handler_context: the stub skill context.
+    :param msg_factory: builds the reply under test (a scan that found
+        nothing and a failed scan).
+    """
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(msg_factory())
+
+    assert handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] is None
+
+
+def test_scan_head_reply_records_the_head_and_leaves_the_bookmark_alone(
+    handler_context: SimpleNamespace,
+) -> None:
+    """The scan-head read records a head; only the scan's own reply moves the bookmark."""
+    params: Any = handler_context.params
+    params.req_type = hmod.RequestType.SCAN_HEAD.value
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.from_block_range = 36_000
+    params.in_flight_read_req = True
+    params.in_flight_req = True
+
+    lh = LedgerHandler(name="ledger", skill_context=handler_context)
+    lh.setup()
+    lh.handle(
+        SimpleNamespace(
+            performative=LedgerApiMessage.Performative.STATE,
+            state=SimpleNamespace(body={"number": SCANNED_HEAD}),
+        )
+    )
+
+    assert handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] == SCANNED_HEAD
+    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK
+    assert params.req_params.from_block.get(hmod.RequestType.SCAN_HEAD.value) is None
+    assert params.in_flight_read_req is False
+    assert params.in_flight_req is True
+
+
+def test_scan_head_error_reply_releases_only_the_read_flag(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A failed scan-head read frees its own leg and records no head."""
+    params: Any = handler_context.params
+    params.req_type = hmod.RequestType.SCAN_HEAD.value
+    params.in_flight_read_req = True
+    params.in_flight_req = True
+
+    lh = LedgerHandler(name="ledger", skill_context=handler_context)
+    lh.setup()
+    lh.handle(SimpleNamespace(performative=LedgerApiMessage.Performative.GET_STATE))
+
+    assert handler_context.shared_state.get(hmod.MARKETPLACE_SCAN_HEAD) is None
+    assert params.in_flight_read_req is False
+    assert params.in_flight_req is True
