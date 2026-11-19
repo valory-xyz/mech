@@ -6709,6 +6709,7 @@ def _read_body(
     reqs: Any = None,
     last_scanned_block: Any = None,
     timed_out: Any = None,
+    wait_for_timeout: Any = None,
 ) -> Dict[str, Any]:
     """Build a ``get_marketplace_undelivered_reqs`` response body.
 
@@ -6717,11 +6718,13 @@ def _read_body(
         body entirely when ``None``, which is the shape an older contract
         returns.
     :param timed_out: the timed-out requests echoed back by the scan.
+    :param wait_for_timeout: the wait-for-timeout entries the contract
+        echoes back, carrying the block they were first seen at.
     :return: the body dict.
     """
     body: Dict[str, Any] = {
         "data": list(reqs or []),
-        "wait_for_timeout_tasks": [],
+        "wait_for_timeout_tasks": list(wait_for_timeout or []),
         "timed_out_requests": list(timed_out or []),
     }
     if last_scanned_block is not None:
@@ -6789,7 +6792,7 @@ def test_read_without_requests_advances_bookmark_past_the_scanned_head(
 def test_read_with_requests_advances_bookmark_past_the_highest_request_block(
     handler_context: SimpleNamespace,
 ) -> None:
-    """With requests in the reply the bookmark follows the requests, not the head."""
+    """A request mined past the scanned head carries the bookmark past itself."""
     params: Any = handler_context.params
     params.req_type = MARKETPLACE
     params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
@@ -6797,12 +6800,12 @@ def test_read_with_requests_advances_bookmark_past_the_highest_request_block(
 
     ch = _contract_handler(handler_context)
     reqs = [
-        _marketplace_req(BOOKMARK_BLOCK + 10),
-        _marketplace_req(BOOKMARK_BLOCK + 12),
+        _marketplace_req(SCANNED_HEAD + 10),
+        _marketplace_req(SCANNED_HEAD + 12),
     ]
     ch.handle(_state_msg(_read_body(reqs=reqs, last_scanned_block=SCANNED_HEAD)))
 
-    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK + 13
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 13
 
 
 def test_read_without_a_scanned_head_leaves_the_bookmark_untouched(
@@ -6825,9 +6828,9 @@ def test_read_without_a_scanned_head_leaves_the_bookmark_untouched(
         (BOOKMARK_BLOCK - 2, None, None),
         (BOOKMARK_BLOCK - 2, BOOKMARK_BLOCK - 500, None),
         (None, BOOKMARK_BLOCK - 500, None),
-        (SCANNED_HEAD, BOOKMARK_BLOCK - 500, None),
         (None, None, BOOKMARK_BLOCK - 2),
         (None, None, 0),
+        (BOOKMARK_BLOCK - 2, BOOKMARK_BLOCK - 500, BOOKMARK_BLOCK - 3),
     ],
 )
 def test_bookmark_never_moves_backwards(
@@ -6990,10 +6993,10 @@ def test_scanned_head_in_the_body_wins_over_the_paired_head(
     assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 5_001
 
 
-def test_read_with_requests_ignores_the_paired_head(
+def test_request_beyond_the_paired_head_wins_over_it(
     handler_context: SimpleNamespace,
 ) -> None:
-    """A scan that found requests follows the requests, not the head."""
+    """A request mined while the scan ran carries the bookmark past the paired head."""
     params: Any = handler_context.params
     params.req_type = MARKETPLACE
     params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
@@ -7001,9 +7004,27 @@ def test_read_with_requests_ignores_the_paired_head(
     handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
 
     ch = _contract_handler(handler_context)
-    ch.handle(_state_msg(_read_body(reqs=[_marketplace_req(BOOKMARK_BLOCK + 12)])))
+    ch.handle(_state_msg(_read_body(reqs=[_marketplace_req(SCANNED_HEAD + 12)])))
 
-    assert params.req_params.from_block[MARKETPLACE] == BOOKMARK_BLOCK + 13
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 13
+
+
+def test_echoed_wait_for_timeout_task_does_not_hold_the_bookmark_back(
+    handler_context: SimpleNamespace,
+) -> None:
+    """An entry echoed back from an old block cannot stop the bookmark reaching the head."""
+    params: Any = handler_context.params
+    params.req_type = MARKETPLACE
+    params.req_params.from_block[MARKETPLACE] = BOOKMARK_BLOCK
+    params.in_flight_read_req = True
+    handler_context.shared_state[hmod.MARKETPLACE_SCAN_HEAD] = SCANNED_HEAD
+
+    ch = _contract_handler(handler_context)
+    ch.handle(
+        _state_msg(_read_body(wait_for_timeout=[_marketplace_req(BOOKMARK_BLOCK - 10)]))
+    )
+
+    assert params.req_params.from_block[MARKETPLACE] == SCANNED_HEAD + 1
 
 
 @pytest.mark.parametrize(

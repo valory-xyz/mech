@@ -820,28 +820,37 @@ class ContractHandler(BaseHandler):
     ) -> None:
         """Move the scan start block past the range the read covered.
 
-        The bookmark advances on every successful read: past the highest
-        request block when the read returned requests, otherwise past the
-        head the scan covered. That head is ``last_scanned_block`` when the
-        contract reports it, else the head read just before the scan was
-        dispatched (``MARKETPLACE_SCAN_HEAD``), which is never ahead of the
-        head the contract scanned to. The bookmark only ever moves forward,
-        so neither a stale head nor a request echoed back from an older
-        block (the wait-for-timeout list carries them) can pull it back
-        over a range already scanned.
+        The bookmark advances to one past the furthest block this read
+        proves was covered: the highest request block in the reply, or the
+        head the scan covered, whichever is further. That head is
+        ``last_scanned_block`` when the contract reports it, else the head
+        read just before the scan was dispatched
+        (``MARKETPLACE_SCAN_HEAD``), which is never ahead of the head the
+        contract scanned to. Every request at or below that head is already
+        in this reply, so taking the head cannot skip one.
+
+        Both are considered on every read, whether or not it carried
+        requests: the wait-for-timeout list is echoed back by each reply at
+        the block its entries were first seen, so a mech holding one has a
+        non-empty reply of old blocks on every scan and the request block
+        alone would hold the bookmark still for as long as the task is
+        held. The bookmark only ever moves forward, so neither a stale head
+        nor such an echo can pull it back over a range already scanned.
 
         :param body: the contract response body.
         :param reqs: the requests the read returned.
         """
+        covered: List[int] = []
         if reqs:
-            candidate = max(req["block_number"] for req in reqs) + 1
-        else:
-            scanned_head = body.get(BodyKey.LAST_SCANNED_BLOCK.value)
-            if scanned_head is None:
-                scanned_head = self.context.shared_state.get(MARKETPLACE_SCAN_HEAD)
-            if scanned_head is None:
-                return
-            candidate = int(scanned_head) + 1
+            covered.append(max(req["block_number"] for req in reqs))
+        scanned_head = body.get(BodyKey.LAST_SCANNED_BLOCK.value)
+        if scanned_head is None:
+            scanned_head = self.context.shared_state.get(MARKETPLACE_SCAN_HEAD)
+        if scanned_head is not None:
+            covered.append(int(scanned_head))
+        if not covered:
+            return
+        candidate = max(covered) + 1
 
         old_block = self.from_block
         if old_block is not None and candidate <= old_block:
