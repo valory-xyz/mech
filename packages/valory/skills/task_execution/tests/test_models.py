@@ -156,6 +156,32 @@ def test_params_init_derivations(
     assert p.req_params.last_polling == {"legacy": None, "marketplace": None}
 
 
+def test_params_openai_base_url_defaults_empty(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """openai_base_url defaults to '' when the kwarg is absent."""
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.openai_base_url == ""
+
+
+def test_params_openai_base_url_passthrough(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """openai_base_url is carried through from kwargs verbatim."""
+    params_kwargs["openai_base_url"] = "https://proxy.example/mechs-openai/gw-key/v1"
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.openai_base_url == ("https://proxy.example/mechs-openai/gw-key/v1")
+
+
+def test_params_openai_base_url_none_treated_as_empty(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """A None kwarg (autonomy's unresolved-default sentinel) coerces to ''."""
+    params_kwargs["openai_base_url"] = None
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.openai_base_url == ""
+
+
 def test_mech_config_from_dict_defaults_and_values() -> None:
     """Build MechConfig from dict and verify defaulted flags and overrides."""
     assert m.MechConfig.from_dict({}) == m.MechConfig(False, False)

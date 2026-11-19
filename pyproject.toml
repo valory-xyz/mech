@@ -51,7 +51,7 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests]==0.7.3",
+    "tomte[cli, tests]==0.7.4",
 ]
 
 [tool.uv]
@@ -84,7 +84,7 @@ check_handlers_ignores = [
 ]
 # Appended to the extras in the tox template render
 # (`tomte[<extras>]$TOMTE_DEP_PIN`), so it carries its own operator.
-tomte_dep_pin = "==0.7.3"
+tomte_dep_pin = "==0.7.4"
 # Extra upstreams for aea-ci check-third-party-hashes. open-autonomy and
 # open-aea are auto-derived from [project].dependencies; kv-store has to
 # be declared explicitly because the vendored valory/kv_store protocol +

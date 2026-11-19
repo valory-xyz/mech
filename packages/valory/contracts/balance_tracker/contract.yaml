@@ -19,4 +19,4 @@ dependencies:
   open-aea-ledger-ethereum:
     version: ==2.2.10
 contracts:
-- valory/olas_mech:0.1.0:bafybeiapcdgr7g3kux6nrs33ttohfupj4zi4mzl3uhbvyd5i6zjqhefb6u
+- valory/olas_mech:0.1.0:bafybeicvucufw3i2hni5sz5hwnsszklk36yxf6k34jrclb3x2d6giojchu

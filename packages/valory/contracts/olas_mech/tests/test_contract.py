@@ -295,7 +295,7 @@ class TestGetOffchainDeliverDataLegacy:
             ),
         ):
             result = OlasMechContract.get_offchain_deliver_data(
-                ledger_api=None,  # patched away via get_instance / simulation
+                ledger_api=_offline_ledger_api(),
                 contract_address=_MECH,
                 sender=_SENDER,
                 requester=_REQUESTER,
@@ -597,3 +597,55 @@ class TestDeliverDataCarriesTheVerdict:
 
         assert result == {"data": b"\xab\xcd", **_INCONCLUSIVE}
         assert elapsed < _PROMPT_RETURN_SECONDS
+
+
+_REQUESTER = "0x3e45c17F8bd7F07f1e0e25C95389956e93eD663f"
+
+
+class _ChecksummingApi(_FakeApi):
+    """``_FakeApi`` whose address helper really checksums, as ``web3`` does."""
+
+    @staticmethod
+    def to_checksum_address(address: str) -> str:
+        """Return the EIP-55 form of ``address``."""
+        return str(Web3.to_checksum_address(address))
+
+
+class TestOffchainDeliverDataRequesterCase:
+    """The off-chain deliver calldata is built whatever case the stored requester has."""
+
+    @staticmethod
+    def _mech_instance() -> object:
+        abi = json.loads(
+            (
+                Path(contract_module.__file__).parent / "build" / "AgentMech.json"
+            ).read_text()
+        )["abi"]
+        return Web3().eth.contract(address=Web3.to_checksum_address(_MECH), abi=abi)
+
+    @pytest.mark.parametrize(
+        "requester",
+        [_REQUESTER, _REQUESTER.lower(), _REQUESTER.upper().replace("0X", "0x")],
+    )
+    def test_requester_case_does_not_change_the_calldata(self, requester: str) -> None:
+        """Lowercase, uppercase and checksum spellings encode to the same calldata."""
+        instance = self._mech_instance()
+        ledger = _FakeLedgerApi(lambda: b"")
+        ledger.api = _ChecksummingApi(lambda: b"")
+        with patch.object(OlasMechContract, "get_instance", return_value=instance):
+            result = OlasMechContract.get_offchain_deliver_data(
+                ledger,  # type: ignore[arg-type]
+                _MECH,
+                _SENDER,
+                requester=requester,
+                deliverWithSignatures=[],
+                deliveryRates=[],
+                paymentData=b"",
+                deadline_seconds=_SHORT_DEADLINE,
+            )
+        expected = instance.encode_abi(  # type: ignore[attr-defined]
+            abi_element_identifier="deliverMarketplaceWithSignatures",
+            args=[_REQUESTER, [], [], b""],
+        )
+        assert result["data"] == bytes.fromhex(expected[2:])
+        assert result[SIMULATION_OK_KEY] is True
