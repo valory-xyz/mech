@@ -97,6 +97,14 @@ INFLIGHT_READ_TS = "inflight_read_ts"
 # block the scan's bookmark advances to when the scan finds nothing. Cleared
 # when that scan's reply lands, so every scan is paired with its own head.
 MARKETPLACE_SCAN_HEAD = "marketplace_scan_head"
+# How far below a paired head the bookmark is allowed to go. The head block
+# itself is not proven scanned: the contract's batch loop has an exclusive
+# upper bound, so it stops one block below the head it read whenever the span
+# is an exact multiple of the window, and a head read from a load-balanced
+# endpoint can come from a node a block ahead of the one the scan ran on. The
+# margin also absorbs a short reorg. These blocks are left to the next scan
+# rather than skipped.
+SCAN_HEAD_LAG_BLOCKS = 5
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 PREDICT_API_EVENTS = "predict_api_events"
 PREDICT_API_EVENT_TTL_SECONDS = 24 * 60 * 60

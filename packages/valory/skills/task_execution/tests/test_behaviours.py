@@ -5997,3 +5997,23 @@ def test_cold_start_head_read_owns_the_marketplace_request_type(
     assert params_stub.req_type == beh_mod.RequestType.MARKETPLACE.value
     assert params_stub.in_flight_req is True
     assert params_stub.in_flight_read_req is False
+
+
+def test_failed_head_read_waits_out_the_poll_interval(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+) -> None:
+    """A failed head read backs off instead of being retried on the next tick."""
+    marketplace_key = _due_poll(params_stub)
+    params_stub.polling_interval = 300.0
+    params_stub.req_params.last_polling[marketplace_key] = 1000.0
+    monkeypatch.setattr(time, "time", lambda: 1100.0)
+    head_reads: List[Any] = []
+    monkeypatch.setattr(
+        behaviour, "_request_scan_head", lambda: head_reads.append(True)
+    )
+
+    behaviour._check_for_new_marketplace_reqs()
+
+    assert head_reads == []

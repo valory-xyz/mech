@@ -67,6 +67,7 @@ from packages.valory.skills.task_execution.behaviours import (
     MARKETPLACE_SCAN_HEAD,
     PREDICT_API_EVENTS,
     RequestType,
+    SCAN_HEAD_LAG_BLOCKS,
     _release_outstanding_nonce,
 )
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
@@ -601,6 +602,18 @@ class BaseHandler(Handler):
             block_number
         )
 
+    def set_was_last_read_successful(self, was_successful: bool) -> None:
+        """Record whether the last marketplace read succeeded.
+
+        Lives here rather than on the contract handler because the read has
+        two legs: the contract scan and the ledger head read that precedes
+        it. A failure on either must show up in readiness.
+
+        :param was_successful: whether the read succeeded.
+        """
+        self.context.shared_state[WAS_LAST_READ_SUCCESSFUL] = was_successful
+        self.context.logger.info(f"Last read success flag set to {was_successful}.")
+
     def teardown(self) -> None:
         """Teardown the handler."""
         self.context.logger.info(f"{self.__class__.__name__}: teardown called.")
@@ -704,11 +717,6 @@ class ContractHandler(BaseHandler):
         self.context.logger.info(
             f"Last successful read set to {self.context.shared_state[LAST_SUCCESSFUL_READ]}."
         )
-
-    def set_was_last_read_successful(self, was_successful: bool) -> None:
-        """Set the last successful read."""
-        self.context.shared_state[WAS_LAST_READ_SUCCESSFUL] = was_successful
-        self.context.logger.info(f"Last read success flag set to {was_successful}.")
 
     @property
     def pending_tasks(self) -> List[Dict[str, Any]]:
@@ -818,39 +826,52 @@ class ContractHandler(BaseHandler):
     def _advance_from_block(
         self, body: Dict[str, Any], reqs: List[Dict[str, Any]]
     ) -> None:
-        """Move the scan start block past the range the read covered.
+        """Move the scan start block forward over the range the read covered.
 
-        The bookmark advances to one past the furthest block this read
-        proves was covered: the highest request block in the reply, or the
-        head the scan covered, whichever is further. That head is
-        ``last_scanned_block`` when the contract reports it, else the head
-        read just before the scan was dispatched
-        (``MARKETPLACE_SCAN_HEAD``), which is never ahead of the head the
-        contract scanned to. Every request at or below that head is already
-        in this reply, so taking the head cannot skip one.
+        Two things can move it and the furthest wins:
+
+        - the highest request block in the reply, plus one. A returned
+          request proves its own block was queried.
+        - the head the scan was paired with, less
+          ``SCAN_HEAD_LAG_BLOCKS``. The head block itself is not proven
+          queried, so the margin leaves it and its neighbours to the next
+          scan instead of skipping them. A contract that reports its own
+          ``last_scanned_block`` is treated the same way: nothing here can
+          prove that value was covered inclusively.
 
         Both are considered on every read, whether or not it carried
-        requests: the wait-for-timeout list is echoed back by each reply at
+        requests. The wait-for-timeout list is echoed back by each reply at
         the block its entries were first seen, so a mech holding one has a
-        non-empty reply of old blocks on every scan and the request block
+        non-empty reply of old blocks on every scan, and the request block
         alone would hold the bookmark still for as long as the task is
-        held. The bookmark only ever moves forward, so neither a stale head
-        nor such an echo can pull it back over a range already scanned.
+        held.
+
+        A block the margin leaves behind is re-scanned, and that cannot
+        queue a request twice. The guarantee is the request rule above, not
+        an id filter: ``filter_requests`` appends without one. A request
+        found in a block lifts the bookmark past that block, so no later
+        scan starts at or below it.
+
+        The bookmark only ever moves forward, so neither a stale head nor
+        an echoed older request can pull it back over a scanned range. On a
+        chain mining fewer than ``SCAN_HEAD_LAG_BLOCKS`` blocks between
+        polls it holds still until the head has moved further than the
+        margin.
 
         :param body: the contract response body.
         :param reqs: the requests the read returned.
         """
-        covered: List[int] = []
+        next_starts: List[int] = []
         if reqs:
-            covered.append(max(req["block_number"] for req in reqs))
+            next_starts.append(max(req["block_number"] for req in reqs) + 1)
         scanned_head = body.get(BodyKey.LAST_SCANNED_BLOCK.value)
         if scanned_head is None:
             scanned_head = self.context.shared_state.get(MARKETPLACE_SCAN_HEAD)
         if scanned_head is not None:
-            covered.append(int(scanned_head))
-        if not covered:
+            next_starts.append(int(scanned_head) - SCAN_HEAD_LAG_BLOCKS)
+        if not next_starts:
             return
-        candidate = max(covered) + 1
+        candidate = max(next_starts)
 
         old_block = self.from_block
         if old_block is not None and candidate <= old_block:
@@ -1025,6 +1046,14 @@ class LedgerHandler(BaseHandler):
             self.context.logger.warning(
                 f"Ledger API Message performative not recognized: {ledger_api_msg.performative}"
             )
+            if self.params.req_type == RequestType.SCAN_HEAD.value:
+                # The poll cadence is stamped when the scan goes out, which a
+                # failed head read never reaches. Stamping it here is what
+                # keeps the next tick from re-requesting the head at once.
+                self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = (
+                    time.time()
+                )
+                self.set_was_last_read_successful(False)
             self._release_ledger_request()
             return
 
