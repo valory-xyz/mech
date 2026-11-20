@@ -217,7 +217,8 @@ mech_preimage_incomplete_rows = Gauge(
 
 # Off-chain HTTP hardening
 MAX_HTTP_BODY_BYTES = 1_048_576  # 1MB cap on inbound HTTP bodies
-MIN_DELIVERY_RATE = 0  # 0 allowed for free tasks; rejects only negatives
+# The balance tracker refuses a zero-total charge, so a zero rate never settles.
+MIN_DELIVERY_RATE = 1
 MAX_DELIVERY_RATE = 2**256 - 1  # uint256 upper bound
 # 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
 IPFS_HASH_RE = re.compile(r"^0x([0-9a-fA-F]{64}|[0-9a-fA-F]{68})$")

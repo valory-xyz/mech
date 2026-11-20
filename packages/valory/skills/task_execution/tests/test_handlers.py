@@ -2312,9 +2312,10 @@ def test_signed_requests_rejects_invalid_ipfs_hash(
     "delivery_rate_str",
     [
         "-1",
+        "0",
         str(hmod.MAX_DELIVERY_RATE + 1),
     ],
-    ids=["negative", "above_uint256"],
+    ids=["negative", "zero", "above_uint256"],
 )
 def test_signed_requests_rejects_out_of_range_delivery_rate(
     handler_context: Any,
@@ -2339,16 +2340,16 @@ def test_signed_requests_rejects_out_of_range_delivery_rate(
     assert handler_context.shared_state["pending_tasks"] == []
 
 
-def test_signed_requests_accepts_zero_delivery_rate(
+def test_signed_requests_accepts_the_minimum_delivery_rate(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """delivery_rate=0 is accepted so free off-chain tasks can be enqueued."""
+    """delivery_rate=1, the lowest rate that can settle, is accepted."""
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     _install_balance_ok(mh, monkeypatch)
     mh.setup()
 
-    body = _make_signed_request_body(delivery_rate="0", request_id="7")
+    body = _make_signed_request_body(delivery_rate="1", request_id="7")
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
 
