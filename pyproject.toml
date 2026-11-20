@@ -63,6 +63,17 @@ prerelease = "allow"
 override-dependencies = ["cffi<2.1"]
 
 [tool.tomte]
+# filelock advisories disclosed 2026-10-20 against the version safety's
+# own tox venv installs; drop once tomte's fleet baseline carries them.
+safety_ignores = [
+    "SFTY-20261020-11422",
+    "SFTY-20261020-13394",
+    "SFTY-20261020-18367",
+    "SFTY-20261020-25530",
+    "SFTY-20261020-34461",
+    "SFTY-20261020-81101",
+    "SFTY-20261020-91319",
+]
 # delivery_rate_abci tests are flaky / incomplete; drop this field once
 # those land so tomte's default discovery picks up everything.
 pytest_targets = [
