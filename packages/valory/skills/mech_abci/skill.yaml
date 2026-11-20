@@ -15,6 +15,7 @@ fingerprint:
   models.py: bafybeidz3uijrjd5336t5yfhuneukcky44g2knyc5xjp3xs66nbcakijpy
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
   tests/conftest.py: bafybeiaqouyzclh4wvnf36jgcmgzm7k4snfghnm3v4yowb4pomyn6qvezu
+  tests/test_agent_config.py: bafybeierr35sqlgq326cohxlb66m2epn2t5drmkpzvdj6x5uhtofb5hmvm
   tests/test_behaviours.py: bafybeibjw3tusfxxmr3byy6sdmu7gefotya4xvhd7ia43ll7fgyqggx7ye
   tests/test_composition.py: bafybeihrzdjr7w4dght6bhstcni4zswp4rzgzkgx5bpx4lcesh46h6noqm
   tests/test_dialogues.py: bafybeiaicu6h4d3rppxbjhkifwlrfpjmxd6y4sdqnlskdjqijkct2tvhci
@@ -94,6 +95,7 @@ models:
       default_chain_id: gnosis
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       erc8004_agent_id: null
+      explicit_deadline_settlement_margin_seconds: 180
       finalize_timeout: 60.0
       gas_params:
         gas_price: null
