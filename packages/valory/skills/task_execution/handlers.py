@@ -217,7 +217,8 @@ mech_preimage_incomplete_rows = Gauge(
 
 # Off-chain HTTP hardening
 MAX_HTTP_BODY_BYTES = 1_048_576  # 1MB cap on inbound HTTP bodies
-MIN_DELIVERY_RATE = 0  # 0 allowed for free tasks; rejects only negatives
+# The balance tracker refuses a zero-total charge, so a zero rate never settles.
+MIN_DELIVERY_RATE = 1
 MAX_DELIVERY_RATE = 2**256 - 1  # uint256 upper bound
 # 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
 IPFS_HASH_RE = re.compile(r"^0x([0-9a-fA-F]{64}|[0-9a-fA-F]{68})$")
@@ -1965,6 +1966,23 @@ class MechHttpHandler(AbstractResponseHandler):
                 return mech
         return None
 
+    def _offchain_delivery_rate(self) -> Optional[int]:
+        """Return the marketplace mech's configured delivery rate.
+
+        A signed off-chain request must sign at least this rate.
+
+        :return: the rate from ``mech_to_max_delivery_rate``, or ``None`` when
+            no marketplace mech or no rate for it is configured.
+        """
+        if self._marketplace_mech_address is None:
+            return None
+        rates = {
+            mech.lower(): rate
+            for mech, rate in self.params.mech_to_max_delivery_rate.items()
+        }
+        rate = rates.get(self._marketplace_mech_address.lower())
+        return None if rate is None else int(rate)
+
     def _initialise_offchain_verification_constants(self) -> None:
         """Read the marketplace ``domainSeparator`` and mech ``paymentType``.
 
@@ -2313,6 +2331,40 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             self._handle_bad_request(
                 http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
+            return
+
+        mech_delivery_rate = self._offchain_delivery_rate()
+        if mech_delivery_rate is None:
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id}: no delivery rate is "
+                "configured for the marketplace mech."
+            )
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="mech delivery rate unavailable",
+                status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                status_text="Service unavailable",
+                outcome=REQUEST_OUTCOME_INTERNAL_ERROR,
+            )
+            return
+        if request_delivery_rate < mech_delivery_rate:
+            self.context.logger.info(
+                f"Rejecting offchain request {request_id}: "
+                f"request_delivery_rate={request_delivery_rate} is below the "
+                f"mech's delivery rate {mech_delivery_rate}."
+            )
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="delivery rate below the mech's delivery rate",
+                status_code=HttpCode.BAD_REQUEST_CODE.value,
+                status_text="Bad request",
+                body_extras={"mech_delivery_rate": mech_delivery_rate},
+                outcome=REQUEST_OUTCOME_BAD_REQUEST,
             )
             return
 
