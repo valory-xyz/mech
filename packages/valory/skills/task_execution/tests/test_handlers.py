@@ -145,6 +145,59 @@ def test_ipfs_handler_calls_callback_and_clears(
     assert "nonce-1" not in handler_context.params.req_to_deadline
 
 
+def test_ipfs_reply_without_a_tracked_dialogue_fails_its_request(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A reply whose dialogue was cleaned up fails its request instead of raising."""
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    monkeypatch.setattr(handler_context.ipfs_dialogues, "update", lambda _msg: None)
+
+    calls: Dict[str, Any] = {"callback": False, "error": None}
+    handler_context.params.req_to_callback["nonce-1"] = lambda *_: calls.__setitem__(
+        "callback", True
+    )
+    handler_context.params.req_to_error_callback["nonce-1"] = (
+        lambda reason: calls.__setitem__("error", reason)
+    )
+    handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
+    handler_context.params.in_flight_req = True
+
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=IpfsMessage.Performative.FILES,
+        dialogue_reference=("nonce-1", "x"),
+    )
+    handler.handle(msg)
+
+    assert calls["callback"] is False
+    assert calls["error"] == "IPFS reply arrived after its dialogue was cleaned up"
+    assert handler_context.params.in_flight_req is False
+    assert "nonce-1" not in handler_context.params.req_to_callback
+    assert "nonce-1" not in handler_context.params.req_to_error_callback
+    assert "nonce-1" not in handler_context.params.req_to_deadline
+
+
+def test_ipfs_reply_for_an_unknown_nonce_leaves_the_in_flight_request(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A late reply for a request no longer pending does not touch another request's flag."""
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    monkeypatch.setattr(handler_context.ipfs_dialogues, "update", lambda _msg: None)
+
+    handler_context.params.req_to_callback["nonce-2"] = lambda *_: None
+    handler_context.params.in_flight_req = True
+
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=IpfsMessage.Performative.FILES,
+        dialogue_reference=("nonce-1", "x"),
+    )
+    handler.handle(msg)
+
+    assert handler_context.params.in_flight_req is True
+    assert "nonce-2" in handler_context.params.req_to_callback
+
+
 def test_ipfs_handler_deadline_expired_still_invokes_callback(
     handler_context: Any,
 ) -> None:

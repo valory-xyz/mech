@@ -791,6 +791,9 @@ class IpfsHandler(BaseHandler):
         # ERROR is a valid TERMINAL_PERFORMATIVE in the IPFS dialogue protocol,
         # so ipfs_dialogues.update() will succeed for error replies.
         dialogue = self.context.ipfs_dialogues.update(ipfs_msg)
+        if dialogue is None:
+            self._handle_untracked_reply(ipfs_msg)
+            return
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback = self.params.req_to_callback.pop(nonce)
         error_callback = self.params.req_to_error_callback.pop(nonce, None)
@@ -821,6 +824,32 @@ class IpfsHandler(BaseHandler):
         self.params.in_flight_req = False
         self.params.is_cold_start = False
         self.on_message_handled(message)
+
+    def _handle_untracked_reply(self, ipfs_msg: IpfsMessage) -> None:
+        """Fail the request behind a reply whose dialogue is no longer tracked.
+
+        ``cleanup_dialogues`` can drop a dialogue while its request is still
+        in flight, so ``update`` returns None for the late reply. The request's
+        bookkeeping is keyed by the nonce the reply carries; it is cleared and
+        the request fails through its error callback, as an ERROR reply does.
+        A nonce with no pending callback was already settled or timed out, so
+        ``in_flight_req`` belongs to another request and is left alone.
+
+        :param ipfs_msg: the reply.
+        """
+        nonce = ipfs_msg.dialogue_reference[0]
+        if self.params.req_to_callback.pop(nonce, None) is None:
+            self.context.logger.warning(
+                f"Dropping IPFS reply for nonce {nonce}: no pending request."
+            )
+            return
+        self.params.req_to_deadline.pop(nonce, None)
+        error_callback = self.params.req_to_error_callback.pop(nonce, None)
+        reason = "IPFS reply arrived after its dialogue was cleaned up"
+        self.context.logger.warning(f"IPFS request failed for nonce {nonce}: {reason}")
+        if error_callback is not None:
+            error_callback(reason)
+        self.params.in_flight_req = False
 
 
 class ContractHandler(BaseHandler):
