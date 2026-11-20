@@ -4048,10 +4048,11 @@ class TestSimulationBudget:
     def test_deadline_is_capped_by_the_remaining_budget(self) -> None:
         """A small round leaves less than the per-call bound for the next call."""
         b = _make_sim_b([], round_timeout_seconds=4.0)
-        b.start_simulation_budget()
-        deadline = b.next_simulation_deadline()
-        assert deadline is not None
-        assert 0 < deadline <= 4.0 * SIMULATION_ROUND_BUDGET_FRACTION
+        with patch.object(beh_mod.time, "monotonic", return_value=100.0):
+            b.start_simulation_budget()
+        with patch.object(beh_mod.time, "monotonic", return_value=100.5):
+            deadline = b.next_simulation_deadline()
+        assert deadline == 4.0 * SIMULATION_ROUND_BUDGET_FRACTION - 0.5
 
     @pytest.mark.parametrize("round_timeout_seconds", [0.0, -1.0])
     def test_deadline_is_none_once_the_budget_is_spent(

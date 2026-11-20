@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = ">=3.10, <3.15"
 resolution-markers = [
     "python_full_version >= '3.14' and platform_python_implementation != 'PyPy'",
@@ -1061,7 +1061,7 @@ name = "exceptiongroup"
 version = "1.3.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "typing-extensions" },
+    { name = "typing-extensions", marker = "python_full_version < '3.13'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/50/79/66800aadf48771f6b62f7eb014e352e5d06856655206165d775e675a02c9/exceptiongroup-1.3.1.tar.gz", hash = "sha256:8b412432c6055b0b7d14c310000ae93352ed6754f70fa8f7c34141f91c4e3219", size = 30371, upload-time = "2025-11-21T23:01:54.787Z" }
 wheels = [
@@ -1533,7 +1533,6 @@ wheels = [
 name = "mech"
 version = "0.1.0"
 source = { editable = "." }
-default-groups = "all"
 dependencies = [
     { name = "aiohttp" },
     { name = "asn1crypto" },
@@ -1580,11 +1579,11 @@ requires-dist = [
     { name = "hypothesis", specifier = ">=6" },
     { name = "multidict" },
     { name = "open-aea-cli-ipfs", specifier = "==2.2.10" },
-    { name = "open-aea-helpers", specifier = "==0.21.30" },
+    { name = "open-aea-helpers", specifier = "==0.21.31" },
     { name = "open-aea-ledger-cosmos", specifier = "==2.2.10" },
     { name = "open-aea-ledger-ethereum", specifier = "==2.2.10" },
-    { name = "open-aea-test-autonomy", specifier = "==0.21.30" },
-    { name = "open-autonomy", specifier = "==0.21.30" },
+    { name = "open-aea-test-autonomy", specifier = "==0.21.31" },
+    { name = "open-autonomy", specifier = "==0.21.31" },
     { name = "openai", specifier = ">=1.30,<2" },
     { name = "openapi-core", specifier = ">=0.22,<0.23" },
     { name = "openapi-spec-validator", specifier = ">=0.7.0,<0.8.0" },
@@ -1791,14 +1790,14 @@ wheels = [
 
 [[package]]
 name = "open-aea-helpers"
-version = "0.21.30"
+version = "0.21.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "open-autonomy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/46/a4/312f6e542d40f6cf1e5f9cb746d31cb9fd46353290bb198a1a432001b8f2/open_aea_helpers-0.21.30.tar.gz", hash = "sha256:f028c4b637c08cc2fef2e46fcaeef44b474805b38d1f1bdf20f316708c442af7", size = 41197, upload-time = "2026-10-26T09:59:09.751Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/b9/1b/30214433f6c70a594a806900dd2a8e99675e50a4a9e6735bb8310310c9ed/open_aea_helpers-0.21.31.tar.gz", hash = "sha256:76dd5d927876e88866f13fb41849e5c78c6b2d0ef4fd6c5d25bb9d92b831556b", size = 41185, upload-time = "2026-11-18T16:25:54.621Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/01/51/a22304020d4c25deda49dcb106d12c45f057a0eca118a0f296ae79585a9c/open_aea_helpers-0.21.30-py3-none-any.whl", hash = "sha256:23e0d9f3923c3c1845bbed540fcd41767924232e60b0ff406b437105b49e0b0d", size = 44435, upload-time = "2026-10-26T09:59:08.909Z" },
+    { url = "https://files.pythonhosted.org/packages/18/1b/a64170d18567a3ef2721ee4154212ac801cff8723cca1dd6516069d5cd9f/open_aea_helpers-0.21.31-py3-none-any.whl", hash = "sha256:012c03c4db48380565d57c95dd21104aab2af0b5e34a4c34241263bf954b4669", size = 44435, upload-time = "2026-11-18T16:25:53.586Z" },
 ]
 
 [[package]]
@@ -1835,19 +1834,19 @@ wheels = [
 
 [[package]]
 name = "open-aea-test-autonomy"
-version = "0.21.30"
+version = "0.21.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "open-autonomy", extra = ["all", "docker"] },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/bb/790f5e475d6abc45f2d07ffc0a8f488268dc3bb3834ac5b9a6a6e6da4a9a/open_aea_test_autonomy-0.21.30.tar.gz", hash = "sha256:02bc720c6b44e09db7a7a0b337eb76af467e320b9bffa40f34576fb1966daf8d", size = 34898, upload-time = "2026-10-26T09:59:05.884Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/31/8d0ec9dc9c1730cc65a9aacce6eacd5d2d20d21bfc4e290e065ec5083d01/open_aea_test_autonomy-0.21.31.tar.gz", hash = "sha256:90f5665560c807ad66b8e3589d1b049f60db6113d63b2617acae89ca2f34cc2f", size = 34891, upload-time = "2026-11-18T16:25:51.142Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/17/32/5e2ac1b26a1d05fcf60401c23c82a1546ab327f2ae6994278c340cce715b/open_aea_test_autonomy-0.21.30-py3-none-any.whl", hash = "sha256:eb4448a83bfef04aa0dc9151f8ea6e39ddd38a7c277f2e4a6c173ffcd856d711", size = 51495, upload-time = "2026-10-26T09:59:04.819Z" },
+    { url = "https://files.pythonhosted.org/packages/7e/81/507f59e050f726ea54b375d1e46abfbd49690d856dc7583f3fc975cb7373/open_aea_test_autonomy-0.21.31-py3-none-any.whl", hash = "sha256:90da5076f820cc5dee7e4aafa93bc0523412d1879a71c1c4f91ce5fd65048f11", size = 51498, upload-time = "2026-11-18T16:25:50.069Z" },
 ]
 
 [[package]]
 name = "open-autonomy"
-version = "0.21.30"
+version = "0.21.31"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
@@ -1864,9 +1863,9 @@ dependencies = [
     { name = "requests" },
     { name = "web3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/6f/45/b7c26e596ea0292fee939276ca4eb558358e0f8bd3d5b4c5af80d2943b79/open_autonomy-0.21.30.tar.gz", hash = "sha256:dabe161302dbc5ab190d5e394d10e05a1f4cb8dd48355a8d4f144d7e2ed08e06", size = 1165695, upload-time = "2026-10-26T09:59:01.386Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/62/48/b69b4eaaecfb4faaa5ff1e360eb1f2f501bc0055c73bec34252604d0b055/open_autonomy-0.21.31.tar.gz", hash = "sha256:b3f5428c7b583cf236f2275ec3ea835c19b0e68a8c1aa32a11f67490c1eeab58", size = 1123057, upload-time = "2026-11-18T16:25:47.124Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/bf/1a/7fd50d6961cfadc10cf282ed165ba1daa03f595952ccb56cb12c8dec61d9/open_autonomy-0.21.30-py3-none-any.whl", hash = "sha256:d84260a3f55d059be1a0dd23c9b492b38f493ccc3e903c92e784347cd925820e", size = 1675378, upload-time = "2026-10-26T09:58:59.982Z" },
+    { url = "https://files.pythonhosted.org/packages/c4/f8/412eec26a82cdcba5aa789ec3f8ac5e20e712739501a9cb242fffddf417e/open_autonomy-0.21.31-py3-none-any.whl", hash = "sha256:0a582c4f48c1eb9f4b494b2dd8e418dd681186f014de9fecdc3a939675b24b25", size = 1634677, upload-time = "2026-11-18T16:25:45.781Z" },
 ]
 
 [package.optional-dependencies]
