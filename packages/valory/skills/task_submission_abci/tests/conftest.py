@@ -221,6 +221,7 @@ def _make_full_ctx(
         settlement_profit_transfer_gas=DEFAULT_SETTLEMENT_PROFIT_TRANSFER_GAS,
         settlement_metadata_hash_gas=DEFAULT_SETTLEMENT_METADATA_HASH_GAS,
         settlement_legacy_response_gas=DEFAULT_SETTLEMENT_LEGACY_RESPONSE_GAS,
+        round_timeout_seconds=30.0,
     )
     defaults.update(overrides)
     for attr, val in defaults.items():

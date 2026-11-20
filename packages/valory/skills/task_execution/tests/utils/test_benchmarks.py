@@ -139,17 +139,21 @@ class TestTokenCounterCallbackCall:
         assert cb.cost_dict["total_tokens"] == 1500
         assert cb.cost_dict["total_cost"] == pytest.approx(0.00125 + 0.0025 * 0.5)
 
-    def test_every_jury_voter_model_is_priced(self) -> None:
-        """resolve_market_jury's voter models must all be keys in the table."""
+    def test_every_jury_model_is_priced(self) -> None:
+        """resolve_market_jury's voter and judge models must all be priced."""
         jury_models = (
             "openai/gpt-6.1-sol:online",
             "x-ai/grok-4.3:online",
             "google/gemini-2.5-flash:online",
             "anthropic/claude-haiku-4.5:online",
             "anthropic/claude-sonnet-5.5:online",
+            # native provider ids, for the slots the jury calls directly
+            "gpt-6.1-sol",
+            "gemini-2.5-flash",
+            "claude-sonnet-5-5",
         )
         missing = [m for m in jury_models if m not in TokenCounterCallback.TOKEN_PRICES]
-        assert not missing, f"unpriced jury voter models: {missing}"
+        assert not missing, f"unpriced jury models: {missing}"
 
     @pytest.mark.parametrize(
         "model, input_price, output_price",
@@ -159,6 +163,7 @@ class TestTokenCounterCallbackCall:
             ("claude-sonnet-5-5", 0.002, 0.010),
             ("openai/gpt-6.1-sol:online", 0.002, 0.010),
             ("anthropic/claude-sonnet-5.5:online", 0.002, 0.010),
+            ("gemini-2.5-flash", 0.0003, 0.0025),
         ],
     )
     def test_current_models_are_priced(
@@ -180,6 +185,44 @@ class TestTokenCounterCallbackCall:
         assert callback.cost_dict["total_cost"] == pytest.approx(
             input_price + output_price
         )
+
+    def test_deepseek_flash_is_priced_at_its_listed_fireworks_rate(self) -> None:
+        """deepseek/deepseek-v4.1-flash accrues cost at 0.00045 / 0.0018 USD per 1k."""
+        model = "deepseek/deepseek-v4.1-flash"
+        input_tokens, output_tokens = 2000, 400
+        expected_input = input_tokens / PRICE_NUM_TOKENS * 0.00045
+        expected_output = output_tokens / PRICE_NUM_TOKENS * 0.0018
+        cb = TokenCounterCallback()
+        cb(
+            model,
+            _dummy_counter,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        assert cb.actual_model == model
+        assert cb.cost_dict["total_tokens"] == 2400
+        assert cb.cost_dict["input_cost"] == pytest.approx(expected_input)
+        assert cb.cost_dict["output_cost"] == pytest.approx(expected_output)
+        assert cb.cost_dict["total_cost"] == pytest.approx(
+            expected_input + expected_output
+        )
+
+    @pytest.mark.parametrize(
+        "model",
+        [
+            "deepseek/deepseek-v4.1-flash:online",
+            "deepseek/deepseek-v4.1",
+            "deepseek-v4.1-flash",
+            "",
+        ],
+    )
+    def test_model_id_not_matching_a_key_exactly_is_unpriced(self, model: str) -> None:
+        """Lookup is by exact model id, so near-miss ids are not priced."""
+        cb = TokenCounterCallback()
+        cb(model, _dummy_counter, input_tokens=10, output_tokens=10)
+        assert cb.cost_dict["unpriced_calls"] == 1
+        assert cb.cost_dict["total_tokens"] == 0
+        assert cb.cost_dict["total_cost"] == 0
 
     def test_gemini_flash_lite_tokens_are_counted_at_its_listed_price(self) -> None:
         """A gemini-3.5-flash-lite call is priced from the table, not left unpriced."""

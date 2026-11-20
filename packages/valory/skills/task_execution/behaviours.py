@@ -22,6 +22,7 @@
 import functools
 import json
 import math
+import os
 import re
 import threading
 import time
@@ -104,6 +105,18 @@ PAYMENT_INFO = "payment_info"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
+# The chain head read just before a marketplace scan is dispatched, and the
+# block the scan's bookmark advances to when the scan finds nothing. Cleared
+# when that scan's reply lands, so every scan is paired with its own head.
+MARKETPLACE_SCAN_HEAD = "marketplace_scan_head"
+# How far below a paired head the bookmark is allowed to go. The head block
+# itself is not proven scanned: the contract's batch loop has an exclusive
+# upper bound, so it stops one block below the head it read whenever the span
+# is an exact multiple of the window, and a head read from a load-balanced
+# endpoint can come from a node a block ahead of the one the scan ran on. The
+# margin also absorbs a short reorg. These blocks are left to the next scan
+# rather than skipped.
+SCAN_HEAD_LAG_BLOCKS = 5
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 PREDICT_API_EVENTS = "predict_api_events"
 PREDICT_API_EVENT_TTL_SECONDS = 24 * 60 * 60
@@ -614,6 +627,7 @@ class RequestType(Enum):
 
     LEGACY = "legacy"
     MARKETPLACE = "marketplace"
+    SCAN_HEAD = "scan_head"
 
 
 @dataclass(init=False)
@@ -806,6 +820,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash = self.params.tools_to_package_hash
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
+        if self.params.openai_base_url:
+            os.environ["OPENAI_BASE_URL"] = self.params.openai_base_url
         # Initialise the off-chain preimage buffer's shared-state keys so the
         # accept hook (handler side), the sweeper (here) and the settlement
         # skill's stamps can read/write them. The retention flag is mirrored
@@ -854,6 +870,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._filter_out_incompatible_reqs()
         self._update_pending_tasks()
         self._process_preimage_buffer()
+
+    @property
+    def marketplace_scan_head(self) -> Optional[int]:
+        """Get the chain head paired with the next marketplace scan."""
+        return self.context.shared_state.get(MARKETPLACE_SCAN_HEAD)
 
     @property
     def payment_model(self) -> Optional[Any]:
@@ -1013,8 +1034,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._all_tools[tool_req] = tool_py, callable_method, component_yaml
         self._inflight_tool_req = None
 
-    def _populate_from_block(self) -> None:
-        """Populate from_block"""
+    def _request_latest_block(self) -> None:
+        """Put a ``get_block("latest")`` request on the outbox."""
         ledger_api_msg, _ = self.context.ledger_dialogues.create(
             performative=LedgerApiMessage.Performative.GET_STATE,
             callable="get_block",
@@ -1026,11 +1047,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             args=(),
         )
         self.context.outbox.put_message(message=ledger_api_msg)
+
+    def _populate_from_block(self) -> None:
+        """Populate from_block"""
+        self.params.req_type = RequestType.MARKETPLACE.value
+        self._request_latest_block()
         self.params.in_flight_req = True
+
+    def _request_scan_head(self) -> None:
+        """Read the chain head the next marketplace scan will start from.
+
+        The head is read before the scan is dispatched, so it is never
+        ahead of the head the contract reads for itself. The bookmark can
+        therefore be advanced to it on a scan that returned no requests
+        without skipping a block: whatever is mined between the two reads
+        falls inside the next scan's range.
+        """
+        self.params.req_type = RequestType.SCAN_HEAD.value
+        self._request_latest_block()
+        self.params.in_flight_read_req = True
 
     def _get_payment_types(self) -> bool:
         """Get the payment types of the mechs in the timed out tasks, if not available in the cache."""
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or self.params.in_flight_read_req:
             return False
 
         to_request = {
@@ -1102,7 +1141,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         now = time.time()
 
         # This prevents readiness from going stale while we're legitimately busy.
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or self.params.in_flight_read_req:
             self.context.shared_state[INFLIGHT_READ_TS] = now
             return
 
@@ -1121,7 +1160,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
-            self.params.req_type = RequestType.MARKETPLACE.value
             self.context.shared_state[LAST_READ_ATTEMPT_TS] = now
             return
 
@@ -1129,8 +1167,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.shared_state[LAST_READ_ATTEMPT_TS] = now
         self.context.shared_state[INFLIGHT_READ_TS] = now
 
+        if self.marketplace_scan_head is None:
+            # Pair the scan with a head read first. ``last_polling`` is
+            # stamped only once the scan itself goes out, so the next tick
+            # still sees a poll as due and dispatches it.
+            self._request_scan_head()
+            return
+
         self._check_undelivered_reqs_marketplace()
-        self.params.in_flight_req = True
+        self.params.in_flight_read_req = True
         self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 
     def _check_undelivered_reqs_marketplace(self) -> None:
@@ -1357,7 +1402,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         # there is an in flight request
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or self.params.in_flight_read_req:
             return
 
         # status check interval not reached

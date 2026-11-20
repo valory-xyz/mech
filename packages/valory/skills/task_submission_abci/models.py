@@ -109,9 +109,9 @@ class Params(BaseParams):
         # out of gas at a 1M limit. A delivery wrapped in ``mech.exec``
         # measured 6k to 18k below the mech's direct wrapper, so it needs no
         # extra budget. The defaults keep a margin over these figures.
-        self.settlement_base_gas: int = int(kwargs.get("settlement_base_gas", 300_000))
+        self.settlement_base_gas: int = int(kwargs.pop("settlement_base_gas", 300_000))
         self.settlement_gas_per_request: int = int(
-            kwargs.get("settlement_gas_per_request", 150_000)
+            kwargs.pop("settlement_gas_per_request", 150_000)
         )
         # Each off-chain requester group past the first is its own deliver
         # call with its own exec, karma, tracker and counter writes; the base
@@ -121,7 +121,7 @@ class Params(BaseParams):
         # that is about 117k per extra group, so the default sits at a
         # first-time requester's cost with the per-request budget's margin.
         self.settlement_gas_per_requester_group: int = int(
-            kwargs.get("settlement_gas_per_requester_group", 110_000)
+            kwargs.pop("settlement_gas_per_requester_group", 110_000)
         )
         # Budgets for the other txs that can share the multisend, from
         # eth_estimateGas on the same fork (each includes the 21k a call inside
@@ -130,16 +130,16 @@ class Params(BaseParams):
         # (native, fresh receiver); changeHash 28,566. A legacy response tx is
         # supplied by the tool, so its budget is a cap, not a measurement.
         self.settlement_process_payment_gas: int = int(
-            kwargs.get("settlement_process_payment_gas", 120_000)
+            kwargs.pop("settlement_process_payment_gas", 120_000)
         )
         self.settlement_profit_transfer_gas: int = int(
-            kwargs.get("settlement_profit_transfer_gas", 70_000)
+            kwargs.pop("settlement_profit_transfer_gas", 70_000)
         )
         self.settlement_metadata_hash_gas: int = int(
-            kwargs.get("settlement_metadata_hash_gas", 40_000)
+            kwargs.pop("settlement_metadata_hash_gas", 40_000)
         )
         self.settlement_legacy_response_gas: int = int(
-            kwargs.get("settlement_legacy_response_gas", 150_000)
+            kwargs.pop("settlement_legacy_response_gas", 150_000)
         )
         if self.settlement_gas_per_request <= 0 or (
             self.manual_gas_limit
@@ -164,7 +164,7 @@ class Params(BaseParams):
         # We are using 10_000 for 100% so 1000 == 0.1 for the service_owner_share
         self.service_owner_share = self._ensure("service_owner_share", kwargs, int)
         self.profit_split_balance = self._ensure("profit_split_balance", kwargs, int)
-        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure_get(
+        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure(
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
         self.mech_to_config: Dict[str, MechConfig] = {
@@ -218,25 +218,25 @@ class Params(BaseParams):
         # alertable rather than silent. False by default so an
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
-        self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
+        self.use_offchain: bool = bool(kwargs.pop("use_offchain", False))
         # Off-chain settlement via the cap-and-actual overload; off until the
         # marketplace contracts that carry it are live.
         self.cap_and_actual_enabled: bool = bool(
-            kwargs.get("cap_and_actual_enabled", False)
+            kwargs.pop("cap_and_actual_enabled", False)
         )
         # An explicit-nonce task closer than this to its signed deadline when a
         # batch is built is dropped rather than risked: the batch still goes
         # through payload consensus, signature collection and submission, and
         # one expired item reverts the whole call.
         self.explicit_deadline_settlement_margin_seconds: int = int(
-            kwargs.get("explicit_deadline_settlement_margin_seconds", 180)
+            kwargs.pop("explicit_deadline_settlement_margin_seconds", 180)
         )
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No
         # API key here — the EOA signature is the credential.
         self.predict_api_events_url: str = str(
-            kwargs.get("predict_api_events_url", "") or ""
+            kwargs.pop("predict_api_events_url", "") or ""
         )
         # Explicit short timeout on the predict-api POST. The framework's
         # default ``request_timeout`` would let a slow or hung endpoint
@@ -246,14 +246,14 @@ class Params(BaseParams):
         # healthy endpoint and surfaces a stuck endpoint as a dropped
         # batch on the next FSM cycle.
         self.predict_api_events_timeout_seconds: float = float(
-            kwargs.get("predict_api_events_timeout_seconds", 5.0) or 5.0
+            kwargs.pop("predict_api_events_timeout_seconds", 5.0) or 5.0
         )
         # Upper bound on the drainer's replay batch (rows settled before a
         # restart and never posted). Chunks a long predict-api outage into
         # one bounded POST per settled round instead of one ever-growing
         # request that the server would eventually refuse.
         self.predict_api_replay_batch_size: int = int(
-            kwargs.get("predict_api_replay_batch_size", 50) or 50
+            kwargs.pop("predict_api_replay_batch_size", 50) or 50
         )
         # On-chain undelivered-request sweep. The PostTxSettlement
         # behaviour walks ``shared_state[PENDING_TASKS]`` for tasks
@@ -266,7 +266,7 @@ class Params(BaseParams):
         # validated against a live deployment. See
         # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.2.
         self.mech_events_sweep_pending_enabled: bool = bool(
-            kwargs.get("mech_events_sweep_pending_enabled", False)
+            kwargs.pop("mech_events_sweep_pending_enabled", False)
         )
         # Max age in seconds before a pending task is treated as
         # undelivered. The contract's ``RequestInfo.responseTimeout`` is
@@ -276,7 +276,7 @@ class Params(BaseParams):
         # conservative upper bound covering typical mech timeouts; tune
         # per deployment if responseTimeout values differ.
         self.mech_events_sweep_max_age_seconds: float = float(
-            kwargs.get("mech_events_sweep_max_age_seconds", 3600.0) or 3600.0
+            kwargs.pop("mech_events_sweep_max_age_seconds", 3600.0) or 3600.0
         )
         # Chain id used to build request-only sweep events and to derive
         # the EIP-712 domain when a pure-sweep round emits no delivered
@@ -288,7 +288,7 @@ class Params(BaseParams):
         # whole batch (including any delivered events on a mixed round)
         # is silently dropped after the queue has already been mutated.
         # Same semantics and default as task_execution.
-        self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
+        self.mech_events_chain_id: int = int(kwargs.pop("mech_events_chain_id", 0) or 0)
         super().__init__(*args, **kwargs)
 
     @classmethod
