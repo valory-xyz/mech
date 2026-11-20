@@ -22,7 +22,6 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple
 
-import pytest
 import yaml
 
 PACKAGES_DIR = Path(__file__).parents[4]
@@ -47,35 +46,25 @@ def _skill_overrides() -> List[Tuple[str, Dict[str, Any]]]:
     ]
 
 
-@pytest.mark.parametrize(
-    "skill_name,override", _skill_overrides(), ids=lambda value: str(value)[:40]
-)
-def test_overridden_model_args_are_declared_by_the_skill(
-    skill_name: str, override: Dict[str, Any]
-) -> None:
+def test_overridden_model_args_are_declared_by_the_skill() -> None:
     """Every model arg the agent overrides exists in that skill's ``skill.yaml``.
 
     The AEA refuses to start when an override names an arg the skill does not
-    declare, so an undeclared override stops the agent at load time.
-
-    :param skill_name: the overridden skill's name.
-    :param override: the agent's override document for that skill.
+    declare, so an undeclared override stops the agent at load time. The files
+    are read inside the test: the AEA imports every module of a skill when it
+    loads it, tests included.
     """
-    skill = yaml.safe_load(
-        (PACKAGES_DIR / "valory" / "skills" / skill_name / "skill.yaml").read_text()
-    )
-    undeclared = [
-        f"{model}.{arg}"
-        for model, model_override in (override.get("models") or {}).items()
-        for arg in (model_override.get("args") or {})
-        if arg not in (skill["models"].get(model) or {}).get("args", {})
-    ]
+    overrides = _skill_overrides()
+    assert {name for name, _ in overrides} >= {"mech_abci", "task_execution"}
+    undeclared = []
+    for skill_name, override in overrides:
+        skill = yaml.safe_load(
+            (PACKAGES_DIR / "valory" / "skills" / skill_name / "skill.yaml").read_text()
+        )
+        undeclared += [
+            f"{skill_name}.{model}.{arg}"
+            for model, model_override in (override.get("models") or {}).items()
+            for arg in (model_override.get("args") or {})
+            if arg not in (skill["models"].get(model) or {}).get("args", {})
+        ]
     assert undeclared == []
-
-
-def test_the_agent_overrides_dev_skills() -> None:
-    """The override check above has dev skills to look at."""
-    assert {name for name, _ in _skill_overrides()} >= {
-        "mech_abci",
-        "task_execution",
-    }
