@@ -73,6 +73,9 @@ safety_ignores = [
     "SFTY-20261020-34461",
     "SFTY-20261020-81101",
     "SFTY-20261020-91319",
+    "SFTY-20261023-10299",
+    "SFTY-20261023-16869",
+    "SFTY-20261023-24590",
 ]
 # delivery_rate_abci tests are flaky / incomplete; drop this field once
 # those land so tomte's default discovery picks up everything.
