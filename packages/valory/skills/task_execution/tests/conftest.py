@@ -177,6 +177,7 @@ def params_stub() -> SimpleNamespace:
         in_flight_req=False,
         in_flight_read_req=False,
         req_to_callback={},
+        background_ipfs_nonces=set(),
         req_to_error_callback={},
         req_to_deadline={},
         request_count=0,

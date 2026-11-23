@@ -193,6 +193,9 @@ CLIENT_FAULT_EXCEPTION = "InvalidRequestError"
 NO_RESULT_ERROR = "tool returned no result"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
+# How long a queued on-chain task waits for its IPFS request data before the
+# download counts as timed out.
+REQUEST_DATA_FETCH_DEADLINE = 60.0
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
@@ -773,6 +776,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
         self._task_ipfs_nonce: Optional[str] = None
+        # Outcome of the request data download of queued on-chain tasks, by
+        # request id: ``{"files": ...}``, ``{"error": reason}``, or ``{}``
+        # when no download could be started.
+        self._request_data: Dict[Any, Dict[str, Any]] = {}
+        self._prefetch_request_id: Optional[Any] = None
+        self._prefetch_nonce: Optional[str] = None
+        self._prefetch_deadline: float = 0.0
+        self._ready_request_data: Dict[str, Any] = {}
         self._done_task: Optional[Dict[str, Any]] = None
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
@@ -866,6 +877,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if not self._ensure_payment_model():
             return
         self._execute_ipfs_tasks()
+        self._prefetch_request_data()
         self._execute_task()
         self._check_for_new_marketplace_reqs()
         self._filter_out_incompatible_reqs()
@@ -1135,7 +1147,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Requested mech's payment model: {req_mech_pm} != {self.payment_model}."
             )
 
-        self.timed_out_tasks = same_payment_type[: self.params.step_in_list_size]
+        # A listed task whose request data is downloaded or downloading stays
+        # listed until it runs.
+        kept = [task for task in self.timed_out_tasks if self._has_request_data(task)]
+        kept_ids = {task["requestId"] for task in kept}
+        self.timed_out_tasks = kept + [
+            task
+            for task in same_payment_type[: self.params.step_in_list_size]
+            if task["requestId"] not in kept_ids
+        ]
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
@@ -1313,12 +1333,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._handle_timeout_task()
             return
 
-        if len(self.pending_tasks) == 0:
-            if len(self.timed_out_tasks) == 0:
-                return
-            task_data = self.timed_out_tasks.pop(0)
-        else:
-            task_data = self.pending_tasks.pop(0)
+        next_task = self._next_ready_task()
+        if next_task is None:
+            return
+        task_data = next_task
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # Start the time counter to measure time taken to prepare the task
         self.tool_preparation_start_time = time.perf_counter()
@@ -1373,6 +1391,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return
 
+        request_data, self._ready_request_data = self._ready_request_data, {}
         try:
             ipfs_hash = get_ipfs_file_hash(task_data["data"])
         except Exception as e:  # pylint: disable=W0718
@@ -1390,6 +1409,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             task_data["request_cid"] = ipfs_hash
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
+        if "files" in request_data:
+            self._handle_get_task(
+                cast(Any, SimpleNamespace(files=request_data["files"])),
+                cast(Any, None),
+            )
+            return
+        if "error" in request_data:
+            self._handle_ipfs_error(cast(str, request_data["error"]))
+            return
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self._task_ipfs_nonce = self.send_message(
             ipfs_msg,
@@ -1397,6 +1425,114 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._handle_get_task,
             self._handle_ipfs_error,
         )
+
+    def _next_ready_task(self) -> Optional[Dict[str, Any]]:
+        """Pop the first task that can run now, pending tasks before timed-out ones.
+
+        An off-chain task carries its request inline; an on-chain task is ready
+        once its request data download has ended.
+
+        :return: the task, or None when no queued task is ready.
+        """
+        self._ready_request_data = {}
+        for queue in (self.pending_tasks, self.timed_out_tasks):
+            for index, task in enumerate(queue):
+                if task.get("is_offchain"):
+                    return queue.pop(index)
+                if task["requestId"] in self._request_data:
+                    self._ready_request_data = self._request_data.pop(task["requestId"])
+                    return queue.pop(index)
+        return None
+
+    def _has_request_data(self, task: Dict[str, Any]) -> bool:
+        """Whether a queued task's request data is downloaded or downloading.
+
+        :param task: the queued task.
+        :return: True when its download ended or is in flight.
+        """
+        request_id = task["requestId"]
+        return request_id in self._request_data or (
+            self._prefetch_nonce is not None and request_id == self._prefetch_request_id
+        )
+
+    def _prefetch_request_data(self) -> None:
+        """Download the IPFS request data of the next queued on-chain task.
+
+        One download runs at a time, outside the task slot: it never sets
+        ``in_flight_req``, so a slow download delays only its own task. Only
+        one downloaded task waits for the slot, which bounds the data held.
+        A download without a reply by ``REQUEST_DATA_FETCH_DEADLINE`` ends as
+        a timeout, which ``_handle_ipfs_error`` retries.
+        """
+        if self._prefetch_nonce is not None:
+            if time.time() <= self._prefetch_deadline:
+                return
+            self._abandon_prefetch()
+        queued = [
+            task
+            for task in (*self.pending_tasks, *self.timed_out_tasks)
+            if not task.get("is_offchain")
+        ]
+        queued_ids = {task["requestId"] for task in queued}
+        self._request_data = {
+            request_id: data
+            for request_id, data in self._request_data.items()
+            if request_id in queued_ids
+        }
+        if self._request_data or not queued:
+            return
+        task = queued[0]
+        request_id = task["requestId"]
+        try:
+            ipfs_hash = get_ipfs_file_hash(task["data"])
+        except Exception:  # pylint: disable=W0718
+            # The task slot reports the malformed hash when the task runs.
+            self._request_data[request_id] = {}
+            return
+        message, dialogue = self._build_ipfs_get_file_req(
+            ipfs_hash, timeout=REQUEST_DATA_FETCH_DEADLINE
+        )
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        deadline = time.time() + REQUEST_DATA_FETCH_DEADLINE
+        self.params.background_ipfs_nonces.add(nonce)
+        self.params.req_to_callback[nonce] = (
+            lambda reply, _dialogue: self._store_request_data(
+                nonce, {"files": reply.files}
+            )
+        )
+        self.params.req_to_error_callback[nonce] = (
+            lambda reason: self._store_request_data(nonce, {"error": reason})
+        )
+        self.params.req_to_deadline[nonce] = deadline
+        self._prefetch_request_id = request_id
+        self._prefetch_nonce = nonce
+        self._prefetch_deadline = deadline
+        self.context.outbox.put_message(message=message)
+
+    def _store_request_data(self, nonce: str, request_data: Dict[str, Any]) -> None:
+        """Record the outcome of the current request data download.
+
+        :param nonce: the nonce of the download the outcome belongs to.
+        :param request_data: ``{"files": ...}`` or ``{"error": reason}``.
+        """
+        if nonce != self._prefetch_nonce:
+            return
+        self._request_data[self._prefetch_request_id] = request_data
+        self._prefetch_request_id = None
+        self._prefetch_nonce = None
+
+    def _abandon_prefetch(self) -> None:
+        """End the current download as timed out; a later reply is dropped."""
+        nonce = cast(str, self._prefetch_nonce)
+        self.params.req_to_callback.pop(nonce, None)
+        self.params.req_to_error_callback.pop(nonce, None)
+        self.params.req_to_deadline.pop(nonce, None)
+        self.params.background_ipfs_nonces.discard(nonce)
+        self._request_data[self._prefetch_request_id] = {
+            "error": "request data download timed out"
+        }
+        self._prefetch_request_id = None
+        self._prefetch_nonce = None
 
     def _update_pending_tasks(self) -> None:
         if not self.params.use_mech_marketplace:
