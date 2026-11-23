@@ -154,6 +154,10 @@ def shared_state() -> Dict[str, Any]:
 # ----------------------------- Params stub -----------------------------------
 
 
+# The marketplace mech's configured delivery rate in ``params_stub``.
+SAMPLE_MECH_DELIVERY_RATE = 1
+
+
 @pytest.fixture
 def params_stub() -> SimpleNamespace:
     """Return a minimal Params-like namespace with the attributes the code uses."""
@@ -168,6 +172,7 @@ def params_stub() -> SimpleNamespace:
         req_params=SimpleNamespace(from_block={}, last_polling={}),
         polling_interval=10.0,
         in_flight_req=False,
+        in_flight_read_req=False,
         req_to_callback={},
         req_to_error_callback={},
         req_to_deadline={},
@@ -210,7 +215,7 @@ def params_stub() -> SimpleNamespace:
         num_agents=1,
         agent_index=0,
         from_block_range=0,
-        mech_to_max_delivery_rate={},
+        mech_to_max_delivery_rate={mech_addr_lower: SAMPLE_MECH_DELIVERY_RATE},
         step_in_list_size=20,
     )
 
