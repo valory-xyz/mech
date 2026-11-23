@@ -167,6 +167,7 @@ def params_stub() -> SimpleNamespace:
     ns = SimpleNamespace(
         tools_to_package_hash={},  # {tool_name: ipfs_cid}
         tools_to_pricing={},  # {tool_name: price}
+        tools_to_minimum_cap={},
         payment_token_decimals=18,
         fixed_cost_per_request=0,
         marketplace_fee_bp=1500,
@@ -453,6 +454,7 @@ def params_kwargs(dialogue_skill_context: SimpleNamespace) -> Dict[str, Any]:
         mech_marketplace_address=models.ZERO_ADDRESS,
         default_chain_id="1",
         tools_to_pricing={},
+        tools_to_minimum_cap={},
         payment_token_decimals=18,
         fixed_cost_per_request=0,
         marketplace_fee_bp=1500,

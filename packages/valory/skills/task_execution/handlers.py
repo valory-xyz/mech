@@ -77,7 +77,7 @@ from packages.valory.skills.task_execution.behaviours import (
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import (
     Params,
-    minimum_charge,
+    minimum_cap,
     offchain_metric_labels,
     prompt_byte_length,
 )
@@ -498,8 +498,8 @@ REQUEST_ALREADY_ACCEPTED = "already accepted"
 # round-trip needed for the compare.
 IPFS_HASH_MULTIHASH_PREFIX = "1220"
 
-# Acceptance refusals. A signed cap below the mech's minimum charge gets a 400
-# naming ``minimum_cap``. A balance that, after the caps of the sender's
+# Acceptance refusals. A signed cap below the mech's minimum charge, or below
+# the tool's ``tools_to_minimum_cap`` entry, gets a 400 naming ``minimum_cap``. A balance that, after the caps of the sender's
 # unsettled requests, does not cover this cap gets a 402.
 INSUFFICIENT_BALANCE = "insufficient balance"
 SIGNED_CAP_BELOW_MINIMUM = "signed cap below the mech's minimum charge"
@@ -2930,13 +2930,13 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return
 
-        minimum = minimum_charge(
+        minimum = minimum_cap(
             self.params, requested_tool(data.get(RequestKey.IPFS_DATA.value, ""))
         )
         if request_delivery_rate < minimum:
             self.context.logger.info(
                 "Offchain request %s refused: signed cap %d is below the "
-                "minimum charge %d.",
+                "minimum cap %d.",
                 request_id,
                 request_delivery_rate,
                 minimum,

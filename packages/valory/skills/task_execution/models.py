@@ -146,6 +146,7 @@ class PricingParams(Protocol):
     payment_token_decimals: int
     marketplace_fee_bp: int
     tools_to_pricing: Dict[str, int]
+    tools_to_minimum_cap: Dict[str, int]
 
 
 def gross_up_for_fee(amount: int, fee_bp: int) -> int:
@@ -185,6 +186,21 @@ def minimum_charge(params: PricingParams, tool: Optional[str]) -> int:
     )
     floor = params.tools_to_pricing.get(tool, 0) if tool is not None else 0
     return max(MINIMUM_CHARGE_BASE_UNITS, int(floor), fixed)
+
+
+def minimum_cap(params: PricingParams, tool: Optional[str]) -> int:
+    """Return the least an off-chain request for ``tool`` must sign.
+
+    The signed cap bounds what the run can be charged, so it has to cover the
+    tool's ``tools_to_minimum_cap`` entry as well as the minimum charge. A
+    tool without an entry is held to the minimum charge alone.
+
+    :param params: the skill params.
+    :param tool: the requested tool, or None when unknown.
+    :return: the minimum signed cap in payment-asset base units.
+    """
+    listed = params.tools_to_minimum_cap.get(tool, 0) if tool is not None else 0
+    return max(minimum_charge(params, tool), int(listed))
 
 
 class Params(Model):
@@ -355,6 +371,25 @@ class Params(Model):
                 min(self.tools_to_pricing.values()) >= 0,
                 "tools_to_pricing values must be >= 0",
             )
+        # The least an off-chain request must sign per tool. A tool may be
+        # left out; every listed tool must be one the mech serves.
+        self.tools_to_minimum_cap: Dict[str, int] = (
+            kwargs.pop("tools_to_minimum_cap", None) or {}
+        )
+        unknown = sorted(
+            set(self.tools_to_minimum_cap) - set(self.tools_to_package_hash)
+        )
+        enforce(
+            not unknown,
+            f"Unknown tools in tools_to_minimum_cap: {', '.join(unknown)}",
+        )
+        enforce(
+            all(
+                isinstance(cap, int) and not isinstance(cap, bool) and cap >= 0
+                for cap in self.tools_to_minimum_cap.values()
+            ),
+            "tools_to_minimum_cap values must be whole numbers >= 0",
+        )
         # Floor on how far away an explicit-nonce request's signed settlement
         # deadline must be at acceptance: the mech executes, pools and settles
         # through the Safe before then, and settlement past the deadline

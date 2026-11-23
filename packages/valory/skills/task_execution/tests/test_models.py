@@ -240,6 +240,75 @@ def test_params_tools_pricing_rejects_negative_floor(
         m.Params(name="params", **params_kwargs)
 
 
+SERVED_TOOLS = {"sum": "h1", "mul": "h2"}
+
+
+def test_params_minimum_cap_may_list_some_of_the_served_tools(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """A minimum cap is optional per tool, and absent by default."""
+    params_kwargs["tools_to_package_hash"] = dict(SERVED_TOOLS)
+    assert m.Params(name="params", **dict(params_kwargs)).tools_to_minimum_cap == {}
+
+    params_kwargs["tools_to_minimum_cap"] = {"sum": 200}
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.tools_to_minimum_cap == {"sum": 200}
+
+
+@pytest.mark.parametrize(
+    "caps, message",
+    [
+        ({"div": 200}, "Unknown tools in tools_to_minimum_cap: div"),
+        ({"sum": -1}, "whole numbers >= 0"),
+        ({"sum": 1.5}, "whole numbers >= 0"),
+        ({"sum": "200"}, "whole numbers >= 0"),
+        ({"sum": True}, "whole numbers >= 0"),
+        ({"sum": None}, "whole numbers >= 0"),
+    ],
+    ids=["unserved_tool", "negative", "fraction", "text", "bool", "none"],
+)
+def test_params_minimum_cap_rejects_unusable_entries(
+    params_kwargs: Dict[str, Any], caps: Dict[str, Any], message: str
+) -> None:
+    """A cap for a tool the mech does not serve, or one that is not a whole number, stops startup."""
+    params_kwargs["tools_to_package_hash"] = dict(SERVED_TOOLS)
+    params_kwargs["tools_to_minimum_cap"] = caps
+    with pytest.raises(AEAEnforceError, match=message):
+        m.Params(name="params", **params_kwargs)
+
+
+@pytest.mark.parametrize(
+    "tool, floor, listed, expected_charge, expected_cap",
+    [
+        ("sum", 50, 200, 100, 200),
+        ("sum", 150, 120, 150, 150),
+        ("sum", 50, 0, 100, 100),
+        ("mul", 0, 0, 100, 100),
+        (None, 0, 0, 100, 100),
+    ],
+    ids=[
+        "cap_above_charge",
+        "cap_below_floor",
+        "zero_cap",
+        "tool_not_listed",
+        "unknown_tool",
+    ],
+)
+def test_minimum_cap_is_the_larger_of_the_listed_cap_and_the_minimum_charge(
+    tool: Any, floor: int, listed: int, expected_charge: int, expected_cap: int
+) -> None:
+    """The minimum cap never drops below the minimum charge, which it does not change."""
+    params = SimpleNamespace(
+        fixed_cost_per_request=85,
+        payment_token_decimals=6,
+        marketplace_fee_bp=1500,
+        tools_to_pricing={"sum": floor},
+        tools_to_minimum_cap={"sum": listed} if listed else {},
+    )
+    assert m.minimum_charge(params, tool) == expected_charge
+    assert m.minimum_cap(params, tool) == expected_cap
+
+
 def test_params_price_inputs_keep_explicit_zero(params_kwargs: Dict[str, Any]) -> None:
     """An explicit 0 fee or 0 fixed share stays 0 instead of falling back to the default."""
     params_kwargs.update(
