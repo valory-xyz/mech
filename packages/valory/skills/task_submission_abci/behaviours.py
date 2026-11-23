@@ -2240,12 +2240,9 @@ class TransactionPreparationBehaviour(
                     self.context.logger.warning(
                         f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
                     )
-                    # The deliver-data call fails before any simulation,
-                    # so RPC trouble is already reported as inconclusive
-                    # upstream; what is left is this group's own data.
-                    # Charge the group an attempt so a row that can never
-                    # encode is dropped at the cap instead of abandoning
-                    # the batch every period.
+                    # Simulation errors come back inconclusive, so an ERROR
+                    # here is this group's own data; charge an attempt so
+                    # the cap can drop a row that never encodes.
                     self.note_settlement_skipped(
                         group_request_ids,
                         SOURCE_OFFCHAIN,
