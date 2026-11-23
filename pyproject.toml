@@ -63,8 +63,8 @@ prerelease = "allow"
 override-dependencies = ["cffi<2.1"]
 
 [tool.tomte]
-# filelock advisories disclosed 2026-10-20 against the version safety's
-# own tox venv installs; drop once tomte's fleet baseline carries them.
+# filelock advisories against the version safety's own tox venv installs;
+# drop once tomte's fleet baseline carries them.
 safety_ignores = [
     "SFTY-20261020-11422",
     "SFTY-20261020-13394",

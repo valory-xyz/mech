@@ -3312,6 +3312,64 @@ class TestGetOffchainTasksDeliverData:
         assert group_b[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70]
         b.context.logger.warning.assert_called_once()
 
+    def test_contract_error_charges_only_the_failing_group_and_drops_at_the_cap(
+        self,
+    ) -> None:
+        """A failed deliver-data call is an attempt for its own group, contract_error for the rest.
+
+        The failing group is at the cap, so its task leaves the local queue
+        and its settling nonce is released; the other group is only counted
+        ``contract_error`` and stays queued for the next period.
+        """
+        bad = self._offchain_task("r-bad", sender="0xBAD", nonce=1)
+        bad[SETTLEMENT_ATTEMPTS_KEY] = MAX_SETTLEMENT_ATTEMPTS - 1
+        ok = self._offchain_task("r-ok", sender="0xOK", nonce=2)
+        ctx = _make_full_ctx(done_tasks=[dict(bad), dict(ok)])
+        ctx.shared_state[SETTLING_NONCES_BY_SENDER] = {"0xBAD": {1}, "0xOK": {2}}
+        b = _DummyTransPrep(name="b", skill_context=ctx)
+        with (
+            self._patch_sd(b, [bad, ok]),
+            patch.object(
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
+            ),
+            patch.object(b, "count_settlement") as mock_count,
+        ):
+            b.synchronized_data.period_count = 9
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result == (None, [])
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r-ok"]
+        assert SETTLEMENT_ATTEMPTS_KEY not in local[0]
+        assert b.context.shared_state[SETTLING_NONCES_BY_SENDER] == {"0xOK": {2}}
+        by_outcome = {c.args[0]: c.args[3] for c in mock_count.call_args_list}
+        assert by_outcome[SETTLEMENT_OUTCOME_DROPPED] == 1
+        assert by_outcome[SETTLEMENT_OUTCOME_SIM_FAILED] == 0
+        assert by_outcome[SETTLEMENT_OUTCOME_CONTRACT_ERROR] == 1
+
+    def test_contract_error_below_the_cap_keeps_the_group_queued(self) -> None:
+        """Before the cap a failed deliver-data call only stamps an attempt on the group."""
+        task = self._offchain_task("r1", sender="0xBAD", nonce=1)
+        ctx = _make_full_ctx(done_tasks=[dict(task)])
+        b = _DummyTransPrep(name="b", skill_context=ctx)
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
+            ),
+            patch.object(b, "count_settlement"),
+        ):
+            b.synchronized_data.period_count = 3
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result == (None, [])
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r1"]
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == 1
+        assert local[0][SETTLEMENT_ATTEMPT_PERIOD_KEY] == 3
+
 
 # ---------------------------------------------------------------------------
 # TransactionPreparationBehaviour._get_is_nvm_mech / _get_encoded_deliver_data
@@ -3428,28 +3486,65 @@ class TestGetMarketplaceTasksDeliverData:
         assert result == ([], [])
         mock_skip.assert_called_once_with(["12345"], SOURCE_ONCHAIN, "0xMECH", 4)
 
-    def test_contract_error_after_sim_failure_does_not_recount_those_ids(self) -> None:
-        """Ids already charged sim_failed are excluded from the contract_error count."""
+    def test_contract_error_charges_the_failing_mech_group_and_drops_at_the_cap(
+        self,
+    ) -> None:
+        """A failed marketplace deliver-data call is an attempt for that mech's group."""
         b = self._make_b()
-        bad = {
+        task = {
             "mech_address": "0xBAD",
             "request_id": 1,
             "requestId": 1,
             "task_result": "aa",
-        }
-        good = {
-            "mech_address": "0xGOOD",
-            "request_id": 2,
-            "requestId": 2,
-            "task_result": "bb",
+            SETTLEMENT_ATTEMPTS_KEY: MAX_SETTLEMENT_ATTEMPTS - 1,
         }
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
+        mock_sd.period_count = 4
         b._synchronized_data = mock_sd
-        b.context.shared_state[DONE_TASKS] = [dict(bad), dict(good)]
+        b.context.shared_state[DONE_TASKS] = [dict(task)]
+        with (
+            patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
+            patch.object(
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
+            ),
+            patch.object(b, "count_settlement") as mock_count,
+        ):
+            result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
+        assert result == (None, [])
+        assert b.context.shared_state[DONE_TASKS] == []
+        by_outcome = {
+            (c.args[0], c.args[2]): c.args[3] for c in mock_count.call_args_list
+        }
+        assert by_outcome[(SETTLEMENT_OUTCOME_DROPPED, "0xBAD")] == 1
+        assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xBAD")] == 0
+
+    def test_contract_error_counts_only_the_groups_it_abandons(self) -> None:
+        """Groups already charged (sim-failed, or the one whose call failed) are not contract_error.
+
+        Only the groups the abandoned batch never reached are counted
+        ``contract_error``; the failing group is charged an attempt like a
+        simulation failure.
+        """
+        b = self._make_b()
+        tasks = [
+            {
+                "mech_address": mech,
+                "request_id": index,
+                "requestId": index,
+                "task_result": "aa",
+            }
+            for index, mech in enumerate(("0xBAD", "0xERR", "0xREST"), start=1)
+        ]
+        mock_sd = MagicMock()
+        mock_sd.safe_contract_address = "0xSAFE"
+        b._synchronized_data = mock_sd
+        b.context.shared_state[DONE_TASKS] = [dict(task) for task in tasks]
         responses = {
             "0xBAD": _state_contract_msg({"data": b"\x01", "simulation_ok": False}),
-            "0xGOOD": _error_contract_msg(),
+            "0xERR": _error_contract_msg(),
         }
 
         def _respond(*_args: Any, **kwargs: Any) -> Any:
@@ -3460,14 +3555,16 @@ class TestGetMarketplaceTasksDeliverData:
             patch.object(b, "get_contract_api_response", side_effect=_respond),
             patch.object(b, "count_settlement") as mock_count,
         ):
-            result = _run_gen(b._get_marketplace_tasks_deliver_data([bad, good]))
+            result = _run_gen(b._get_marketplace_tasks_deliver_data(tasks))
         assert result == (None, [])
         by_outcome = {
             (c.args[0], c.args[2]): c.args[3] for c in mock_count.call_args_list
         }
         assert by_outcome[(SETTLEMENT_OUTCOME_SIM_FAILED, "0xBAD")] == 1
+        assert by_outcome[(SETTLEMENT_OUTCOME_SIM_FAILED, "0xERR")] == 1
         assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xBAD")] == 0
-        assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xGOOD")] == 1
+        assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xERR")] == 0
+        assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xREST")] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -5833,6 +5930,7 @@ class TestTransPrepContractErrors:
             safe_contract_address="0xSAFE",
             all_participants=frozenset(["0xA"]),
             done_tasks=[],
+            period_count=1,
         )
         return b
 
@@ -5924,6 +6022,7 @@ class TestTransPrepContractErrors:
         b._synchronized_data = SimpleNamespace(
             safe_contract_address="0xSAFE",
             done_tasks=[offchain_task],
+            period_count=1,
         )
         b.context.shared_state[DONE_TASKS] = [dict(offchain_task)]
         with (
@@ -5936,10 +6035,14 @@ class TestTransPrepContractErrors:
         ):
             result = _run_gen(b._get_offchain_tasks_deliver_data())
         assert result == (None, [])
-        # The whole off-chain batch is abandoned this period: count every task.
-        mock_count.assert_called_once_with(
-            SETTLEMENT_OUTCOME_CONTRACT_ERROR, SOURCE_OFFCHAIN, "0xMECH", 1
-        )
+        # The failing group is charged an attempt (sim_failed); the batch
+        # holds nothing else to count as contract_error.
+        by_outcome = {c.args[0]: c.args[3] for c in mock_count.call_args_list}
+        assert by_outcome == {
+            SETTLEMENT_OUTCOME_SIM_FAILED: 1,
+            SETTLEMENT_OUTCOME_DROPPED: 0,
+            SETTLEMENT_OUTCOME_CONTRACT_ERROR: 0,
+        }
 
     def test_get_is_nvm_mech_contract_error(self) -> None:
         """Error from get_is_nvm_mech returns None."""
@@ -5996,9 +6099,14 @@ class TestTransPrepContractErrors:
         ):
             result = _run_gen(b._get_marketplace_tasks_deliver_data(marketplace_tasks))
         assert result == (None, [])
-        mock_count.assert_called_once_with(
-            SETTLEMENT_OUTCOME_CONTRACT_ERROR, SOURCE_ONCHAIN, "0xMECH", 1
-        )
+        # The failing mech group is charged an attempt (sim_failed); the
+        # batch holds nothing else to count as contract_error.
+        by_outcome = {c.args[0]: c.args[3] for c in mock_count.call_args_list}
+        assert by_outcome == {
+            SETTLEMENT_OUTCOME_SIM_FAILED: 1,
+            SETTLEMENT_OUTCOME_DROPPED: 0,
+            SETTLEMENT_OUTCOME_CONTRACT_ERROR: 0,
+        }
 
 
 # ---------------------------------------------------------------------------

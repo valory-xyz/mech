@@ -2415,9 +2415,10 @@ def test_signed_requests_rejects_invalid_ipfs_hash(
     "delivery_rate_str",
     [
         "-1",
+        "0",
         str(hmod.MAX_DELIVERY_RATE + 1),
     ],
-    ids=["negative", "above_uint256"],
+    ids=["negative", "zero", "above_uint256"],
 )
 def test_signed_requests_rejects_out_of_range_delivery_rate(
     handler_context: Any,
@@ -2439,6 +2440,146 @@ def test_signed_requests_rejects_out_of_range_delivery_rate(
 
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_signed_requests_accepts_the_minimum_delivery_rate(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """delivery_rate=1, the lowest rate that can settle, is accepted."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(delivery_rate="1", request_id="7")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+# A mech price above the shared fixture's, so a request can sign below it.
+PRICED_MECH_DELIVERY_RATE = 100
+
+
+def _post_signed_request(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    delivery_rate: str,
+    mech_to_max_delivery_rate: Dict[str, int],
+) -> Any:
+    """Post one signed request under the given mech rate config and return the reply.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param delivery_rate: the decimal rate the request signs.
+    :param mech_to_max_delivery_rate: the mech rate config for this request.
+    :return: the HTTP response the handler sent.
+    """
+    handler_context.params.mech_to_max_delivery_rate = mech_to_max_delivery_rate
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+    body = _make_signed_request_body(delivery_rate=delivery_rate, request_id="8")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    return handler_context.outbox.sent[-1]
+
+
+def _marketplace_mech(handler_context: Any) -> str:
+    """Return the marketplace mech key configured in ``params_stub``.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :return: the marketplace mech address as stored in ``mech_to_config``.
+    """
+    return next(iter(handler_context.params.mech_to_config))
+
+
+@pytest.mark.parametrize(
+    "delivery_rate",
+    ["1", str(PRICED_MECH_DELIVERY_RATE - 1)],
+    ids=["one_base_unit", "one_below_the_mech_rate"],
+)
+def test_signed_requests_rejects_a_rate_below_the_mech_delivery_rate(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, delivery_rate: str
+) -> None:
+    """A signed rate below the mech's configured rate is refused with 400 and not queued.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param delivery_rate: the decimal rate the request signs.
+    """
+    mech = _marketplace_mech(handler_context)
+    resp = _post_signed_request(
+        handler_context,
+        http_dialogue,
+        monkeypatch,
+        delivery_rate,
+        {mech: PRICED_MECH_DELIVERY_RATE},
+    )
+
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body)
+    assert payload["mech_delivery_rate"] == PRICED_MECH_DELIVERY_RATE
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+@pytest.mark.parametrize(
+    ("delivery_rate", "key_case"),
+    [
+        (str(PRICED_MECH_DELIVERY_RATE), str.lower),
+        (str(PRICED_MECH_DELIVERY_RATE + 1), str.lower),
+        (str(PRICED_MECH_DELIVERY_RATE), str.upper),
+    ],
+    ids=["at_the_mech_rate", "above_the_mech_rate", "upper_case_config_key"],
+)
+def test_signed_requests_accepts_a_rate_covering_the_mech_delivery_rate(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    delivery_rate: str,
+    key_case: Any,
+) -> None:
+    """A signed rate at or above the mech's rate is queued, whatever the config key's case.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param delivery_rate: the decimal rate the request signs.
+    :param key_case: how the mech address is cased in the rate config.
+    """
+    mech = key_case(_marketplace_mech(handler_context))
+    resp = _post_signed_request(
+        handler_context,
+        http_dialogue,
+        monkeypatch,
+        delivery_rate,
+        {mech: PRICED_MECH_DELIVERY_RATE},
+    )
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_signed_requests_refused_when_no_mech_delivery_rate_is_configured(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Without a configured rate for the marketplace mech, intake answers 503 and queues nothing.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    resp = _post_signed_request(handler_context, http_dialogue, monkeypatch, "123", {})
+
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
     assert handler_context.shared_state["pending_tasks"] == []
 
 
@@ -2844,6 +2985,7 @@ from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E4
 
 _SIGVERIFY_MARKETPLACE = "0xdEaDbeefdEaDbeefdEadbEefdeADBeEfDeAdBeEf"
 _SIGVERIFY_MECH = "0xCAFECAFECAFECAFECAFECAFECAFECAFECAFECAFE"
+_SIGVERIFY_MECH_DELIVERY_RATE = 1
 _SIGVERIFY_DOMAIN_SEPARATOR = b"\xab" * 32
 _SIGVERIFY_EXPLICIT_DOMAIN_SEPARATOR = b"\xba" * 32
 # Far enough away that every test's floor check passes.
@@ -2901,6 +3043,9 @@ def _seed_verification_constants(
             is_marketplace_mech=True,
             use_dynamic_pricing=False,
         )
+    }
+    params.mech_to_max_delivery_rate = {
+        _SIGVERIFY_MECH.lower(): _SIGVERIFY_MECH_DELIVERY_RATE
     }
     mh._domain_separator = _SIGVERIFY_DOMAIN_SEPARATOR
     mh._payment_type = _SIGVERIFY_PAYMENT_TYPE
@@ -7542,9 +7687,15 @@ def _post_cap(
 @pytest.mark.parametrize(
     "tools_to_pricing, fixed_cost, tool, cap, minimum",
     [
-        pytest.param({}, 0, None, 0, 1, id="zero_cap_no_floor"),
         pytest.param({}, 0, None, 1, None, id="one_unit_no_floor"),
-        pytest.param({_PRICED_TOOL: _TOOL_FLOOR}, 0, _PRICED_TOOL, 0, 50, id="zero"),
+        pytest.param(
+            {_PRICED_TOOL: _TOOL_FLOOR},
+            0,
+            _PRICED_TOOL,
+            1,
+            50,
+            id="one_unit_below_floor",
+        ),
         pytest.param(
             {_PRICED_TOOL: _TOOL_FLOOR}, 0, _PRICED_TOOL, 49, 50, id="floor_minus_1"
         ),
@@ -7626,7 +7777,7 @@ def test_signed_cap_covers_the_minimum_charge(
 def test_zero_cap_is_refused_even_with_a_zero_balance(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """A zero cap never passes the balance check, whatever the balance.
+    """A zero cap is refused with 400 and not queued, whatever the balance.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
@@ -7635,9 +7786,7 @@ def test_zero_cap_is_refused_even_with_a_zero_balance(
     mh = _patched_handler_for_balance(handler_context, monkeypatch, 0)
     resp = _post_cap(mh, http_dialogue, 0, request_id="9101")
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
-    payload = json.loads(resp.body.decode("utf-8"))
-    assert payload["minimum_cap"] == 1
-    assert "depositInstructions" not in payload
+    assert "WWW-Authenticate" not in resp.headers
     assert handler_context.shared_state["pending_tasks"] == []
 
 
