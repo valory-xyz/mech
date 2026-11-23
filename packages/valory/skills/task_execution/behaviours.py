@@ -193,8 +193,6 @@ CLIENT_FAULT_EXCEPTION = "InvalidRequestError"
 NO_RESULT_ERROR = "tool returned no result"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
-# How long a queued on-chain task waits for its IPFS request data before the
-# download counts as timed out.
 REQUEST_DATA_FETCH_DEADLINE = 60.0
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
@@ -776,14 +774,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
         self._task_ipfs_nonce: Optional[str] = None
-        # Outcome of the request data download of queued on-chain tasks, by
-        # request id: ``{"files": ...}``, ``{"error": reason}``, or ``{}``
-        # when no download could be started.
         self._request_data: Dict[Any, Dict[str, Any]] = {}
         self._prefetch_request_id: Optional[Any] = None
         self._prefetch_nonce: Optional[str] = None
         self._prefetch_deadline: float = 0.0
-        self._ready_request_data: Dict[str, Any] = {}
         self._done_task: Optional[Dict[str, Any]] = None
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
@@ -1147,15 +1141,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Requested mech's payment model: {req_mech_pm} != {self.payment_model}."
             )
 
-        # A listed task whose request data is downloaded or downloading stays
-        # listed until it runs.
-        kept = [task for task in self.timed_out_tasks if self._has_request_data(task)]
-        kept_ids = {task["requestId"] for task in kept}
-        self.timed_out_tasks = kept + [
-            task
-            for task in same_payment_type[: self.params.step_in_list_size]
-            if task["requestId"] not in kept_ids
-        ]
+        self.timed_out_tasks = same_payment_type[: self.params.step_in_list_size]
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
@@ -1333,10 +1319,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._handle_timeout_task()
             return
 
-        next_task = self._next_ready_task()
-        if next_task is None:
+        ready = self._next_ready_task()
+        if ready is None:
             return
-        task_data = next_task
+        task_data, request_data = ready
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # Start the time counter to measure time taken to prepare the task
         self.tool_preparation_start_time = time.perf_counter()
@@ -1391,7 +1377,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return
 
-        request_data, self._ready_request_data = self._ready_request_data, {}
         try:
             ipfs_hash = get_ipfs_file_hash(task_data["data"])
         except Exception as e:  # pylint: disable=W0718
@@ -1426,54 +1411,46 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._handle_ipfs_error,
         )
 
-    def _next_ready_task(self) -> Optional[Dict[str, Any]]:
-        """Pop the first task that can run now, pending tasks before timed-out ones.
+    def _next_ready_task(self) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+        """Pop the next task that can run now, with its downloaded request data.
 
-        An off-chain task carries its request inline; an on-chain task is ready
-        once its request data download has ended.
+        A pending task runs first: an off-chain one carries its request
+        inline, an on-chain one is ready once its request data download has
+        ended. A timed-out task of another mech runs only while nothing is
+        pending, and downloads its request data in the slot.
 
-        :return: the task, or None when no queued task is ready.
+        :return: the task and its stored download outcome (empty when it has
+            none), or None when no queued task is ready.
         """
-        self._ready_request_data = {}
-        for queue in (self.pending_tasks, self.timed_out_tasks):
-            for index, task in enumerate(queue):
-                if task.get("is_offchain"):
-                    return queue.pop(index)
-                if task["requestId"] in self._request_data:
-                    self._ready_request_data = self._request_data.pop(task["requestId"])
-                    return queue.pop(index)
-        return None
-
-    def _has_request_data(self, task: Dict[str, Any]) -> bool:
-        """Whether a queued task's request data is downloaded or downloading.
-
-        :param task: the queued task.
-        :return: True when its download ended or is in flight.
-        """
-        request_id = task["requestId"]
-        return request_id in self._request_data or (
-            self._prefetch_nonce is not None and request_id == self._prefetch_request_id
-        )
+        for index, task in enumerate(self.pending_tasks):
+            if task.get("is_offchain"):
+                return self.pending_tasks.pop(index), {}
+            if task["requestId"] in self._request_data:
+                request_data = self._request_data.pop(task["requestId"])
+                return self.pending_tasks.pop(index), request_data
+        if self.pending_tasks or not self.timed_out_tasks:
+            return None
+        return self.timed_out_tasks.pop(0), {}
 
     def _prefetch_request_data(self) -> None:
-        """Download the IPFS request data of the next queued on-chain task.
+        """Download the IPFS request data of the next pending on-chain task.
 
         One download runs at a time, outside the task slot: it never sets
-        ``in_flight_req``, so a slow download delays only its own task. Only
-        one downloaded task waits for the slot, which bounds the data held.
-        A download without a reply by ``REQUEST_DATA_FETCH_DEADLINE`` ends as
-        a timeout, which ``_handle_ipfs_error`` retries.
+        ``in_flight_req``, so off-chain tasks are not held up by it. Only one
+        downloaded task waits for the slot, which bounds the data held. A
+        download still unanswered at ``REQUEST_DATA_FETCH_DEADLINE`` is marked
+        timed out on the next ``act()``; the task slot retries it. A download
+        whose task has left the queue is dropped.
         """
-        if self._prefetch_nonce is not None:
-            if time.time() <= self._prefetch_deadline:
-                return
-            self._abandon_prefetch()
-        queued = [
-            task
-            for task in (*self.pending_tasks, *self.timed_out_tasks)
-            if not task.get("is_offchain")
-        ]
+        queued = [task for task in self.pending_tasks if not task.get("is_offchain")]
         queued_ids = {task["requestId"] for task in queued}
+        if self._prefetch_nonce is not None:
+            if self._prefetch_request_id not in queued_ids:
+                self._end_prefetch()
+            elif time.time() <= self._prefetch_deadline:
+                return
+            else:
+                self._end_prefetch({"error": "request data download timed out"})
         self._request_data = {
             request_id: data
             for request_id, data in self._request_data.items()
@@ -1493,7 +1470,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ipfs_hash, timeout=REQUEST_DATA_FETCH_DEADLINE
         )
         nonce = dialogue.dialogue_label.dialogue_reference[0]
-        deadline = time.time() + REQUEST_DATA_FETCH_DEADLINE
+        self._prefetch_request_id = request_id
+        self._prefetch_nonce = nonce
+        self._prefetch_deadline = time.time() + REQUEST_DATA_FETCH_DEADLINE
         self.params.background_ipfs_nonces.add(nonce)
         self.params.req_to_callback[nonce] = (
             lambda reply, _dialogue: self._store_request_data(
@@ -1503,10 +1482,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.req_to_error_callback[nonce] = (
             lambda reason: self._store_request_data(nonce, {"error": reason})
         )
-        self.params.req_to_deadline[nonce] = deadline
-        self._prefetch_request_id = request_id
-        self._prefetch_nonce = nonce
-        self._prefetch_deadline = deadline
+        self.params.req_to_deadline[nonce] = self._prefetch_deadline
         self.context.outbox.put_message(message=message)
 
     def _store_request_data(self, nonce: str, request_data: Dict[str, Any]) -> None:
@@ -1521,16 +1497,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._prefetch_request_id = None
         self._prefetch_nonce = None
 
-    def _abandon_prefetch(self) -> None:
-        """End the current download as timed out; a later reply is dropped."""
+    def _end_prefetch(self, outcome: Optional[Dict[str, Any]] = None) -> None:
+        """End the current download without its reply; a later reply is dropped.
+
+        :param outcome: what to record for the task, or None to record nothing.
+        """
         nonce = cast(str, self._prefetch_nonce)
         self.params.req_to_callback.pop(nonce, None)
         self.params.req_to_error_callback.pop(nonce, None)
         self.params.req_to_deadline.pop(nonce, None)
         self.params.background_ipfs_nonces.discard(nonce)
-        self._request_data[self._prefetch_request_id] = {
-            "error": "request data download timed out"
-        }
+        if outcome is not None:
+            self._request_data[self._prefetch_request_id] = outcome
         self._prefetch_request_id = None
         self._prefetch_nonce = None
 

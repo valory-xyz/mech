@@ -1188,48 +1188,6 @@ def _step_in_setup(params_stub: Any, shared_state: Dict[str, Any]) -> None:
     shared_state[beh_mod.PAYMENT_INFO] = {"0xmech1": "fixed"}
 
 
-@pytest.mark.parametrize(
-    "state", ["downloaded", "downloading"], ids=["downloaded", "downloading"]
-)
-def test_listed_timed_out_task_with_request_data_stays_listed(
-    behaviour: Any, params_stub: Any, shared_state: Dict[str, Any], state: str
-) -> None:
-    """A listed task whose data is downloaded or downloading survives a pass with nothing new."""
-    _step_in_setup(params_stub, shared_state)
-    listed = {"priorityMech": "0xmech1", "requestId": 3}
-    shared_state[beh_mod.TIMED_OUT_TASKS] = [listed]
-    shared_state[beh_mod.UNPROCESSED_TIMED_OUT_TASKS] = []
-    if state == "downloaded":
-        behaviour._request_data[3] = {"files": {"m.json": "{}"}}
-    else:
-        behaviour._prefetch_request_id, behaviour._prefetch_nonce = 3, "nonce-3"
-
-    behaviour._filter_out_incompatible_reqs()
-
-    assert shared_state[beh_mod.TIMED_OUT_TASKS] == [listed]
-
-
-def test_listed_timed_out_task_without_request_data_is_replaced(
-    behaviour: Any, params_stub: Any, shared_state: Dict[str, Any]
-) -> None:
-    """A listed task with no download is dropped; a kept one is not listed twice."""
-    _step_in_setup(params_stub, shared_state)
-    kept = {"priorityMech": "0xmech1", "requestId": 3}
-    stale = {"priorityMech": "0xmech1", "requestId": 5}
-    behaviour._request_data[3] = {"files": {"m.json": "{}"}}
-    shared_state[beh_mod.TIMED_OUT_TASKS] = [kept, stale]
-    shared_state[beh_mod.UNPROCESSED_TIMED_OUT_TASKS] = [
-        {"priorityMech": "0xmech1", "requestId": 4},
-        {"priorityMech": "0xmech1", "requestId": 3},
-    ]
-
-    behaviour._filter_out_incompatible_reqs()
-
-    reloaded = shared_state[beh_mod.TIMED_OUT_TASKS]
-    assert reloaded[0] is kept
-    assert [t["requestId"] for t in reloaded] == [3, 4]
-
-
 def test_only_one_downloaded_task_waits_for_the_slot(
     behaviour: Any,
     shared_state: Dict[str, Any],
@@ -1283,7 +1241,32 @@ def test_request_data_download_is_bounded_by_its_deadline(
     assert timeouts == [beh_mod.REQUEST_DATA_FETCH_DEADLINE]
 
 
-def test_stepped_in_task_runs_after_its_download_spans_several_ticks(
+STEP_IN_TASK = {
+    "priorityMech": "0xmech1",
+    "requestId": 560,
+    "request_delivery_rate": 100,
+    "data": b"ipfs-pointer",
+    "contract_address": "0xmech1",
+}
+
+
+def _stub_downloads(behaviour: Any, monkeypatch: Any, fake_dialogue: Any) -> List[Any]:
+    """Stub the IPFS request builder and the in-slot sender.
+
+    :param behaviour: Behaviour under test.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: Dialogue-like object returned by the builder.
+    :return: the list that collects in-slot sends.
+    """
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    sent: List[Any] = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    return sent
+
+
+def test_timed_out_task_downloads_in_the_slot_when_nothing_is_pending(
     behaviour: Any,
     shared_state: Dict[str, Any],
     params_stub: Any,
@@ -1291,44 +1274,154 @@ def test_stepped_in_task_runs_after_its_download_spans_several_ticks(
     monkeypatch: Any,
     patch_ipfs_multihash: Callable[[], None],
 ) -> None:
-    """A listed timed-out task stays queued over ticks with nothing new, then runs."""
+    """Another mech's timed-out task is not downloaded ahead; the slot fetches it."""
     patch_ipfs_multihash()
-    _step_in_setup(params_stub, shared_state)
     params_stub.in_flight_req = False
-    task = {
-        "priorityMech": "0xmech1",
-        "requestId": 550,
-        "request_delivery_rate": 100,
-        "data": b"ipfs-pointer",
-        "contract_address": "0xmech1",
-    }
-    shared_state[beh_mod.TIMED_OUT_TASKS] = [task]
-    shared_state[beh_mod.UNPROCESSED_TIMED_OUT_TASKS] = []
-    monkeypatch.setattr(
-        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
-    )
-    handled: List[Any] = []
-    monkeypatch.setattr(
-        behaviour, "_handle_get_task", lambda msg, _dlg: handled.append(msg.files)
-    )
-    files = {"metadata.json": "{}"}
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
 
-    for _ in range(2):
-        behaviour._prefetch_request_data()
-        behaviour._execute_task()
-        behaviour._filter_out_incompatible_reqs()
-    assert shared_state[beh_mod.TIMED_OUT_TASKS] == [task]
-    _answer_download(
-        params_stub,
-        lambda msg, dlg, callback, error_callback: callback(
-            SimpleNamespace(files=files), dlg
-        ),
-    )
-    behaviour._filter_out_incompatible_reqs()
+    behaviour._prefetch_request_data()
+    assert params_stub.background_ipfs_nonces == set()
     behaviour._execute_task()
 
-    assert handled == [files]
+    assert behaviour._executing_task["requestId"] == STEP_IN_TASK["requestId"]
+    assert len(sent) == 1
     assert shared_state[beh_mod.TIMED_OUT_TASKS] == []
+
+
+def test_timed_out_task_waits_while_a_pending_task_is_downloading(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A listed timed-out task neither takes the slot nor the download from a pending task."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    _enqueue_task(shared_state, params_stub, req_id=561)
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    behaviour._execute_task()
+
+    assert behaviour._prefetch_request_id == 561
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert behaviour._executing_task is None
+    assert sent == []
+    assert len(shared_state[beh_mod.TIMED_OUT_TASKS]) == 1
+
+
+def test_downloaded_pending_task_runs_before_a_timed_out_task(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """With a ready task in each queue, the pending one takes the slot."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    _enqueue_task(shared_state, params_stub, req_id=562)
+    behaviour._request_data[562] = {"files": {"metadata.json": "{}"}}
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 562
+    assert len(shared_state[beh_mod.TIMED_OUT_TASKS]) == 1
+
+
+def test_malformed_request_pointer_is_reported_by_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+) -> None:
+    """A task whose pointer cannot be read starts no download and fails in the slot."""
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=563)
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(
+        beh_mod,
+        "get_ipfs_file_hash",
+        lambda _data: (_ for _ in ()).throw(ValueError("bad pointer")),
+    )
+
+    behaviour._prefetch_request_data()
+    assert behaviour._request_data == {563: {}}
+    assert params_stub.background_ipfs_nonces == set()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 563
+    assert behaviour._invalid_request is True
+    assert sent == []
+
+
+@pytest.mark.parametrize(
+    "reason, timeouts, invalid",
+    [("socket timed out", 1, False), ("content unpinned", 0, True)],
+    ids=["timeout_is_retried", "other_error_is_terminal"],
+)
+def test_error_reply_of_a_download_reaches_the_task_in_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    reason: str,
+    timeouts: int,
+    invalid: bool,
+) -> None:
+    """An error reply is stored by the registered callback and handled when the task runs."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.timeout_limit = 3
+    _enqueue_task(shared_state, params_stub, req_id=564)
+    params_stub.request_id_to_num_timeouts[564] = 0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub, lambda msg, dlg, callback, error_callback: error_callback(reason)
+    )
+    assert behaviour._request_data == {564: {"error": reason}}
+    behaviour._execute_task()
+
+    assert params_stub.request_id_to_num_timeouts[564] == timeouts
+    assert behaviour._invalid_request is invalid
+
+
+def test_download_of_a_task_that_left_the_queue_is_dropped(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A download in flight for a task no longer pending frees the download for the next one."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=565)
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    behaviour._prefetch_request_data()
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+
+    shared_state[beh_mod.PENDING_TASKS].clear()
+    behaviour._prefetch_request_data()
+
+    assert behaviour._prefetch_nonce is None
+    assert behaviour._request_data == {}
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.background_ipfs_nonces
 
 
 def test_request_data_of_a_task_no_longer_queued_is_dropped(
