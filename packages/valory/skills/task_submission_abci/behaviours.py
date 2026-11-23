@@ -229,7 +229,8 @@ mech_settlement_total = Counter(
     "dropped: skipped MAX_SETTLEMENT_ATTEMPTS periods, removed unpaid "
     "(one task per group per period, so the count includes collateral from "
     "a group-wide simulation failure). "
-    "contract_error: deliver-data contract call failed, batch abandoned this period. "
+    "contract_error: deliver-data contract call failed, batch abandoned this period "
+    "(the failing group itself is charged an attempt and counted sim_failed). "
     "A sim_failed burst of N is usually one failing requester or mech group.",
     labelnames=["outcome", "source", "chain", "mech_address"],
 )
@@ -483,7 +484,10 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         mech_address: str,
         period: int,
     ) -> None:
-        """Record a failed deliver simulation for ``request_ids`` this period.
+        """Record a failed deliver attempt for ``request_ids`` this period.
+
+        Called when the group's deliver simulation failed, or when the
+        deliver-data contract call itself failed for the group.
 
         The tasks stay in ``synchronized_data.done_tasks`` (so
         ``PostTxSettlementRound`` does not prune them) and, on the agent that
@@ -544,7 +548,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
                 )
             self.context.logger.warning(
                 "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped after %d "
-                "periods of failed deliver simulations; the delivery will not be "
+                "periods of failed deliver attempts; the delivery will not be "
                 "settled on-chain.",
                 source,
                 dropped.get("request_id"),
@@ -2236,10 +2240,20 @@ class TransactionPreparationBehaviour(
                     self.context.logger.warning(
                         f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
                     )
-                    # Every off-chain task in this period's batch is
+                    # Simulation errors come back inconclusive, so an ERROR
+                    # here is this group's own data; charge an attempt so
+                    # the cap can drop a row that never encodes.
+                    self.note_settlement_skipped(
+                        group_request_ids,
+                        SOURCE_OFFCHAIN,
+                        mech_address,
+                        self.synchronized_data.period_count,
+                    )
+                    counted_request_ids.update(group_request_ids)
+                    # Every other off-chain task in this period's batch is
                     # abandoned (including groups already appended to
                     # ``tx_list``, since the caller discards it on None),
-                    # except ids already counted ``sim_failed`` above.
+                    # except ids already counted above.
                     self.count_local_settlement(
                         SETTLEMENT_OUTCOME_CONTRACT_ERROR,
                         SOURCE_OFFCHAIN,
@@ -2448,6 +2462,13 @@ class TransactionPreparationBehaviour(
                     self.context.logger.warning(
                         f"get_marketplace_deliver_data unsuccessful!: {contract_api_msg}"
                     )
+                    self.note_settlement_skipped(
+                        group_request_ids,
+                        SOURCE_ONCHAIN,
+                        mech,
+                        self.synchronized_data.period_count,
+                    )
+                    counted_request_ids.update(group_request_ids)
                     for (
                         failed_mech,
                         failed_details,
