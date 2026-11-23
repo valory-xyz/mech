@@ -145,6 +145,104 @@ def test_ipfs_handler_calls_callback_and_clears(
     assert "nonce-1" not in handler_context.params.req_to_deadline
 
 
+def _untracked(handler_context: Any, monkeypatch: Any) -> IpfsHandler:
+    """Return an IPFS handler whose dialogues no longer track any reply.
+
+    :param handler_context: the handler context fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :return: the handler.
+    """
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    monkeypatch.setattr(handler_context.ipfs_dialogues, "update", lambda _msg: None)
+    return handler
+
+
+def test_ipfs_reply_without_a_tracked_dialogue_runs_its_callback(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A reply whose dialogue was cleaned up reaches a callback with no error callback."""
+    handler = _untracked(handler_context, monkeypatch)
+    received: List[Any] = []
+    handler_context.params.req_to_callback["nonce-1"] = (
+        lambda msg, dialogue: received.append((msg, dialogue))
+    )
+    handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
+    handler_context.params.in_flight_req = True
+    handler_context.params.is_cold_start = True
+    count_before = handler_context.params.request_count
+
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=IpfsMessage.Performative.FILES,
+        dialogue_reference=("nonce-1", "x"),
+    )
+    handler.handle(msg)
+
+    assert received == [(msg, None)]
+    assert handler_context.params.in_flight_req is False
+    assert handler_context.params.is_cold_start is False
+    assert handler_context.params.request_count == count_before + 1
+    assert "nonce-1" not in handler_context.params.req_to_callback
+    assert "nonce-1" not in handler_context.params.req_to_deadline
+
+
+def test_ipfs_error_reply_without_a_tracked_dialogue_runs_the_error_callback(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """An ERROR reply whose dialogue was cleaned up reports its own reason."""
+    handler = _untracked(handler_context, monkeypatch)
+    calls: Dict[str, Any] = {"callback": False, "error": None}
+    handler_context.params.req_to_callback["nonce-1"] = lambda *_: calls.__setitem__(
+        "callback", True
+    )
+    handler_context.params.req_to_error_callback["nonce-1"] = (
+        lambda reason: calls.__setitem__("error", reason)
+    )
+    handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
+    handler_context.params.in_flight_req = True
+
+    handler.handle(
+        SimpleNamespace(
+            performative=IpfsMessage.Performative.ERROR,
+            reason="content unpinned",
+            dialogue_reference=("nonce-1", "x"),
+        )
+    )
+
+    assert calls == {"callback": False, "error": "content unpinned"}
+    assert handler_context.params.in_flight_req is False
+    assert "nonce-1" not in handler_context.params.req_to_error_callback
+
+
+@pytest.mark.parametrize("tracked", [True, False])
+def test_ipfs_reply_with_no_pending_request_is_dropped(
+    handler_context: Any, monkeypatch: Any, tracked: bool
+) -> None:
+    """A reply for a request that already gave up leaves the slot's request alone."""
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    if not tracked:
+        monkeypatch.setattr(handler_context.ipfs_dialogues, "update", lambda _msg: None)
+    called = {"other": False}
+    handler_context.params.req_to_callback["nonce-2"] = lambda *_: called.__setitem__(
+        "other", True
+    )
+    handler_context.params.in_flight_req = True
+    handler_context.params.is_cold_start = True
+
+    handler.handle(
+        SimpleNamespace(
+            performative=IpfsMessage.Performative.FILES,
+            dialogue_reference=("nonce-1", "x"),
+        )
+    )
+
+    assert called["other"] is False
+    assert handler_context.params.in_flight_req is True
+    assert handler_context.params.is_cold_start is True
+    assert "nonce-2" in handler_context.params.req_to_callback
+
+
 def test_ipfs_handler_deadline_expired_still_invokes_callback(
     handler_context: Any,
 ) -> None:

@@ -772,6 +772,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._decimals_warned: bool = False
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
+        self._task_ipfs_nonce: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
@@ -1390,7 +1391,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             task_data["request_cid"] = ipfs_hash
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
-        self.send_message(
+        self._task_ipfs_nonce = self.send_message(
             ipfs_msg,
             message,
             self._handle_get_task,
@@ -1453,8 +1454,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         dialogue: Dialogue,
         callback: Callable,
         error_callback: Optional[Callable] = None,
-    ) -> None:
-        """Send message."""
+    ) -> str:
+        """Send an IPFS request and register its callbacks.
+
+        :param msg: the request.
+        :param dialogue: the request's dialogue.
+        :param callback: called with the reply.
+        :param error_callback: called with the reason of an ERROR reply.
+        :return: the nonce the request's callbacks are registered under.
+        """
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
@@ -1465,6 +1473,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             float, self._request_handling_deadline
         )
         self.params.in_flight_req = True
+        return nonce
+
+    def _drop_task_ipfs_request(self) -> None:
+        """Forget the executing task's pending IPFS request.
+
+        A reply that arrives after the task gave up finds no callback and is
+        dropped, so it cannot run against the task that holds the slot by then.
+        """
+        nonce = self._task_ipfs_nonce
+        self._task_ipfs_nonce = None
+        if nonce is None:
+            return
+        self.params.req_to_callback.pop(nonce, None)
+        self.params.req_to_error_callback.pop(nonce, None)
+        self.params.req_to_deadline.pop(nonce, None)
 
     def _handle_ipfs_error(self, reason: str) -> None:
         """Handle an IPFS error reported by the handler.
@@ -1752,7 +1775,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         callback = functools.partial(
             self._handle_store_response, response=response, req_id=req_id
         )
-        self.send_message(msg, dialogue, callback)
+        self._task_ipfs_nonce = self.send_message(msg, dialogue, callback)
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
@@ -1775,6 +1798,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # message reflects the underlying cause instead of only the
         # generic "timed out N times" string.
         preserved_reason = error_reason or self._ipfs_error_reason
+        self._drop_task_ipfs_request()
         self.params.in_flight_req = False
         self.params.is_cold_start = False
         self._request_handling_deadline = None

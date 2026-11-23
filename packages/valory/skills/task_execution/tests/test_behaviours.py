@@ -2697,6 +2697,31 @@ def test_handle_timeout_task_adds_back_to_queue(
     assert any(t.get("requestId") == 7 for t in behaviour.pending_tasks)
 
 
+def test_handle_timeout_task_drops_the_tasks_pending_ipfs_request(
+    behaviour: Any, params_stub: Any, fake_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A timed-out task's IPFS request is forgotten; another request's is kept."""
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    behaviour._executing_task = {"requestId": 8, "request_delivery_rate": 100}
+    behaviour._async_result = None
+    params_stub.request_id_to_num_timeouts[8] = 0
+    params_stub.timeout_limit = 3
+    params_stub.req_to_callback["other"] = lambda *_: None
+    behaviour._task_ipfs_nonce = behaviour.send_message(
+        object(), fake_dialogue, lambda *_: None, lambda _reason: None
+    )
+    nonce = fake_dialogue.dialogue_label.dialogue_reference[0]
+    assert nonce in params_stub.req_to_callback
+
+    behaviour._handle_timeout_task()
+
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.req_to_error_callback
+    assert nonce not in params_stub.req_to_deadline
+    assert "other" in params_stub.req_to_callback
+    assert behaviour._task_ipfs_nonce is None
+
+
 def test_handle_timeout_task_limit_reached_calls_handle_done(
     behaviour: Any, params_stub: Any, monkeypatch: Any
 ) -> None:
