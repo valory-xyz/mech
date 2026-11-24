@@ -186,26 +186,24 @@ class TestTokenCounterCallbackCall:
             input_price + output_price
         )
 
-    def test_deepseek_flash_is_priced_at_its_listed_fireworks_rate(self) -> None:
-        """deepseek/deepseek-v4.1-flash accrues cost at 0.00045 / 0.0018 USD per 1k."""
-        model = "deepseek/deepseek-v4.1-flash"
-        input_tokens, output_tokens = 2000, 400
-        expected_input = input_tokens / PRICE_NUM_TOKENS * 0.00045
-        expected_output = output_tokens / PRICE_NUM_TOKENS * 0.0018
+    def test_deepseek_flash_is_charged_its_reported_cost(self) -> None:
+        """deepseek/deepseek-v4.1-flash is not in the table: the reported cost is the cost.
+
+        OpenRouter may serve it from any of several Fireworks endpoints at
+        different prices, so only the cost it reports for the call is exact.
+        """
         cb = TokenCounterCallback()
         cb(
-            model,
+            "deepseek/deepseek-v4.1-flash",
             _dummy_counter,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
+            input_tokens=2000,
+            output_tokens=400,
+            call_cost=0.00078,
         )
-        assert cb.actual_model == model
-        assert cb.cost_dict["total_tokens"] == 2400
-        assert cb.cost_dict["input_cost"] == pytest.approx(expected_input)
-        assert cb.cost_dict["output_cost"] == pytest.approx(expected_output)
-        assert cb.cost_dict["total_cost"] == pytest.approx(
-            expected_input + expected_output
-        )
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.00078)
+        assert cb.cost_dict["input_cost"] == 0
+        assert cb.cost_dict["output_cost"] == 0
+        assert cb.cost_dict["unpriced_calls"] == 0
 
     @pytest.mark.parametrize(
         "model",

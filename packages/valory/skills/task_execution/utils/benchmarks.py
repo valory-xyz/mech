@@ -59,8 +59,6 @@ class TokenCounterCallback:
         "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
         "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-5.5:online": {"input": 0.002, "output": 0.010},
-        # Highest-priced Fireworks endpoint, as provider.only may route to any of them.
-        "deepseek/deepseek-v4.1-flash": {"input": 0.00045, "output": 0.0018},
         # Self-hosted, so this is not a provider list price: it is the hosted
         # market rate for a 14B model, used as the per-token stand-in for a
         # server whose real cost is a flat hourly rate.
