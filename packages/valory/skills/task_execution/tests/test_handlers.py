@@ -2625,35 +2625,70 @@ def test_signed_requests_accepts_a_rate_covering_the_mech_delivery_rate(
     assert len(handler_context.shared_state["pending_tasks"]) == 1
 
 
-@pytest.mark.parametrize(
-    "delivery_rate",
-    ["1", str(PRICED_MECH_DELIVERY_RATE - 1)],
-    ids=["one_base_unit", "one_below_the_mech_rate"],
-)
-def test_signed_requests_below_the_mech_rate_are_queued_when_priced(
-    handler_context: Any, http_dialogue: Any, monkeypatch: Any, delivery_rate: str
+def test_signed_requests_between_the_tool_minimum_and_the_mech_rate_are_queued_when_priced(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """With cap-and-actual pricing on, the mech's rate does not bound the signed rate.
-
-    The tool's minimum cap still applies; here it is the one-unit minimum charge.
+    """With pricing on, a tool's listed minimum below the mech's rate is the bound.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
-    :param delivery_rate: the decimal rate the request signs.
     """
+    params = handler_context.params
     handler_context.shared_state[hmod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
-    mech = _marketplace_mech(handler_context)
-    resp = _post_signed_request(
-        handler_context,
+    params.mech_to_max_delivery_rate = {
+        _marketplace_mech(handler_context): PRICED_MECH_DELIVERY_RATE
+    }
+    params.tools_to_minimum_cap = {_PRICED_TOOL: PRICED_MECH_DELIVERY_RATE // 2}
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, 10**9)
+
+    resp = _post_cap(
+        mh,
         http_dialogue,
-        monkeypatch,
-        delivery_rate,
-        {mech: PRICED_MECH_DELIVERY_RATE},
+        PRICED_MECH_DELIVERY_RATE * 3 // 4,
+        request_id="9152",
+        ipfs_data=_tool_ipfs_data(_PRICED_TOOL),
     )
 
     assert resp.status_code == HttpCode.OK_CODE.value
     assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+@pytest.mark.parametrize(
+    "delivery_rate",
+    [1, PRICED_MECH_DELIVERY_RATE - 1],
+    ids=["one_base_unit", "one_below_the_mech_rate"],
+)
+def test_priced_tool_without_a_listed_minimum_keeps_the_mech_rate(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, delivery_rate: int
+) -> None:
+    """With pricing on, a tool with no listed minimum is bounded by the mech's rate.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param delivery_rate: the rate the request signs.
+    """
+    params = handler_context.params
+    handler_context.shared_state[hmod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    params.mech_to_max_delivery_rate = {
+        _marketplace_mech(handler_context): PRICED_MECH_DELIVERY_RATE
+    }
+    params.tools_to_minimum_cap = {}
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, 10**9)
+
+    resp = _post_cap(
+        mh,
+        http_dialogue,
+        delivery_rate,
+        request_id="9153",
+        ipfs_data=_tool_ipfs_data(_PRICED_TOOL),
+    )
+
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["minimum_cap"] == PRICED_MECH_DELIVERY_RATE
+    assert handler_context.shared_state["pending_tasks"] == []
 
 
 def test_signed_requests_below_the_tool_minimum_are_refused_when_priced(
