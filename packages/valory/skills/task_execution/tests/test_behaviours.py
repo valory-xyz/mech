@@ -5763,6 +5763,7 @@ PRICING_EVENT_FIELDS = (
     "fixed_cost",
     "marketplace_fee_bp",
     "tool_floor",
+    "computed_price",
     "payment_token_decimals",
     "pricing_mode",
     "settled_at",
@@ -5875,6 +5876,7 @@ def test_finalize_done_task_stores_price_and_reports_it(
         "fixed_cost": "0",
         "marketplace_fee_bp": 1500,
         "tool_floor": None,
+        "computed_price": "5882352941176471",
         "payment_token_decimals": 18,
         "pricing_mode": "cap_and_actual",
         "settled_at": None,
@@ -5912,6 +5914,39 @@ def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
     assert done_task["pricing"]["pricing_mode"] == "signed_cap"
     envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert envelope["delivery_rate"] == 10**16
+
+
+def test_flag_off_reports_the_computed_price_next_to_the_cap(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: the event charges the cap and still carries the price the run would cost.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
+    response = event["event"]["response"]
+    assert response["actual_delivery_rate"] == str(10**16)
+    assert response["computed_price"] == "5882352941176471"
 
 
 NVM_TOKEN_PAYMENT_TYPE = bytes.fromhex(beh_mod.PAYMENT_TYPE_TOKEN_NVM)
@@ -7288,6 +7323,33 @@ def test_offchain_mech_fault_is_charged_the_minimum_charge(
     assert envelope["error"] == "RuntimeError: provider outage"
 
 
+def test_flag_off_mech_fault_reports_the_minimum_as_computed_price(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: a mech-fault run is charged the cap, and the event records the minimum it would pay.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _priced_failed_run(
+        behaviour,
+        params_stub,
+        shared_state,
+        monkeypatch,
+        RuntimeError("provider outage"),
+        cap_and_actual=False,
+    )
+
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["req-41"]["event"]["response"]
+    assert event["actual_delivery_rate"] == str(CAP_ONE_USD_6DEC)
+    assert event["computed_price"] == str(MECH_FAULT_CHARGE)
+
+
 def test_offchain_tool_priced_above_the_signed_rate_is_a_mech_fault(
     behaviour: Any,
     params_stub: Any,
@@ -7399,6 +7461,7 @@ def test_offchain_failed_run_event_reports_status_error_and_charge(
         "InvalidRequestError: prompt is empty",
     )
     assert event["actual_delivery_rate"] == str(CAP_ONE_USD_6DEC)
+    assert event["computed_price"] == str(CAP_ONE_USD_6DEC)
     assert event["pricing_mode"] == beh_mod.PRICING_SIGNED_CAP
     assert event["raw_content"]["fault"] == beh_mod.FAULT_CLIENT
     assert "fault" not in event
