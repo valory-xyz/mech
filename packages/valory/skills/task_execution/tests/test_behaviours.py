@@ -119,7 +119,7 @@ def test_happy_path_executes_and_stores(
     task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
     get_response = SimpleNamespace(files={"task.json": json.dumps(task_body)})
     store_response = SimpleNamespace(ipfs_hash=valid_cid)
-    responses = iter([get_response, store_response])
+    responses = iter([store_response])
 
     def send_message_stub(
         msg: Any,
@@ -127,7 +127,7 @@ def test_happy_path_executes_and_stores(
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """Stub send_message with sequential GET then STORE responses."""
+        """Stub send_message with the STORE response."""
         callback(next(responses), dlg)
         params_stub.in_flight_req = True
 
@@ -140,6 +140,12 @@ def test_happy_path_executes_and_stores(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
     )
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(get_response, dlg),
+    )
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -208,7 +214,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     get_response = SimpleNamespace(files={"task.json": json.dumps(task_body)})
     store_response = SimpleNamespace(ipfs_hash=valid_cid)
     send_calls: list = []
-    responses = iter([get_response, store_response])
+    responses = iter([store_response])
 
     def send_message_stub(
         msg: Any,
@@ -216,7 +222,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """Stub send_message with sequential GET then STORE responses."""
+        """Stub send_message with the STORE response."""
         send_calls.append(1)
         callback(next(responses), dlg)
         params_stub.in_flight_req = True
@@ -225,10 +231,16 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
 
     params_stub.in_flight_req = False
     behaviour.act()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(get_response, dlg),
+    )
+    params_stub.in_flight_req = False
+    behaviour.act()
     params_stub.in_flight_req = False
     behaviour.act()
 
-    assert len(send_calls) == 2
+    assert len(send_calls) == 1
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
@@ -316,10 +328,7 @@ def test_broken_process_pool_restart(
         msg: Any, dlg: Any, cb: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
         func = _dispatch_target(cb)
-        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
-            cb(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
-        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
+        if func is beh_mod.TaskExecutionBehaviour._handle_store_response:
             cb(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         else:
             raise AssertionError(f"Unexpected callback: {cb}")
@@ -331,7 +340,17 @@ def test_broken_process_pool_restart(
     # second time schedules successfully and completes the flow.
     params_stub.in_flight_req = False
     behaviour.act()
-
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(
+                files={"task.json": json.dumps({"prompt": "p", "tool": "sum"})}
+            ),
+            dlg,
+        ),
+    )
+    params_stub.in_flight_req = False
+    behaviour.act()
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -390,7 +409,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         msg: Any, dlg: Any, cb: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
         """
-        Stub send_message to produce unknown tool on GET and store afterwards.
+        Stub send_message to answer the STORE call.
 
         :param msg: Message-like object passed by the behaviour.
         :type msg: Any
@@ -402,14 +421,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         :type error_cb: Any
         """
         func = _dispatch_target(cb)
-        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            cb(
-                SimpleNamespace(
-                    files={"task.json": json.dumps({"prompt": "p", "tool": "unknown"})}
-                ),
-                dlg,
-            )
-        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
+        if func is beh_mod.TaskExecutionBehaviour._handle_store_response:
             cb(SimpleNamespace(ipfs_hash="bafyinval"), dlg)
         else:
             raise AssertionError(f"Unexpected callback: {cb}")
@@ -417,6 +429,17 @@ def test_invalid_tool_is_recorded_and_no_execution(
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(
+                files={"task.json": json.dumps({"prompt": "p", "tool": "unknown"})}
+            ),
+            dlg,
+        ),
+    )
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -590,39 +613,70 @@ def _enqueue_task(
 def _make_send_stub(
     behaviour: Any,
     params_stub: Any,
-    get_action: Callable[[Any, Any, Callable], None],
+    get_action: Callable[..., None],
     store_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u",
 ) -> Callable:
-    """Build a send_message stub that dispatches GET vs STORE callbacks.
+    """Build a send_message stub for the STORE call, carrying the GET action.
+
+    The request data download is sent outside ``send_message``;
+    ``_run_act_cycles`` answers it with ``get_action``.
 
     :param behaviour: The behaviour under test.
     :param params_stub: Params-like namespace.
-    :param get_action: Callable invoked on the first (GET) send.
+    :param get_action: Callable answering the request data download.
     :param store_cid: CID returned by the STORE callback.
     :returns: The stub function.
     """
     store_response = SimpleNamespace(ipfs_hash=store_cid)
-    is_first_call = iter([True, False])
 
     def stub(
         msg: Any, dlg: Any, callback: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
-        """Route GET vs STORE calls."""
-        if next(is_first_call):
-            get_action(msg, dlg, callback)
-        else:
-            callback(store_response, dlg)
+        """Answer the STORE call."""
+        callback(store_response, dlg)
         params_stub.in_flight_req = True
 
+    stub.get_action = get_action  # type: ignore[attr-defined]
     return stub
 
 
-def _run_two_act_cycles(behaviour: Any, params_stub: Any) -> None:
-    """Run two act cycles, clearing in_flight between them.
+def _answer_download(params_stub: Any, get_action: Callable[..., None]) -> None:
+    """Answer the pending request data download as ``IpfsHandler`` would.
+
+    :param params_stub: Params-like namespace holding the download's callbacks.
+    :param get_action: called with ``(msg, dlg, callback, error_callback)``.
+    """
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+    params_stub.background_ipfs_nonces.discard(nonce)
+    params_stub.req_to_deadline.pop(nonce, None)
+    callback = params_stub.req_to_callback.pop(nonce)
+    error_callback = params_stub.req_to_error_callback.pop(nonce)
+    get_action(None, None, callback, error_callback)
+
+
+def _mark_download_finished(behaviour: Any, task: Dict[str, Any]) -> Dict[str, Any]:
+    """Mark a queued on-chain task's request data download as finished.
+
+    The download ended in an IPFS error, so the task takes the slot and fails
+    through ``_handle_ipfs_error`` without running a tool.
+
+    :param behaviour: Behaviour under test.
+    :param task: the queued task.
+    :returns: the same task.
+    """
+    behaviour._request_data[task["requestId"]] = {"error": "content unpinned"}
+    return task
+
+
+def _run_act_cycles(behaviour: Any, params_stub: Any) -> None:
+    """Run one on-chain task through download, execution and delivery.
 
     :param behaviour: Behaviour under test.
     :param params_stub: Params-like namespace.
     """
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, behaviour.send_message.get_action)
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -675,13 +729,13 @@ def test_ipfs_error_codec_mismatch_delivers_descriptive_rejection(
     error_reason = "protobuf: (PBNode) invalid wireType, expected 2, got 3"
 
     def simulate_ipfs_error(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
-        """Simulate what IpfsHandler ERROR path does."""
-        behaviour._invalid_request = True
-        behaviour._ipfs_error_reason = (
-            f"Request data could not be retrieved from IPFS (detail: {error_reason})"
-        )
+        """Report an IPFS ERROR reply for the download."""
+        error_callback(error_reason)
 
     monkeypatch.setattr(
         behaviour,
@@ -689,7 +743,7 @@ def test_ipfs_error_codec_mismatch_delivers_descriptive_rejection(
         _make_send_stub(behaviour, params_stub, simulate_ipfs_error),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
@@ -737,14 +791,13 @@ def test_ipfs_error_network_failure_delivers_rejection(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def simulate_network_error(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
-        """Simulate network-level IPFS failure."""
-        behaviour._invalid_request = True
-        behaviour._ipfs_error_reason = (
-            "Request data could not be retrieved from IPFS"
-            " (detail: Failed to download: bafybeiabc123)"
-        )
+        """Report a network-level IPFS failure for the download."""
+        error_callback("Failed to download: bafybeiabc123")
 
     monkeypatch.setattr(
         behaviour,
@@ -752,7 +805,7 @@ def test_ipfs_error_network_failure_delivers_rejection(
         _make_send_stub(behaviour, params_stub, simulate_network_error),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -793,7 +846,10 @@ def test_ipfs_success_invalid_task_data_delivers_invalid_response(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def deliver_bad_task_data(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver IPFS response with missing 'tool' field."""
         bad_body: Dict[str, Any] = {"prompt": "some prompt"}  # no 'tool' key
@@ -808,7 +864,7 @@ def test_ipfs_success_invalid_task_data_delivers_invalid_response(
         _make_send_stub(behaviour, params_stub, deliver_bad_task_data),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -866,7 +922,10 @@ def test_ipfs_success_valid_task_delivers_result(
     valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
 
     def deliver_valid_task(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver valid task data via IPFS callback."""
         body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
@@ -880,7 +939,7 @@ def test_ipfs_success_valid_task_delivers_result(
         ),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
@@ -938,36 +997,41 @@ def test_ipfs_error_does_not_cascade_to_next_task(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
     )
 
-    task_num: Dict[str, int] = {"n": 0}
-
     def send_message_stub(
         msg: Any,
         dlg: Any,
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """First task: IPFS error. Second task: success. STORE always succeeds."""
-        task_num["n"] += 1
-        func = _dispatch_target(callback)
-        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            if task_num["n"] == 1:
-                # Task 100: IPFS download fails
-                behaviour._invalid_request = True
-                behaviour._ipfs_error_reason = (
-                    "Request data could not be retrieved from IPFS"
-                    " (detail: content unpinned)"
-                )
-            else:
-                # Task 101: IPFS download succeeds
-                body: Dict[str, Any] = {"prompt": "prompt", "tool": "sum"}
-                callback(SimpleNamespace(files={"t.json": json.dumps(body)}), dlg)
-        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
-            callback(SimpleNamespace(ipfs_hash="bafyok"), dlg)
+        """STORE always succeeds."""
+        callback(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         params_stub.in_flight_req = True
+
+    def report_unpinned(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
+    ) -> None:
+        """Task 100: IPFS download fails."""
+        error_callback("content unpinned")
+
+    def deliver_task(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
+    ) -> None:
+        """Task 101: IPFS download succeeds."""
+        body: Dict[str, Any] = {"prompt": "prompt", "tool": "sum"}
+        callback(SimpleNamespace(files={"t.json": json.dumps(body)}), dlg)
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
     # Task 100: IPFS error → rejection pipeline
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, report_unpinned)
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -979,6 +1043,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     _assert_clean_state(behaviour)
 
     # Task 101: should execute normally — no cascading failure
+    _answer_download(params_stub, deliver_task)
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -989,6 +1054,408 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     assert second_done["request_id"] == 101
     assert second_done["task_result"] == "mh:bafyok"
     _assert_clean_state(behaviour)
+
+
+def _queue_offchain(shared_state: Dict[str, Any], req_id: int) -> Dict[str, Any]:
+    """Queue an off-chain task, whose request travels inline.
+
+    :param shared_state: Shared state dict.
+    :param req_id: Request ID for the task.
+    :returns: the queued task.
+    """
+    task: Dict[str, Any] = {
+        "requestId": req_id,
+        "request_delivery_rate": 100,
+        "data": b"raw-bytes",
+        "is_offchain": True,
+        "ipfs_data": json.dumps({"prompt": "p", "tool": "sum"}),
+        "contract_address": "0xmech",
+    }
+    shared_state[beh_mod.PENDING_TASKS].append(task)
+    return task
+
+
+def test_offchain_task_runs_while_an_onchain_download_is_pending(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """An on-chain task still downloading its data does not hold the slot."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=500)
+    _queue_offchain(shared_state, req_id=501)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+
+    behaviour._prefetch_request_data()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 501
+    assert params_stub.in_flight_req is False
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert [t["requestId"] for t in shared_state[beh_mod.PENDING_TASKS]] == [500]
+
+
+def test_downloaded_onchain_task_runs_from_its_stored_data(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """The slot runs a downloaded task from the stored files, without a second download."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=502)
+    files = {"metadata.json": json.dumps({"prompt": "p", "tool": "sum"})}
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    sent: List[Any] = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    handled: List[Any] = []
+    monkeypatch.setattr(
+        behaviour, "_handle_get_task", lambda msg, _dlg: handled.append(msg.files)
+    )
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(files=files), dlg
+        ),
+    )
+    behaviour._execute_task()
+
+    assert handled == [files]
+    assert sent == []
+    assert behaviour._request_data == {}
+
+
+def test_download_without_reply_by_its_deadline_is_retried_as_a_timeout(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A download that never answers ends as a timeout and the task downloads again."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.timeout_limit = 3
+    _enqueue_task(shared_state, params_stub, req_id=503)
+    params_stub.request_id_to_num_timeouts[503] = 0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    now = [1000.0]
+    monkeypatch.setattr(beh_mod.time, "time", lambda: now[0])
+
+    behaviour._prefetch_request_data()
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+    now[0] += beh_mod.REQUEST_DATA_FETCH_DEADLINE + 1
+    behaviour._prefetch_request_data()
+
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.background_ipfs_nonces
+    behaviour._execute_task()
+    assert behaviour._executing_task is None
+    assert params_stub.request_id_to_num_timeouts[503] == 1
+    requeued = [t for t in shared_state[beh_mod.PENDING_TASKS] if t["requestId"] == 503]
+    assert len(requeued) == 1
+    assert behaviour._request_data == {}
+
+
+def _step_in_setup(params_stub: Any, shared_state: Dict[str, Any]) -> None:
+    """Configure a marketplace mech that may step in for ``0xmech1``.
+
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared state dictionary.
+    """
+    params_stub.use_mech_marketplace = True
+    params_stub.agent_mech_contract_address = "0xother"
+    params_stub.step_in_list_size = 20
+    shared_state[beh_mod.PAYMENT_MODEL] = "fixed"
+    shared_state[beh_mod.PAYMENT_INFO] = {"0xmech1": "fixed"}
+
+
+def test_only_one_downloaded_task_waits_for_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """No second download starts while a downloaded task still waits for the slot."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=510)
+    _enqueue_task(shared_state, params_stub, req_id=511)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(files={"m.json": "{}"}), dlg
+        ),
+    )
+    behaviour._prefetch_request_data()
+
+    assert list(behaviour._request_data) == [510]
+    assert params_stub.background_ipfs_nonces == set()
+
+
+def test_request_data_download_is_bounded_by_its_deadline(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """The IPFS request carries the download deadline as its own timeout."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=540)
+    timeouts: List[Any] = []
+
+    def build(_ipfs_hash: str, timeout: Any = None) -> Tuple[Any, Any]:
+        timeouts.append(timeout)
+        return object(), fake_dialogue
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req", build)
+
+    behaviour._prefetch_request_data()
+
+    assert timeouts == [beh_mod.REQUEST_DATA_FETCH_DEADLINE]
+
+
+STEP_IN_TASK = {
+    "priorityMech": "0xmech1",
+    "requestId": 560,
+    "request_delivery_rate": 100,
+    "data": b"ipfs-pointer",
+    "contract_address": "0xmech1",
+}
+
+
+def _stub_downloads(behaviour: Any, monkeypatch: Any, fake_dialogue: Any) -> List[Any]:
+    """Stub the IPFS request builder and the in-slot sender.
+
+    :param behaviour: Behaviour under test.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: Dialogue-like object returned by the builder.
+    :return: the list that collects in-slot sends.
+    """
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    sent: List[Any] = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    return sent
+
+
+def test_timed_out_task_downloads_in_the_slot_when_nothing_is_pending(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """Another mech's timed-out task is not downloaded ahead; the slot fetches it."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    assert params_stub.background_ipfs_nonces == set()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == STEP_IN_TASK["requestId"]
+    assert len(sent) == 1
+    assert shared_state[beh_mod.TIMED_OUT_TASKS] == []
+
+
+def test_timed_out_task_waits_while_a_pending_task_is_downloading(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A listed timed-out task neither takes the slot nor the download from a pending task."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    _enqueue_task(shared_state, params_stub, req_id=561)
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    behaviour._execute_task()
+
+    assert behaviour._prefetch_request_id == 561
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert behaviour._executing_task is None
+    assert sent == []
+    assert len(shared_state[beh_mod.TIMED_OUT_TASKS]) == 1
+
+
+def test_downloaded_pending_task_runs_before_a_timed_out_task(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """With a ready task in each queue, the pending one takes the slot."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    _enqueue_task(shared_state, params_stub, req_id=562)
+    behaviour._request_data[562] = {"files": {"metadata.json": "{}"}}
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 562
+    assert len(shared_state[beh_mod.TIMED_OUT_TASKS]) == 1
+
+
+def test_malformed_request_pointer_is_reported_by_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+) -> None:
+    """A task whose pointer cannot be read starts no download and fails in the slot."""
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=563)
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(
+        beh_mod,
+        "get_ipfs_file_hash",
+        lambda _data: (_ for _ in ()).throw(ValueError("bad pointer")),
+    )
+
+    behaviour._prefetch_request_data()
+    assert behaviour._request_data == {563: {}}
+    assert params_stub.background_ipfs_nonces == set()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 563
+    assert behaviour._invalid_request is True
+    assert sent == []
+
+
+@pytest.mark.parametrize(
+    "reason, timeouts, invalid",
+    [("socket timed out", 1, False), ("content unpinned", 0, True)],
+    ids=["timeout_is_retried", "other_error_is_terminal"],
+)
+def test_error_reply_of_a_download_reaches_the_task_in_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    reason: str,
+    timeouts: int,
+    invalid: bool,
+) -> None:
+    """An error reply is stored by the registered callback and handled when the task runs."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.timeout_limit = 3
+    _enqueue_task(shared_state, params_stub, req_id=564)
+    params_stub.request_id_to_num_timeouts[564] = 0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub, lambda msg, dlg, callback, error_callback: error_callback(reason)
+    )
+    assert behaviour._request_data == {564: {"error": reason}}
+    behaviour._execute_task()
+
+    assert params_stub.request_id_to_num_timeouts[564] == timeouts
+    assert behaviour._invalid_request is invalid
+
+
+def test_download_of_a_task_that_left_the_queue_is_dropped(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A download in flight for a task no longer pending frees the download for the next one."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=565)
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    behaviour._prefetch_request_data()
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+
+    shared_state[beh_mod.PENDING_TASKS].clear()
+    behaviour._prefetch_request_data()
+
+    assert behaviour._prefetch_nonce is None
+    assert behaviour._request_data == {}
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.background_ipfs_nonces
+
+
+def test_request_data_of_a_task_no_longer_queued_is_dropped(
+    behaviour: Any, shared_state: Dict[str, Any]
+) -> None:
+    """Downloaded data is released once its task has left the queues."""
+    behaviour._request_data[520] = {"files": {"m.json": "{}"}}
+    shared_state[beh_mod.PENDING_TASKS].clear()
+
+    behaviour._prefetch_request_data()
+
+    assert behaviour._request_data == {}
+
+
+def test_reply_of_an_abandoned_download_is_not_stored(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """Only the current download's outcome is recorded."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=530)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    behaviour._prefetch_request_data()
+
+    behaviour._store_request_data("another-nonce", {"files": {"m.json": "{}"}})
+
+    assert behaviour._request_data == {}
+    assert behaviour._prefetch_request_id == 530
 
 
 # Scenario F: IPFS download succeeds but empty task data → invalid response
@@ -1023,7 +1490,10 @@ def test_ipfs_success_empty_task_data_delivers_invalid_response(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def deliver_empty_data(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver empty task data."""
         callback(SimpleNamespace(files={"task.json": json.dumps({})}), dlg)
@@ -1034,7 +1504,7 @@ def test_ipfs_success_empty_task_data_delivers_invalid_response(
         _make_send_stub(behaviour, params_stub, deliver_empty_data),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -1079,7 +1549,10 @@ def test_non_ipfs_failure_uses_generic_invalid_response(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def deliver_valid_task(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver valid task data — pricing rejection happens in callback."""
         body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
@@ -1091,7 +1564,7 @@ def test_non_ipfs_failure_uses_generic_invalid_response(
         _make_send_stub(behaviour, params_stub, deliver_valid_task),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -1462,7 +1935,9 @@ def test_execute_task_pops_from_timed_out_when_pending_empty(
         "data": b"ptr",
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.TIMED_OUT_TASKS].append(timed_task)
+    shared_state[beh_mod.TIMED_OUT_TASKS].append(
+        _mark_download_finished(behaviour, timed_task)
+    )
     assert shared_state[beh_mod.PENDING_TASKS] == []
     monkeypatch.setattr(
         behaviour,
@@ -1495,7 +1970,7 @@ def test_execute_task_bytes_request_id_converted(
         "data": b"ptr",
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.PENDING_TASKS].append(task)
+    shared_state[beh_mod.PENDING_TASKS].append(_mark_download_finished(behaviour, task))
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_get_file_req",
@@ -1539,7 +2014,7 @@ def test_execute_task_onchain_stamps_request_cid_on_executing_task(
         "data": b"raw-bytes",
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.PENDING_TASKS].append(task)
+    shared_state[beh_mod.PENDING_TASKS].append(_mark_download_finished(behaviour, task))
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_get_file_req",
@@ -1657,7 +2132,7 @@ def test_execute_task_onchain_request_cid_with_real_cid_helpers(
         "data": RAW_REQUEST_DIGEST,
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.PENDING_TASKS].append(task)
+    shared_state[beh_mod.PENDING_TASKS].append(_mark_download_finished(behaviour, task))
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_get_file_req",
@@ -3456,20 +3931,21 @@ def test_malformed_ipfs_content_sets_invalid_request(
     # Return garbage (non-JSON) from IPFS
     garbage_response = SimpleNamespace(files={"task.json": "NOT VALID JSON {{{"})
 
-    def send_message_stub(
+    def answer_with_content(
         msg: Any,
         dlg: Any,
         callback: Callable[[Any, Any], None],
-        error_callback: Any = None,
+        error_callback: Callable[[str], None],
     ) -> None:
         callback(garbage_response, dlg)
-        params_stub.in_flight_req = True
 
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
     )
-    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, answer_with_content)
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -3504,20 +3980,21 @@ def test_empty_ipfs_files_sets_invalid_request(
     # Return empty files from IPFS → IndexError on [0]
     empty_response = SimpleNamespace(files={})
 
-    def send_message_stub(
+    def answer_with_content(
         msg: Any,
         dlg: Any,
         callback: Callable[[Any, Any], None],
-        error_callback: Any = None,
+        error_callback: Callable[[str], None],
     ) -> None:
         callback(empty_response, dlg)
-        params_stub.in_flight_req = True
 
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
     )
-    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, answer_with_content)
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -3570,8 +4047,9 @@ def test_valid_32_byte_data_still_works(
 
     # Should NOT be marked invalid — normal path
     assert behaviour._invalid_request is False
-    # IPFS get request should have been sent
-    assert len(send_calls) == 1
+    # The request data download was started, outside the task slot
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert send_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -7163,7 +7641,14 @@ def test_new_task_starts_without_a_tool_error_message(
     monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req", lambda *a: (None, None))
     behaviour._tool_error_reason = TOOL_ERROR_REASON
     shared_state[beh_mod.PENDING_TASKS].append(
-        {"requestId": 46, "request_delivery_rate": 100, "data": b"fake-ipfs-pointer"}
+        _mark_download_finished(
+            behaviour,
+            {
+                "requestId": 46,
+                "request_delivery_rate": 100,
+                "data": b"fake-ipfs-pointer",
+            },
+        )
     )
 
     behaviour._execute_task()
