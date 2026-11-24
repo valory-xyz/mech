@@ -2128,7 +2128,10 @@ class MechHttpHandler(AbstractResponseHandler):
     def _offchain_delivery_rate(self) -> Optional[int]:
         """Return the marketplace mech's configured delivery rate.
 
-        A signed off-chain request must sign at least this rate.
+        With cap-and-actual pricing off, a signed off-chain request must sign
+        at least this rate, since that is what it is charged. With it on, the
+        request is charged its run's price and the tool's listed minimum cap
+        bounds what it signs; a tool with no listed minimum keeps this rate.
 
         :return: the rate from ``mech_to_max_delivery_rate``, or ``None`` when
             no marketplace mech or no rate for it is configured.
@@ -2720,7 +2723,10 @@ class MechHttpHandler(AbstractResponseHandler):
                 outcome=REQUEST_OUTCOME_INTERNAL_ERROR,
             )
             return
-        if request_delivery_rate < mech_delivery_rate:
+        priced = bool(
+            self.context.shared_state.get(preimage_buffer.CAP_AND_ACTUAL_ENABLED, False)
+        )
+        if not priced and request_delivery_rate < mech_delivery_rate:
             self.context.logger.info(
                 f"Rejecting offchain request {request_id}: "
                 f"request_delivery_rate={request_delivery_rate} is below the "
@@ -2934,9 +2940,12 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return
 
-        minimum = minimum_cap(
-            self.params, requested_tool(data.get(RequestKey.IPFS_DATA.value, ""))
-        )
+        tool = requested_tool(data.get(RequestKey.IPFS_DATA.value, ""))
+        minimum = minimum_cap(self.params, tool)
+        if priced and tool not in self.params.tools_to_minimum_cap:
+            # A priced tool with no listed minimum keeps the mech's delivery
+            # rate as the least a request must sign.
+            minimum = max(minimum, mech_delivery_rate)
         if request_delivery_rate < minimum:
             self.context.logger.info(
                 "Offchain request %s refused: signed cap %d is below the "
