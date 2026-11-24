@@ -20,7 +20,7 @@ fingerprint:
   tests/test_preimage_buffer.py: bafybeickjqlsfqugfz3yjatgvxdy62fisarq36xlgdis73rnzy5s4vzgh4
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
-  tests/utils/test_benchmarks.py: bafybeic5m7xyfrvvhcnsq37n3sh2s2xtix6cbs4kncea75rnvigfyjr2mq
+  tests/utils/test_benchmarks.py: bafybeicfeavssjjrawwk77jsht5cpaqajykynd76dhyo5ynqv5egozar6e
   tests/utils/test_eip1271.py: bafybeigc6mgwxwik5cbtocxqmugoilumgjh7uztmpnfnfavsui3fedknme
   tests/utils/test_ipfs.py: bafybeie6mkn7wbtd6yjwakwhm6qbqsfqrnhuxmxmnk3ysd63vko6amwfoa
   tests/utils/test_local_cid.py: bafybeia6zbo4g6n6ypkccuywmnytvx6scyiw2pjn6eva6d6edg6hb6tmke
@@ -29,7 +29,7 @@ fingerprint:
   tests/utils/test_task.py: bafybeidmrb73vvfz2lr6begci544hdta7pskreolt2klelhe6teyugtknq
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
-  utils/benchmarks.py: bafybeiakqiqezit7lww2qt5d2frztosbuzq3dxct2x5qj34nasvsbsxpsi
+  utils/benchmarks.py: bafybeiefsidpaytzznipmw3tmawt2znegow6grkmaet23ls4svhtbzlw44
   utils/eip1271.py: bafybeictv7umto5af4vvanf4otefrvm4mb6spazqljn47c22lio336ok24
   utils/ipfs.py: bafybeieuj6ysgmrgtpkxr4peuzjqmbih7q64c5fmins5o6nbhwd7nroi74
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq
