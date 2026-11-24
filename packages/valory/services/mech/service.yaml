@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicsjbrlhxpnnra3lwrlaqu5kh4bgiacty3vzgbdn4p6qxvgugodz4
+agent: valory/mech:0.1.0:bafybeig22o7w23tf2yxl5c7g5ewvns47hzewfscrxf75mebnruzktu26vi
 number_of_agents: 4
 deployment:
   agent:
@@ -251,6 +251,7 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
         fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
         marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
         payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
@@ -279,6 +280,7 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
         fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
         marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
         payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
@@ -308,6 +310,7 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
         fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
         marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
         payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
@@ -338,6 +341,7 @@ type: skill
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
         fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
         marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
         payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}

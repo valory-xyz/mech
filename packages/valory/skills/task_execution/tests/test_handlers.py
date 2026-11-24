@@ -7831,6 +7831,62 @@ def test_signed_cap_covers_the_minimum_charge(
     assert handler_context.shared_state["in_memory_requests"] == {}
 
 
+@pytest.mark.parametrize(
+    "minimum_caps, tool, cap, minimum",
+    [
+        pytest.param({_PRICED_TOOL: 200}, _PRICED_TOOL, 199, 200, id="cap_minus_1"),
+        pytest.param({_PRICED_TOOL: 200}, _PRICED_TOOL, 200, None, id="exact_cap"),
+        pytest.param({_PRICED_TOOL: 200}, _UNPRICED_TOOL, 100, None, id="other_tool"),
+        pytest.param({_PRICED_TOOL: 200}, None, 100, None, id="no_tool_named"),
+        pytest.param({_PRICED_TOOL: 20}, _PRICED_TOOL, 99, 100, id="below_charge"),
+        pytest.param({}, _PRICED_TOOL, 100, None, id="nothing_listed"),
+    ],
+)
+def test_signed_cap_covers_the_tools_minimum_cap(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    minimum_caps: Dict[str, int],
+    tool: Any,
+    cap: int,
+    minimum: Any,
+) -> None:
+    """A cap below the requested tool's listed minimum is refused with 400 and not queued.
+
+    The minimum charge here is 100 (the grossed-up fixed share), above the
+    tool floor, so each case isolates the listed minimum cap.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param minimum_caps: the mech's ``tools_to_minimum_cap``.
+    :param tool: the tool the request names, or None for none.
+    :param cap: the signed cap.
+    :param minimum: the minimum cap the 400 names, or None when accepted.
+    """
+    params = handler_context.params
+    params.tools_to_pricing = {_PRICED_TOOL: _TOOL_FLOOR}
+    params.tools_to_minimum_cap = minimum_caps
+    params.fixed_cost_per_request = _FIXED_COST_6_DECIMALS
+    params.payment_token_decimals = 6
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, 10**9)
+    ipfs_data = _DEFAULT_IPFS_DATA if tool is None else _tool_ipfs_data(tool)
+
+    resp = _post_cap(mh, http_dialogue, cap, request_id="9150", ipfs_data=ipfs_data)
+
+    pending = handler_context.shared_state["pending_tasks"]
+    if minimum is None:
+        assert resp.status_code == HttpCode.OK_CODE.value
+        assert len(pending) == 1
+        return
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == "signed cap below the mech's minimum charge"
+    assert payload["minimum_cap"] == minimum
+    assert "WWW-Authenticate" not in resp.headers
+    assert pending == []
+
+
 def test_zero_cap_is_refused_even_with_a_zero_balance(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
