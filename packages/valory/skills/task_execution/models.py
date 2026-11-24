@@ -21,7 +21,7 @@
 
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, List, Optional, Protocol, Set
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -225,6 +225,9 @@ class Params(Model):
         self.req_to_callback: Dict[str, Callable] = {}
         self.req_to_error_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
+        # IPFS requests sent outside the task slot; their replies leave
+        # ``in_flight_req`` and ``is_cold_start`` to the slot's own request.
+        self.background_ipfs_nonces: Set[str] = set()
         self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure(
             "mech_to_max_delivery_rate", kwargs, Dict[str, int]
         )

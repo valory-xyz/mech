@@ -243,6 +243,63 @@ def test_ipfs_reply_with_no_pending_request_is_dropped(
     assert "nonce-2" in handler_context.params.req_to_callback
 
 
+def test_background_ipfs_reply_leaves_the_slot_flags(
+    handler_context: Any,
+) -> None:
+    """A reply for a background download does not clear the slot's request flags."""
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    called = {"ok": False}
+    handler_context.params.req_to_callback["nonce-1"] = lambda *_: called.__setitem__(
+        "ok", True
+    )
+    handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
+    handler_context.params.background_ipfs_nonces.add("nonce-1")
+    handler_context.params.in_flight_req = True
+    handler_context.params.is_cold_start = True
+
+    handler.handle(SimpleNamespace(performative=IpfsMessage.Performative.FILES))
+
+    assert called["ok"] is True
+    assert handler_context.params.in_flight_req is True
+    assert handler_context.params.is_cold_start is True
+    assert "nonce-1" not in handler_context.params.background_ipfs_nonces
+
+
+def test_background_ipfs_error_reply_leaves_the_slot_flags(
+    handler_context: Any,
+) -> None:
+    """An error reply for a background download reaches its error callback only."""
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    reasons: List[str] = []
+    handler_context.params.req_to_callback["nonce-1"] = lambda *_: None
+    handler_context.params.req_to_error_callback["nonce-1"] = reasons.append
+    handler_context.params.background_ipfs_nonces.add("nonce-1")
+    handler_context.params.in_flight_req = True
+
+    handler.handle(
+        SimpleNamespace(performative=IpfsMessage.Performative.ERROR, reason="unpinned")
+    )
+
+    assert reasons == ["unpinned"]
+    assert handler_context.params.in_flight_req is True
+    assert "nonce-1" not in handler_context.params.background_ipfs_nonces
+
+
+def test_ipfs_reply_after_its_request_gave_up_is_dropped(
+    handler_context: Any,
+) -> None:
+    """A reply whose callback was already removed is dropped without touching the slot."""
+    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    handler.setup()
+    handler_context.params.in_flight_req = True
+
+    handler.handle(SimpleNamespace(performative=IpfsMessage.Performative.FILES))
+
+    assert handler_context.params.in_flight_req is True
+
+
 def test_ipfs_handler_deadline_expired_still_invokes_callback(
     handler_context: Any,
 ) -> None:

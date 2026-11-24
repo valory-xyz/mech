@@ -802,6 +802,8 @@ class IpfsHandler(BaseHandler):
         callback = self.params.req_to_callback.pop(nonce, None)
         error_callback = self.params.req_to_error_callback.pop(nonce, None)
         deadline = self.params.req_to_deadline.pop(nonce, None)
+        in_slot = nonce not in self.params.background_ipfs_nonces
+        self.params.background_ipfs_nonces.discard(nonce)
         if callback is None:
             # The request timed out and was dropped; ``in_flight_req`` now
             # belongs to another request.
@@ -818,7 +820,8 @@ class IpfsHandler(BaseHandler):
             )
             if error_callback is not None:
                 error_callback(reason)
-            self.params.in_flight_req = False
+            if in_slot:
+                self.params.in_flight_req = False
             self.on_message_handled(message)
             return
 
@@ -833,8 +836,9 @@ class IpfsHandler(BaseHandler):
 
         self.context.logger.info(f"Invoking IPFS callback. {nonce=}")
         callback(ipfs_msg, dialogue)
-        self.params.in_flight_req = False
-        self.params.is_cold_start = False
+        if in_slot:
+            self.params.in_flight_req = False
+            self.params.is_cold_start = False
         self.on_message_handled(message)
 
 
