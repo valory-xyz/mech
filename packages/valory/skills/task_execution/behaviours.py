@@ -2621,6 +2621,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             price = self._price_done_task(done_task, cap)
         else:
             price = self._price_failed_run(done_task, cap, fault)
+        if price is not None and "pricing" in done_task:
+            done_task["pricing"]["computed_price"] = price
         actual_delivery_rate, pricing_mode = self._charged_delivery_rate(
             done_task, is_offchain, cap, price, fault
         )
@@ -3034,6 +3036,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "fixed_cost": _opt_int_str(pricing.get("fixed_cost")),
                 "marketplace_fee_bp": pricing.get("marketplace_fee_bp"),
                 "tool_floor": _opt_int_str(pricing.get("tool_floor")),
+                # What cap-and-actual pricing charges for this run, at or below
+                # the signed cap; with the flag off it differs from the charge.
+                "computed_price": _opt_int_str(pricing.get("computed_price")),
                 "payment_token_decimals": pricing.get("payment_token_decimals"),
                 "pricing_mode": pricing.get("pricing_mode"),
                 "is_offchain": is_offchain_task,
