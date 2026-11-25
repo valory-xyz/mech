@@ -74,8 +74,10 @@ from packages.valory.skills.task_execution.models import (
     PRICING_ONCHAIN_MAX,
     PRICING_SIGNED_CAP,
     Params,
+    accepted_minimum_cap,
     fixed_share_in_asset_units,
     gross_up_for_fee,
+    is_partial_floor_map,
     minimum_charge,
     offchain_metric_labels,
     prompt_byte_length,
@@ -844,6 +846,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if self.payment_model:
             self._payment_model_request_sent_at = None
+            self._require_whole_floor_map_on_nvm()
             return True
 
         if self.params.in_flight_req:
@@ -864,6 +867,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info("Setting the mech's payment model...")
         self._request_payment_model()
         return False
+
+    def _require_whole_floor_map_on_nvm(self) -> None:
+        """Refuse a ``tools_to_pricing`` map that floors only some tools on an NVM mech.
+
+        An NVM deliver carries the tool floor as its rate and falls back to the
+        mech's max delivery rate without one, so the map lists every served
+        tool or none. The payment type is read from the chain, so this runs
+        once it is known rather than at params validation.
+
+        :raises ValueError: for a partial map on an NVM mech.
+        """
+        if self._mech_is_nvm() and is_partial_floor_map(
+            self.params.tools_to_pricing, self.params.tools_to_package_hash
+        ):
+            unlisted = sorted(
+                set(self.params.tools_to_package_hash)
+                - set(self.params.tools_to_pricing)
+            )
+            raise ValueError(
+                "tools_to_pricing must list every served tool, or none, on an "
+                f"NVM mech; missing: {', '.join(unlisted)}"
+            )
 
     def act(self) -> None:
         """Implement the act."""
@@ -2110,8 +2135,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if tool_name in self._tools_to_package_hash:
-            if self._tools_to_pricing:
-                tool_pricing = self._tools_to_pricing[tool_name]
+            tool_pricing = self._tools_to_pricing.get(tool_name)
+            if tool_pricing is not None:
                 req_id_delivery_rate = self.request_id_to_delivery_rate_info[
                     executing_task["requestId"]
                 ]
@@ -2389,7 +2414,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(
                 f"Cost for request {done_task.get('request_id')} is incomplete: "
                 f"{cost_dict['unpriced_calls']} call(s) to an unpriced model; "
-                "charging the floor or the cap."
+                "charging the floor or the least accepted for the tool."
             )
             return None
         usd = Decimal(str(total_cost))
@@ -2401,11 +2426,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     ) -> Optional[int]:
         """Price for a done task: the grossed-up cost or the tool floor, up to the cap.
 
-        :param done_task: the done task, carrying ``cost_dict`` (V) and
-            ``dynamic_tool_cost`` (the floor) when set.
+        A run with neither a measured cost nor a floor is charged the least
+        the mech accepts for the tool (``accepted_minimum_cap``): an unmeasured
+        cost says nothing about what the run cost. No run is priced below the
+        minimum charge.
+
+        :param done_task: the done task, carrying ``cost_dict`` (V), ``tool``
+            and ``dynamic_tool_cost`` (the floor) when set.
         :param cap: the rate the requester signed, or None when unknown.
-        :return: the rate in payment-asset units, never above ``cap``; the cap
-            itself with neither a measured cost nor a floor; None without a cap.
+        :return: the rate in payment-asset units, at least the minimum charge
+            and never above ``cap``; None without a cap.
         """
         if cap is None:
             return None
@@ -2427,13 +2457,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             candidates.append(gross_up_for_fee(measured + fixed, fee_bp))
         if floor is not None:
             candidates.append(int(floor))
+        tool = done_task.get("tool")
         if not candidates:
-            self.context.logger.warning(
-                f"No measured cost or tool floor for request {request_id}; "
-                f"the price falls back to the signed rate {cap}."
+            accepted = accepted_minimum_cap(
+                self.params,
+                tool,
+                self._marketplace_mech_delivery_rate(),
+                bool(
+                    self.context.shared_state.get(
+                        preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
+                    )
+                ),
             )
-            return cap
-        price = max(candidates)
+            self.context.logger.info(
+                f"No measured cost or tool floor for request {request_id}; "
+                f"charging the least accepted for the tool, {accepted}."
+            )
+            candidates.append(accepted)
+        price = max(candidates + [minimum_charge(self.params, tool)])
         if price > cap:
             self.context.logger.warning(
                 f"Price {price} for request {request_id} exceeds the signed cap "
@@ -2441,6 +2482,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return cap
         return price
+
+    def _marketplace_mech_delivery_rate(self) -> Optional[int]:
+        """Return the marketplace mech's configured delivery rate, if any."""
+        try:
+            mech = self._get_designated_marketplace_mech_address()
+        except ValueError:
+            return None
+        rates = {
+            address.lower(): rate
+            for address, rate in self.params.mech_to_max_delivery_rate.items()
+        }
+        rate = rates.get(mech.lower())
+        return None if rate is None else int(rate)
 
     def _price_failed_run(
         self, done_task: Dict[str, Any], cap: Optional[int], fault: Fault
@@ -2503,13 +2557,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 if fault == FAULT_MECH:
                     return price, PRICING_FAILED_FLOOR
                 if fault == FAULT_CLIENT:
-                    return price, PRICING_SIGNED_CAP
-                pricing = done_task.get("pricing") or {}
-                if (
-                    pricing.get("measured_cost") is None
-                    and pricing.get("tool_floor") is None
-                ):
-                    # Neither a measured cost nor a floor: the price is the cap.
                     return price, PRICING_SIGNED_CAP
                 return price, PRICING_CAP_AND_ACTUAL
             return cap, PRICING_SIGNED_CAP

@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeihhe7l5bqrr4yypbfv6jtopq5irvbo4g3z2nynuv2d5oz2i3khv7a
+  behaviours.py: bafybeieuqvpjtp562n2mefcyvk6b76y4egikj4agiz3x5yesvbnek2qhvq
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -47,7 +47,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeidvedqepygcbmztrglxlxq2tpbfwnnwjpzenjhx6zrrxbu6nloxe4
-- valory/task_execution:0.1.0:bafybeig6scseoateipcnknl7eqcijxeru4ro7xmxjfloto6l3hwim6jrvi
+- valory/task_execution:0.1.0:bafybeig2yhjpb57wq5ofxsfnajmx3nrl2xltue72tyblgbwtyibgwz4buq
 - valory/transaction_settlement_abci:0.1.0:bafybeiamnm26osevzjawbjx3rabeibnbkptdckadlucz6ef5u4jtgtlzc4
 behaviours:
   main:

@@ -415,7 +415,7 @@ def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs: Dict[str, Any],
 ) -> None:
     """
-    Mismatched pricing/package keys should raise an enforcement error.
+    A priced tool the mech does not serve should raise an enforcement error.
 
     :param params_kwargs: Baseline keyword arguments used to construct Params.
     :type params_kwargs: Dict[str, Any]
@@ -424,7 +424,23 @@ def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs["tools_to_pricing"] = {"mul": 20}  # mismatch
     with pytest.raises(AEAEnforceError) as ei:
         m.Params(name="params", **params_kwargs)
-    assert "Extra keys" in str(ei.value)
+    assert "Unknown tools in tools_to_pricing: mul" in str(ei.value)
+
+
+@pytest.mark.parametrize("pricing", [{}, {"sum": 10}, {"sum": 0}])
+def test_params_tools_pricing_may_leave_tools_out(
+    params_kwargs: Dict[str, Any], pricing: Dict[str, int]
+) -> None:
+    """A tool the mech serves may have no floor; the listed ones keep theirs.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :param pricing: the tools_to_pricing map under test.
+    """
+    params_kwargs["tools_to_package_hash"] = {"sum": "h1", "mul": "h2"}
+    params_kwargs["tools_to_pricing"] = pricing
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.tools_to_pricing == pricing
+    assert m.minimum_charge(p, "mul") == m.MINIMUM_CHARGE_BASE_UNITS
 
 
 def test_params_missing_required_key_raises(
@@ -647,3 +663,50 @@ def test_params_preimage_retention_can_be_switched_off(
     params_kwargs["preimage_retention_enabled"] = False
     p: m.Params = m.Params(name="params", **params_kwargs)
     assert p.preimage_retention_enabled is False
+
+
+HELPER_TOOL = "sum"
+HELPER_LISTED_CAP = 15_000
+HELPER_MECH_RATE = 10_000
+
+
+@pytest.mark.parametrize(
+    "minimum_caps, priced, mech_rate, expected",
+    [
+        ({HELPER_TOOL: HELPER_LISTED_CAP}, True, HELPER_MECH_RATE, HELPER_LISTED_CAP),
+        ({HELPER_TOOL: HELPER_LISTED_CAP}, False, HELPER_MECH_RATE, HELPER_LISTED_CAP),
+        ({HELPER_TOOL: 500}, True, HELPER_MECH_RATE, 500),
+        ({}, True, HELPER_MECH_RATE, HELPER_MECH_RATE),
+        ({}, False, HELPER_MECH_RATE, m.MINIMUM_CHARGE_BASE_UNITS),
+        ({}, True, None, m.MINIMUM_CHARGE_BASE_UNITS),
+    ],
+)
+def test_accepted_minimum_cap(
+    minimum_caps: Dict[str, int],
+    priced: bool,
+    mech_rate: Any,
+    expected: int,
+) -> None:
+    """A tool with no listed minimum keeps the mech delivery rate only when priced."""
+    params = SimpleNamespace(
+        payment_token_decimals=6,
+        fixed_cost_per_request=0,
+        marketplace_fee_bp=0,
+        tools_to_pricing={},
+        tools_to_minimum_cap=dict(minimum_caps),
+    )
+    assert m.accepted_minimum_cap(params, HELPER_TOOL, mech_rate, priced) == expected
+
+
+@pytest.mark.parametrize(
+    "floors, expected",
+    [
+        ({}, False),
+        ({"sum": 1, "mul": 2}, False),
+        ({"sum": 1}, True),
+        ({"mul": 0}, True),
+    ],
+)
+def test_is_partial_floor_map(floors: Dict[str, int], expected: bool) -> None:
+    """A map is partial when it floors some served tools but not all."""
+    assert m.is_partial_floor_map(floors, {"sum": "h1", "mul": "h2"}) is expected

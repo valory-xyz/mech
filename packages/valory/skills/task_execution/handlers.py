@@ -77,7 +77,7 @@ from packages.valory.skills.task_execution.behaviours import (
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import (
     Params,
-    minimum_cap,
+    accepted_minimum_cap,
     offchain_metric_labels,
     prompt_byte_length,
 )
@@ -2941,11 +2941,7 @@ class MechHttpHandler(AbstractResponseHandler):
             return
 
         tool = requested_tool(data.get(RequestKey.IPFS_DATA.value, ""))
-        minimum = minimum_cap(self.params, tool)
-        if priced and tool not in self.params.tools_to_minimum_cap:
-            # A priced tool with no listed minimum keeps the mech's delivery
-            # rate as the least a request must sign.
-            minimum = max(minimum, mech_delivery_rate)
+        minimum = accepted_minimum_cap(self.params, tool, mech_delivery_rate, priced)
         if request_delivery_rate < minimum:
             self.context.logger.info(
                 "Offchain request %s refused: signed cap %d is below the "
