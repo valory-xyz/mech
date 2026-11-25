@@ -2933,7 +2933,8 @@ def test_enqueue_offchain_request_carries_only_the_request_format_fields(
     body = _make_signed_request_body(delivery_rate="123", request_id="42")
     body[extra_key] = extra_value
 
-    mh._handle_signed_requests(make_http_msg(body), http_dialogue)
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
 
     assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
     task = handler_context.shared_state["pending_tasks"][0]
