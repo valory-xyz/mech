@@ -34,7 +34,10 @@ from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 from packages.valory.skills.task_execution.behaviours import TaskExecutionBehaviour
-from packages.valory.skills.task_execution.models import DEFAULT_MAX_PROMPT_BYTES
+from packages.valory.skills.task_execution.models import (
+    DEFAULT_MAX_PROMPT_BYTES,
+    MINIMUM_CHARGE_BASE_UNITS,
+)
 from packages.valory.skills.task_execution.utils.request_id import (
     to_request_id_bytes32,
 )
@@ -69,6 +72,22 @@ def cleanup() -> Generator[None, None, None]:
     clear_registry()
 
 
+HAPPY_PATH_SIGNED_RATE = 100
+OTHER_TOOL = "mul"
+
+
+@pytest.mark.parametrize(
+    "floors, expected_floor",
+    [
+        # the tool has a floor at or below the signed rate
+        ({"sum": 0}, 0),
+        ({"sum": HAPPY_PATH_SIGNED_RATE}, HAPPY_PATH_SIGNED_RATE),
+        # no tool has a floor
+        ({}, None),
+        # only another tool has one, above the signed rate: it does not apply
+        ({OTHER_TOOL: HAPPY_PATH_SIGNED_RATE + 1}, None),
+    ],
+)
 def test_happy_path_executes_and_stores(
     behaviour: Any,
     shared_state: Dict[str, Any],
@@ -78,10 +97,13 @@ def test_happy_path_executes_and_stores(
     monkeypatch: Any,
     patch_ipfs_multihash: Callable[[], None],
     disable_polling: Callable[[], None],
+    floors: Dict[str, int],
+    expected_floor: Optional[int],
 ) -> None:
-    """Execute a valid task and store the result."""
+    """Execute a valid task and store the result, with or without a floor for its tool."""
     patch_ipfs_multihash()
     disable_polling()
+    behaviour._tools_to_pricing = dict(floors)
 
     valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
 
@@ -91,19 +113,21 @@ def test_happy_path_executes_and_stores(
         {"params": {"default_model": "gpt-4o-mini"}},
     )
     behaviour._tools_to_package_hash["sum"] = "hashsum"
-    params_stub.tools_to_pricing = {"sum": 0}
+    params_stub.tools_to_pricing = dict(floors)
 
     req_id: int = 42
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
-            "request_delivery_rate": 100,
+            "request_delivery_rate": HAPPY_PATH_SIGNED_RATE,
             "data": b"fake-ipfs-pointer",
             "contract_address": "0xmech",
         }
     )
     params_stub.request_id_to_num_timeouts[req_id] = 0
-    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
+    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][
+        req_id
+    ] = HAPPY_PATH_SIGNED_RATE
 
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
@@ -157,6 +181,7 @@ def test_happy_path_executes_and_stores(
     assert done["tool"] == "sum"
     assert done["mech_address"] == "0xmech"
     assert done["task_result"] == f"mh:{valid_cid}"
+    assert done.get("dynamic_tool_cost") == expected_floor
 
     assert behaviour._executing_task is None
     assert behaviour._async_result is None
@@ -5662,14 +5687,80 @@ def test_price_clamps_to_cap_and_warns(behaviour: Any, params_stub: Any) -> None
     behaviour.context.logger.warning.assert_called_once()
 
 
-def test_price_charges_cap_without_cost_or_floor(
+MINIMUM_CHARGE = MINIMUM_CHARGE_BASE_UNITS
+SUB_CENT_COST_USD = 0.0042
+SUB_CENT_COST_6DEC = 4_200
+TOOL_FLOOR = 30
+UNLISTED_TOOL = "unlisted-tool"
+LISTED_TOOL = "listed-tool"
+
+
+def test_unmeasured_run_without_a_floor_is_charged_the_minimum_charge(
     behaviour: Any, params_stub: Any
 ) -> None:
-    """With no measured cost and no floor the signed cap is charged, with a warning."""
+    """No measured cost and no floor charges the minimum charge, not the signed cap."""
     _set_price_params(params_stub)
     behaviour.context.logger = MagicMock()
-    assert behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC) == 1_000_000
+    task = _priced_task()
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == MINIMUM_CHARGE
     behaviour.context.logger.warning.assert_called_once()
+    assert "minimum charge" in behaviour.context.logger.warning.call_args.args[0]
+
+
+def test_unmeasured_run_is_charged_the_fixed_share_when_it_is_the_minimum(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """With a fixed share set, the minimum charge of an unmeasured run is that share."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
+    assert behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC) == 14_118
+
+
+@pytest.mark.parametrize(
+    "cost_dict, floor, cap, expected",
+    [
+        # measured, no floor: the measured cost, sub-cent included
+        ({"total_cost": SUB_CENT_COST_USD}, None, CAP_ONE_USD_6DEC, SUB_CENT_COST_6DEC),
+        # measured below a floor: the floor
+        ({"total_cost": 0.00001}, TOOL_FLOOR, CAP_ONE_USD_6DEC, TOOL_FLOOR),
+        # unmeasured with a floor: the floor
+        (None, TOOL_FLOOR, CAP_ONE_USD_6DEC, TOOL_FLOOR),
+        # unmeasured, no floor: the minimum charge
+        (None, None, CAP_ONE_USD_6DEC, MINIMUM_CHARGE),
+        # a cap exactly at the price is charged in full; one below clamps
+        (
+            {"total_cost": SUB_CENT_COST_USD},
+            None,
+            SUB_CENT_COST_6DEC,
+            SUB_CENT_COST_6DEC,
+        ),
+        (
+            {"total_cost": SUB_CENT_COST_USD},
+            None,
+            SUB_CENT_COST_6DEC - 1,
+            SUB_CENT_COST_6DEC - 1,
+        ),
+        # a cap exactly at the minimum charge, and a cap of zero
+        (None, None, MINIMUM_CHARGE, MINIMUM_CHARGE),
+        (None, None, 0, 0),
+    ],
+)
+def test_price_without_a_required_floor(
+    behaviour: Any,
+    params_stub: Any,
+    cost_dict: Any,
+    floor: Optional[int],
+    cap: int,
+    expected: int,
+) -> None:
+    """The price is the measured cost or the floor, at least the minimum charge, up to the cap."""
+    _set_price_params(params_stub)
+    extra: Dict[str, Any] = {}
+    if cost_dict is not None:
+        extra["cost_dict"] = cost_dict
+    if floor is not None:
+        extra["dynamic_tool_cost"] = floor
+    assert behaviour._price_done_task(_priced_task(**extra), cap) == expected
 
 
 @pytest.mark.parametrize(
@@ -5687,23 +5778,26 @@ def test_price_treats_cost_dict_without_total_as_no_cost(
 def test_price_zero_cost_with_tokens_charges_only_the_fixed_share(
     behaviour: Any, params_stub: Any
 ) -> None:
-    """A measured run that cost 0 charges F grossed up, not the cap; 0 when F is 0."""
+    """A measured run that cost 0 charges F grossed up; the minimum charge when F is 0."""
     _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
     task = _priced_task(cost_dict={"total_cost": 0.0, "total_tokens": 120})
     # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
     assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 14_118
     _set_price_params(params_stub, decimals=6)
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 0
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == MINIMUM_CHARGE
 
 
 def test_price_treats_an_unused_callback_as_not_measured(
     behaviour: Any, params_stub: Any
 ) -> None:
-    """An untouched callback's zeroed dict is 'not measured': floor or cap, not free."""
+    """An untouched callback's zeroed dict is 'not measured': floor or minimum charge."""
     _set_price_params(params_stub, decimals=6)
     behaviour.context.logger = MagicMock()
     pristine = beh_mod.TokenCounterCallback().cost_dict
-    assert behaviour._price_done_task(_priced_task(cost_dict=pristine), 70) == 70
+    assert (
+        behaviour._price_done_task(_priced_task(cost_dict=pristine), 70)
+        == MINIMUM_CHARGE
+    )
     behaviour.context.logger.warning.assert_called_once()
     floored = _priced_task(cost_dict=pristine, dynamic_tool_cost=30)
     assert behaviour._price_done_task(floored, 70) == 30
@@ -5712,7 +5806,7 @@ def test_price_treats_an_unused_callback_as_not_measured(
 def test_price_treats_an_unpriced_only_run_as_not_measured(
     behaviour: Any, params_stub: Any
 ) -> None:
-    """A callback that only saw an unpriced model is 'not measured': floor or cap."""
+    """A callback that only saw an unpriced model is 'not measured': floor or minimum."""
     _set_price_params(params_stub, decimals=6)
     behaviour.context.logger = MagicMock()
     callback = beh_mod.TokenCounterCallback()
@@ -5720,7 +5814,8 @@ def test_price_treats_an_unpriced_only_run_as_not_measured(
         "unknown-model-xyz", lambda text, model: 0, input_tokens=10, output_tokens=10
     )
     assert (
-        behaviour._price_done_task(_priced_task(cost_dict=callback.cost_dict), 70) == 70
+        behaviour._price_done_task(_priced_task(cost_dict=callback.cost_dict), 70)
+        == MINIMUM_CHARGE
     )
     floored = _priced_task(cost_dict=callback.cost_dict, dynamic_tool_cost=30)
     assert behaviour._price_done_task(floored, 70) == 30
@@ -5798,10 +5893,10 @@ def test_onchain_charge_and_mode(
 @pytest.mark.parametrize(
     "pricing, expected_mode",
     [
-        ({"measured_cost": None, "tool_floor": None}, "signed_cap"),
+        ({"measured_cost": None, "tool_floor": None}, "cap_and_actual"),
         ({"measured_cost": 5_000, "tool_floor": None}, "cap_and_actual"),
         ({"measured_cost": None, "tool_floor": 20_000}, "cap_and_actual"),
-        ({}, "signed_cap"),
+        ({}, "cap_and_actual"),
     ],
 )
 def test_offchain_mode_names_where_the_rate_came_from(
@@ -5810,7 +5905,7 @@ def test_offchain_mode_names_where_the_rate_came_from(
     pricing: Dict[str, Any],
     expected_mode: str,
 ) -> None:
-    """With the flag on, a price that fell back to the cap is labelled ``signed_cap``."""
+    """With the flag on, an answered run's price is labelled ``cap_and_actual``."""
     shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
     task = _priced_task(pricing=pricing)
     _, mode = behaviour._charged_delivery_rate(task, True, 10_000, 9_000)
@@ -7397,6 +7492,51 @@ def test_offchain_tool_priced_above_the_signed_rate_is_a_mech_fault(
     done_task = shared_state[beh_mod.DONE_TASKS][0]
     assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_FAILED_FLOOR
     assert done_task["pricing"]["tool_floor"] is None
+
+
+@pytest.mark.parametrize(
+    "fault, floors, cap, expected",
+    [
+        # a mech fault with no floor and no fixed share pays the minimum charge
+        (beh_mod.FAULT_MECH, {}, CAP_ONE_USD_6DEC, MINIMUM_CHARGE_BASE_UNITS),
+        # only another tool is floored: still the minimum charge
+        (
+            beh_mod.FAULT_MECH,
+            {"othertool": 20_000},
+            CAP_ONE_USD_6DEC,
+            MINIMUM_CHARGE_BASE_UNITS,
+        ),
+        # the tool's own floor applies
+        (beh_mod.FAULT_MECH, {"mytool": 20_000}, CAP_ONE_USD_6DEC, 20_000),
+        # a cap exactly at the minimum charge, and a cap of zero
+        (
+            beh_mod.FAULT_MECH,
+            {},
+            MINIMUM_CHARGE_BASE_UNITS,
+            MINIMUM_CHARGE_BASE_UNITS,
+        ),
+        (beh_mod.FAULT_MECH, {}, 0, 0),
+        # a client fault pays the signed cap whatever the floors
+        (beh_mod.FAULT_CLIENT, {}, CAP_ONE_USD_6DEC, CAP_ONE_USD_6DEC),
+        (beh_mod.FAULT_CLIENT, {"mytool": 20_000}, 50, 50),
+    ],
+)
+def test_failed_run_price_without_a_required_floor(
+    behaviour: Any,
+    params_stub: Any,
+    fault: str,
+    floors: Dict[str, int],
+    cap: int,
+    expected: int,
+) -> None:
+    """A mech fault pays the minimum charge up to the cap; a client fault pays the cap."""
+    _set_price_params(params_stub)
+    params_stub.tools_to_pricing = dict(floors)
+    task = _priced_task(tool="mytool")
+    if "mytool" in floors:
+        task["dynamic_tool_cost"] = floors["mytool"]
+
+    assert behaviour._price_failed_run(task, cap, fault) == expected
 
 
 def test_offchain_mech_fault_is_never_charged_above_the_signed_cap(

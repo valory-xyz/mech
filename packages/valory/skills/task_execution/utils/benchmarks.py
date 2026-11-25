@@ -114,7 +114,8 @@ class TokenCounterCallback:
         Only the provider-reported ``call_cost`` is counted; the tokens are
         not. A call that reports no cost is counted in ``unpriced_calls``
         instead, which marks the whole tally as incomplete so the request
-        is charged the tool floor or the cap rather than the partial sum.
+        is charged the tool floor or the minimum charge rather than the
+        partial sum.
 
         :param model: the unpriced model identifier.
         :param call_cost: the provider-reported cost in USD, if any.

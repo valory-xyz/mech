@@ -2110,8 +2110,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if tool_name in self._tools_to_package_hash:
-            if self._tools_to_pricing:
-                tool_pricing = self._tools_to_pricing[tool_name]
+            tool_pricing = self._tools_to_pricing.get(tool_name)
+            if tool_pricing is not None:
                 req_id_delivery_rate = self.request_id_to_delivery_rate_info[
                     executing_task["requestId"]
                 ]
@@ -2389,7 +2389,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(
                 f"Cost for request {done_task.get('request_id')} is incomplete: "
                 f"{cost_dict['unpriced_calls']} call(s) to an unpriced model; "
-                "charging the floor or the cap."
+                "charging the floor or the minimum charge."
             )
             return None
         usd = Decimal(str(total_cost))
@@ -2401,11 +2401,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     ) -> Optional[int]:
         """Price for a done task: the grossed-up cost or the tool floor, up to the cap.
 
-        :param done_task: the done task, carrying ``cost_dict`` (V) and
-            ``dynamic_tool_cost`` (the floor) when set.
+        A run with neither a measured cost nor a floor is charged the mech's
+        minimum charge, and no run is priced below it.
+
+        :param done_task: the done task, carrying ``cost_dict`` (V), ``tool``
+            and ``dynamic_tool_cost`` (the floor) when set.
         :param cap: the rate the requester signed, or None when unknown.
-        :return: the rate in payment-asset units, never above ``cap``; the cap
-            itself with neither a measured cost nor a floor; None without a cap.
+        :return: the rate in payment-asset units, at least the minimum charge
+            and never above ``cap``; None without a cap.
         """
         if cap is None:
             return None
@@ -2427,13 +2430,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             candidates.append(gross_up_for_fee(measured + fixed, fee_bp))
         if floor is not None:
             candidates.append(int(floor))
+        minimum = minimum_charge(self.params, done_task.get("tool"))
         if not candidates:
             self.context.logger.warning(
                 f"No measured cost or tool floor for request {request_id}; "
-                f"the price falls back to the signed rate {cap}."
+                f"charging the minimum charge {minimum}."
             )
-            return cap
-        price = max(candidates)
+        price = max(candidates + [minimum])
         if price > cap:
             self.context.logger.warning(
                 f"Price {price} for request {request_id} exceeds the signed cap "
@@ -2503,13 +2506,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 if fault == FAULT_MECH:
                     return price, PRICING_FAILED_FLOOR
                 if fault == FAULT_CLIENT:
-                    return price, PRICING_SIGNED_CAP
-                pricing = done_task.get("pricing") or {}
-                if (
-                    pricing.get("measured_cost") is None
-                    and pricing.get("tool_floor") is None
-                ):
-                    # Neither a measured cost nor a floor: the price is the cap.
                     return price, PRICING_SIGNED_CAP
                 return price, PRICING_CAP_AND_ACTUAL
             return cap, PRICING_SIGNED_CAP

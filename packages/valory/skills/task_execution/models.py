@@ -175,7 +175,8 @@ def minimum_charge(params: PricingParams, tool: Optional[str]) -> int:
     """Return the least the mech charges for one run of ``tool``.
 
     Any run, answered or failed, is charged at least the grossed-up fixed
-    share and the tool floor, and never less than one base unit.
+    share and the tool's floor when it has one, and never less than one
+    base unit.
 
     :param params: the skill params.
     :param tool: the requested tool, or None when unknown.
@@ -365,11 +366,17 @@ class Params(Model):
         self.preimage_max_list_attempts: int = kwargs.pop(
             "preimage_max_list_attempts", 5
         )
+        # The floor a run of each tool is charged. A tool may be left out, and
+        # then has no floor; every listed tool must be one the mech serves.
         self.tools_to_pricing: Dict[str, int] = kwargs.pop("tools_to_pricing", {})
+        unknown_priced = sorted(
+            set(self.tools_to_pricing) - set(self.tools_to_package_hash)
+        )
+        enforce(
+            not unknown_priced,
+            f"Unknown tools in tools_to_pricing: {', '.join(unknown_priced)}",
+        )
         if self.tools_to_pricing:
-            self._ensure_same_keys(
-                kwargs, self.tools_to_package_hash, self.tools_to_pricing
-            )
             enforce(
                 min(self.tools_to_pricing.values()) >= 0,
                 "tools_to_pricing values must be >= 0",
@@ -455,29 +462,3 @@ class Params(Model):
                 f"{key!r} must be a {type_}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
             )
         return value
-
-    @classmethod
-    def _ensure_same_keys(
-        cls, kwargs: Dict, hash_dict: Dict, pricing_dict: Dict
-    ) -> None:
-        """Ensure that the same keys are available inside two dicts"""
-        enforce("skill_context" in kwargs, "Only use on models!")
-        hash_keys = set(hash_dict)
-        pricing_keys = set(pricing_dict)
-        extra_keys_in_hash_dict = sorted(hash_keys - pricing_keys)
-        extra_keys_in_pricing_dict = sorted(pricing_keys - hash_keys)
-
-        if extra_keys_in_hash_dict or extra_keys_in_pricing_dict:
-            errors = []
-            if extra_keys_in_hash_dict:
-                errors.append(
-                    f"Extra keys in tools_to_packages_hash dictionary: {', '.join(extra_keys_in_hash_dict)}"
-                )
-            if extra_keys_in_pricing_dict:
-                errors.append(
-                    f"Extra keys in tools_to_pricing dictionary: {', '.join(extra_keys_in_pricing_dict)}"
-                )
-            enforce(
-                False,
-                "; ".join(errors),
-            )

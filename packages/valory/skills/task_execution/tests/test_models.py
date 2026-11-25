@@ -415,7 +415,7 @@ def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs: Dict[str, Any],
 ) -> None:
     """
-    Mismatched pricing/package keys should raise an enforcement error.
+    A priced tool the mech does not serve should raise an enforcement error.
 
     :param params_kwargs: Baseline keyword arguments used to construct Params.
     :type params_kwargs: Dict[str, Any]
@@ -424,7 +424,23 @@ def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs["tools_to_pricing"] = {"mul": 20}  # mismatch
     with pytest.raises(AEAEnforceError) as ei:
         m.Params(name="params", **params_kwargs)
-    assert "Extra keys" in str(ei.value)
+    assert "Unknown tools in tools_to_pricing: mul" in str(ei.value)
+
+
+@pytest.mark.parametrize("pricing", [{}, {"sum": 10}, {"sum": 0}])
+def test_params_tools_pricing_may_leave_tools_out(
+    params_kwargs: Dict[str, Any], pricing: Dict[str, int]
+) -> None:
+    """A tool the mech serves may have no floor; the listed ones keep theirs.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :param pricing: the tools_to_pricing map under test.
+    """
+    params_kwargs["tools_to_package_hash"] = {"sum": "h1", "mul": "h2"}
+    params_kwargs["tools_to_pricing"] = pricing
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.tools_to_pricing == pricing
+    assert m.minimum_charge(p, "mul") == m.MINIMUM_CHARGE_BASE_UNITS
 
 
 def test_params_missing_required_key_raises(
