@@ -663,3 +663,50 @@ def test_params_preimage_retention_can_be_switched_off(
     params_kwargs["preimage_retention_enabled"] = False
     p: m.Params = m.Params(name="params", **params_kwargs)
     assert p.preimage_retention_enabled is False
+
+
+HELPER_TOOL = "sum"
+HELPER_LISTED_CAP = 15_000
+HELPER_MECH_RATE = 10_000
+
+
+@pytest.mark.parametrize(
+    "minimum_caps, priced, mech_rate, expected",
+    [
+        ({HELPER_TOOL: HELPER_LISTED_CAP}, True, HELPER_MECH_RATE, HELPER_LISTED_CAP),
+        ({HELPER_TOOL: HELPER_LISTED_CAP}, False, HELPER_MECH_RATE, HELPER_LISTED_CAP),
+        ({HELPER_TOOL: 500}, True, HELPER_MECH_RATE, 500),
+        ({}, True, HELPER_MECH_RATE, HELPER_MECH_RATE),
+        ({}, False, HELPER_MECH_RATE, m.MINIMUM_CHARGE_BASE_UNITS),
+        ({}, True, None, m.MINIMUM_CHARGE_BASE_UNITS),
+    ],
+)
+def test_accepted_minimum_cap(
+    minimum_caps: Dict[str, int],
+    priced: bool,
+    mech_rate: Any,
+    expected: int,
+) -> None:
+    """A tool with no listed minimum keeps the mech delivery rate only when priced."""
+    params = SimpleNamespace(
+        payment_token_decimals=6,
+        fixed_cost_per_request=0,
+        marketplace_fee_bp=0,
+        tools_to_pricing={},
+        tools_to_minimum_cap=dict(minimum_caps),
+    )
+    assert m.accepted_minimum_cap(params, HELPER_TOOL, mech_rate, priced) == expected
+
+
+@pytest.mark.parametrize(
+    "floors, expected",
+    [
+        ({}, False),
+        ({"sum": 1, "mul": 2}, False),
+        ({"sum": 1}, True),
+        ({"mul": 0}, True),
+    ],
+)
+def test_is_partial_floor_map(floors: Dict[str, int], expected: bool) -> None:
+    """A map is partial when it floors some served tools but not all."""
+    assert m.is_partial_floor_map(floors, {"sum": "h1", "mul": "h2"}) is expected

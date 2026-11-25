@@ -2955,9 +2955,10 @@ class TransactionPreparationBehaviour(
                 marketplace_deliver_by_mech[mech][MarketplaceKeys.DATAS.value].append(
                     bytes.fromhex(data[MarketplaceData.TASK_RESULT.value])
                 )
-                # default is set to mech's max delivery rate
-                # as for nvm mechs this allows to deliver invalid responses
-                # where tool is not available and so is tool_to_pricing
+                # A task without a tool floor delivers at the mech's max
+                # delivery rate: an NVM mech lists every served tool in
+                # tools_to_pricing or none, and an invalid response for an
+                # unavailable tool has no floor either.
                 marketplace_deliver_by_mech[mech][
                     MarketplaceKeys.DELIVERY_RATES.value
                 ].append(

@@ -1729,6 +1729,48 @@ def test_ensure_payment_model_payment_model_already_set(
     assert behaviour._ensure_payment_model() is True
 
 
+NVM_PAYMENT_MODEL = bytes.fromhex(beh_mod.PAYMENT_TYPE_NATIVE_NVM)
+TOKEN_NVM_PAYMENT_MODEL = bytes.fromhex(beh_mod.PAYMENT_TYPE_TOKEN_NVM)
+NON_NVM_PAYMENT_MODEL = bytes.fromhex("cd" * 32)
+SERVED_TOOLS = {"sum": "h1", "mul": "h2"}
+
+
+@pytest.mark.parametrize(
+    "payment_model, floors, refused",
+    [
+        # an NVM mech floors every served tool, or none
+        (NVM_PAYMENT_MODEL, {"sum": 10}, True),
+        (TOKEN_NVM_PAYMENT_MODEL, {"mul": 10}, True),
+        (NVM_PAYMENT_MODEL, {"sum": 10, "mul": 20}, False),
+        (NVM_PAYMENT_MODEL, {}, False),
+        # any other mech may floor some of its tools
+        (NON_NVM_PAYMENT_MODEL, {"sum": 10}, False),
+        (NON_NVM_PAYMENT_MODEL, {}, False),
+        ("fixed", {"sum": 10}, False),
+    ],
+)
+def test_partial_floor_map_is_refused_on_an_nvm_mech_only(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    payment_model: Any,
+    floors: Dict[str, int],
+    refused: bool,
+) -> None:
+    """Once the payment type is known, an NVM mech with a partial floor map does not run."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = False
+    params_stub.tools_to_package_hash = dict(SERVED_TOOLS)
+    params_stub.tools_to_pricing = dict(floors)
+    shared_state[beh_mod.PAYMENT_MODEL] = payment_model
+
+    if refused:
+        with pytest.raises(ValueError, match="every served tool, or none"):
+            behaviour._ensure_payment_model()
+    else:
+        assert behaviour._ensure_payment_model() is True
+
+
 def test_ensure_payment_model_requests_model_when_missing(
     behaviour: Any, params_stub: Any
 ) -> None:
@@ -5695,16 +5737,111 @@ UNLISTED_TOOL = "unlisted-tool"
 LISTED_TOOL = "listed-tool"
 
 
-def test_unmeasured_run_without_a_floor_is_charged_the_minimum_charge(
-    behaviour: Any, params_stub: Any
+UNMEASURED_TOOL = "mytool"
+LISTED_MINIMUM_CAP = 15_000
+MECH_DELIVERY_RATE = 10_000
+
+
+def _set_mech_delivery_rate(params_stub: Any, rate: Optional[int]) -> None:
+    """Configure the marketplace mech's delivery rate, or none."""
+    (mech,) = params_stub.mech_to_config
+    params_stub.mech_to_max_delivery_rate = {} if rate is None else {mech: rate}
+
+
+@pytest.mark.parametrize(
+    "minimum_caps, priced, mech_rate, cap, expected",
+    [
+        # a listed minimum cap is charged, pricing on or off
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            CAP_ONE_USD_6DEC,
+            LISTED_MINIMUM_CAP,
+        ),
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            False,
+            MECH_DELIVERY_RATE,
+            CAP_ONE_USD_6DEC,
+            LISTED_MINIMUM_CAP,
+        ),
+        # a listed minimum below the mech rate is not raised to it
+        ({UNMEASURED_TOOL: 500}, True, MECH_DELIVERY_RATE, CAP_ONE_USD_6DEC, 500),
+        # a tool with no listed minimum keeps the mech delivery rate when priced
+        ({}, True, MECH_DELIVERY_RATE, CAP_ONE_USD_6DEC, MECH_DELIVERY_RATE),
+        (
+            {"othertool": LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            CAP_ONE_USD_6DEC,
+            MECH_DELIVERY_RATE,
+        ),
+        # ... and only the minimum charge with pricing off or no rate configured
+        ({}, False, MECH_DELIVERY_RATE, CAP_ONE_USD_6DEC, MINIMUM_CHARGE),
+        ({}, True, None, CAP_ONE_USD_6DEC, MINIMUM_CHARGE),
+        # the signed cap still bounds it: exactly at, and one below
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            LISTED_MINIMUM_CAP,
+            LISTED_MINIMUM_CAP,
+        ),
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            LISTED_MINIMUM_CAP - 1,
+            LISTED_MINIMUM_CAP - 1,
+        ),
+    ],
+)
+def test_unmeasured_run_without_a_floor_is_charged_the_least_accepted(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    minimum_caps: Dict[str, int],
+    priced: bool,
+    mech_rate: Optional[int],
+    cap: int,
+    expected: int,
 ) -> None:
-    """No measured cost and no floor charges the minimum charge, not the signed cap."""
+    """No measured cost and no floor charges what intake accepts for the tool, up to the cap."""
+    _set_price_params(params_stub)
+    params_stub.tools_to_minimum_cap = dict(minimum_caps)
+    _set_mech_delivery_rate(params_stub, mech_rate)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = priced
+    task = _priced_task(tool=UNMEASURED_TOOL)
+
+    assert behaviour._price_done_task(task, cap) == expected
+
+
+def test_unmeasured_run_is_logged_at_info(behaviour: Any, params_stub: Any) -> None:
+    """The unmeasured fallback is an expected configuration, logged at info."""
     _set_price_params(params_stub)
     behaviour.context.logger = MagicMock()
-    task = _priced_task()
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == MINIMUM_CHARGE
-    behaviour.context.logger.warning.assert_called_once()
-    assert "minimum charge" in behaviour.context.logger.warning.call_args.args[0]
+
+    behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC)
+
+    behaviour.context.logger.warning.assert_not_called()
+    (message,) = behaviour.context.logger.info.call_args.args
+    assert "No measured cost or tool floor" in message
+
+
+def test_measured_run_is_not_raised_to_the_least_accepted(
+    behaviour: Any, params_stub: Any, shared_state: Dict[str, Any]
+) -> None:
+    """A measured sub-cent cost is charged as measured, below the tool's minimum cap."""
+    _set_price_params(params_stub)
+    params_stub.tools_to_minimum_cap = {UNMEASURED_TOOL: LISTED_MINIMUM_CAP}
+    _set_mech_delivery_rate(params_stub, MECH_DELIVERY_RATE)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    task = _priced_task(
+        tool=UNMEASURED_TOOL, cost_dict={"total_cost": SUB_CENT_COST_USD}
+    )
+
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == SUB_CENT_COST_6DEC
 
 
 def test_unmeasured_run_is_charged_the_fixed_share_when_it_is_the_minimum(
@@ -5798,7 +5935,7 @@ def test_price_treats_an_unused_callback_as_not_measured(
         behaviour._price_done_task(_priced_task(cost_dict=pristine), 70)
         == MINIMUM_CHARGE
     )
-    behaviour.context.logger.warning.assert_called_once()
+    behaviour.context.logger.warning.assert_not_called()
     floored = _priced_task(cost_dict=pristine, dynamic_tool_cost=30)
     assert behaviour._price_done_task(floored, 70) == 30
 

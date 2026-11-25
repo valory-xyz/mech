@@ -21,7 +21,7 @@
 
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Protocol, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Set
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -204,6 +204,46 @@ def minimum_cap(params: PricingParams, tool: Optional[str]) -> int:
     return max(minimum_charge(params, tool), int(listed))
 
 
+def accepted_minimum_cap(
+    params: PricingParams,
+    tool: Optional[str],
+    mech_delivery_rate: Optional[int],
+    priced: bool,
+) -> int:
+    """Return the least an off-chain request for ``tool`` is accepted at.
+
+    With cap-and-actual pricing on, a tool with no ``tools_to_minimum_cap``
+    entry keeps the mech's delivery rate as the least a request must sign.
+
+    :param params: the skill params.
+    :param tool: the requested tool, or None when unknown.
+    :param mech_delivery_rate: the marketplace mech's configured delivery
+        rate, or None when none is configured.
+    :param priced: whether cap-and-actual pricing is on.
+    :return: the minimum accepted cap in payment-asset base units.
+    """
+    minimum = minimum_cap(params, tool)
+    if (
+        priced
+        and mech_delivery_rate is not None
+        and tool not in params.tools_to_minimum_cap
+    ):
+        minimum = max(minimum, int(mech_delivery_rate))
+    return minimum
+
+
+def is_partial_floor_map(
+    tools_to_pricing: Dict[str, int], served_tools: Iterable[str]
+) -> bool:
+    """Whether ``tools_to_pricing`` lists some of the served tools but not all.
+
+    :param tools_to_pricing: the per-tool floors.
+    :param served_tools: the tools the mech serves.
+    :return: True when the map is neither empty nor complete.
+    """
+    return bool(tools_to_pricing) and set(tools_to_pricing) != set(served_tools)
+
+
 class Params(Model):
     """A model to represent params for multiple abci apps."""
 
@@ -366,8 +406,6 @@ class Params(Model):
         self.preimage_max_list_attempts: int = kwargs.pop(
             "preimage_max_list_attempts", 5
         )
-        # The floor a run of each tool is charged. A tool may be left out, and
-        # then has no floor; every listed tool must be one the mech serves.
         self.tools_to_pricing: Dict[str, int] = kwargs.pop("tools_to_pricing", {})
         unknown_priced = sorted(
             set(self.tools_to_pricing) - set(self.tools_to_package_hash)
