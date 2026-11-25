@@ -2769,9 +2769,9 @@ def test_signed_requests_stamps_receipt_time_on_enqueued_task(
     task = handler_context.shared_state["pending_tasks"][0]
     assert isinstance(task["enqueued_at_local"], float)
     assert before <= task["enqueued_at_local"] <= after
-    dropped = [ln for ln in info_lines if "Dropping client-supplied reserved" in ln]
+    dropped = [ln for ln in info_lines if "Dropping body keys" in ln]
     assert dropped == [
-        "Dropping client-supplied reserved keys from offchain request '8': "
+        "Dropping body keys outside the offchain request format from request '8': "
         "['enqueued_at_local']"
     ]
 
@@ -2810,7 +2810,7 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     """Client-supplied body keys can not override trusted enqueue-time fields.
 
     ``_enqueue_offchain_request`` merges the parsed HTTP body via ``**data``
-    into the pending task dict. Without the ``reserved_keys`` filter, a
+    into the pending task dict. Without the request-format filter, a
     request carrying an extra ``requestId`` / ``request_id`` /
     ``is_offchain`` / ``data`` / ``request_delivery_rate`` key would
     silently overwrite the trusted values the handler just set. That
@@ -2834,7 +2834,7 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
 
     body = _make_signed_request_body(delivery_rate="123", request_id="42")
     # ``body["request_id"]`` (snake) IS the source of truth read by
-    # ``_handle_signed_requests`` — the reserved_keys filter's job is to
+    # ``_handle_signed_requests`` — the request-format filter's job is to
     # stop it from ALSO surviving as a snake-case dupe on the pending
     # task alongside the trusted ``requestId`` (camel) int. So the
     # source-of-truth ``"42"`` stays; camel + everything else is poisoned.
@@ -2842,7 +2842,7 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     body["is_offchain"] = "false"
     body["data"] = "0x" + "de" * 32
     body["request_delivery_rate"] = "0"
-    # Round-3 additions: reserved_keys was extended to cover the four keys
+    # The filter also keeps out the four keys
     # ``_handle_done_task`` re-spreads via ``**executing_task`` and the
     # ``tool`` used for pricing / metrics. A body value here would
     # otherwise ride through executing_task → done_task → consensus and
@@ -2855,7 +2855,7 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     body["tool"] = "attacker-tool"
     # ``signature`` is a full-length placeholder so the ingress
     # format guard (``SIGNATURE_RE``) accepts it; the test still
-    # pins that it survives the reserved-key filter untouched.
+    # pins that it survives the request-format filter untouched.
     valid_signature = "0x" + "aa" * 65
     body["signature"] = valid_signature
 
@@ -2893,6 +2893,55 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
         assert reserved not in task, f"reserved key {reserved!r} leaked from body"
     # Non-reserved key still flows through.
     assert task["signature"] == valid_signature
+
+
+@pytest.mark.parametrize(
+    "extra_key, extra_value",
+    [
+        ("dynamic_tool_cost", "1"),
+        ("cost_dict", {"total_cost": 0.000001, "total_tokens": 5}),
+        ("pricing", {"computed_price": 1}),
+        ("actual_delivery_rate", "1"),
+        ("priorityMech", "0x" + "11" * 20),
+        ("timeout_deadline", "0"),
+        ("some_unknown_field", "x"),
+        ("", "x"),
+    ],
+)
+def test_enqueue_offchain_request_carries_only_the_request_format_fields(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    extra_key: str,
+    extra_value: Any,
+) -> None:
+    """A body field outside the off-chain request format is not put on the task.
+
+    The request is still accepted, and the format's own fields are carried.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param extra_key: a body key outside the request format.
+    :param extra_value: the value sent under that key.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(delivery_rate="123", request_id="42")
+    body[extra_key] = extra_value
+
+    mh._handle_signed_requests(make_http_msg(body), http_dialogue)
+
+    assert handler_context.outbox.sent[-1].status_code == HttpCode.OK_CODE.value
+    task = handler_context.shared_state["pending_tasks"][0]
+    assert extra_key not in task
+    carried = set(task) & set(hmod.OFFCHAIN_BODY_TASK_KEYS)
+    assert carried == set(body) & set(hmod.OFFCHAIN_BODY_TASK_KEYS)
+    assert task[hmod.RequestKey.SIGNATURE.value] == body["signature"]
+    assert task[hmod.RequestKey.REQUEST_DELIVERY_RATE.value] == 123
 
 
 # --- guard tests for the defensive paths added in the remediation -----------

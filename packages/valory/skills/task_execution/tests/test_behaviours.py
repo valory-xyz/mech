@@ -5675,6 +5675,10 @@ def _priced_task(**extra: Any) -> Dict[str, Any]:
     return {"request_id": "r1", **extra}
 
 
+# A tool floor below the 1e16 cap the finalize gate fixture signs.
+CONFIGURED_TOOL_FLOOR = 4 * 10**15
+
+
 def _set_price_params(
     params_stub: Any, decimals: int = 6, fixed: int = 0, fee_bp: int = 0
 ) -> None:
@@ -6146,6 +6150,99 @@ def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
     assert done_task["pricing"]["pricing_mode"] == "signed_cap"
     envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert envelope["delivery_rate"] == 10**16
+
+
+@pytest.mark.parametrize("cap_and_actual", [True, False])
+@pytest.mark.parametrize(
+    "seeded_floor, seeded_cost_dict",
+    [
+        ("not-a-number", None),
+        (1, None),
+        ([1], None),
+        (None, {"total_cost": 0.000001, "total_tokens": 5}),
+        (1, {"total_cost": 0.000001, "total_tokens": 5}),
+        (None, "not-a-dict"),
+    ],
+)
+def test_finalize_done_task_prices_from_the_mech_values_only(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    cap_and_actual: bool,
+    seeded_floor: Any,
+    seeded_cost_dict: Any,
+) -> None:
+    """A floor or cost already on the task is not what the run is priced from.
+
+    With no configured floor for the tool and no cost in the response, the
+    done task carries neither field, whatever the task held before.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param cap_and_actual: whether the cap-and-actual flag is on.
+    :param seeded_floor: a ``dynamic_tool_cost`` put on the task beforehand.
+    :param seeded_cost_dict: a ``cost_dict`` put on the task beforehand.
+    """
+    _set_price_params(params_stub, decimals=18)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = cap_and_actual
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = {}
+    if seeded_floor is not None:
+        behaviour._done_task["dynamic_tool_cost"] = seeded_floor
+    if seeded_cost_dict is not None:
+        behaviour._done_task["cost_dict"] = seeded_cost_dict
+
+    behaviour._finalize_done_task("bafycid", response={"result": "p_yes=0.7"})
+
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert "dynamic_tool_cost" not in done_task
+    assert "cost_dict" not in done_task
+    assert done_task["pricing"]["tool_floor"] is None
+    assert done_task["pricing"]["measured_cost"] is None
+
+
+def test_finalize_done_task_takes_the_floor_from_the_configured_map(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The configured floor of the tool replaces any floor already on the task.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = {"prediction-offline": CONFIGURED_TOOL_FLOOR}
+    behaviour._done_task["dynamic_tool_cost"] = 1
+
+    behaviour._finalize_done_task("bafycid", response={"result": "p_yes=0.7"})
+
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["dynamic_tool_cost"] == CONFIGURED_TOOL_FLOOR
+    assert done_task["pricing"]["tool_floor"] == CONFIGURED_TOOL_FLOOR
+    assert done_task["actual_delivery_rate"] == CONFIGURED_TOOL_FLOOR
 
 
 def test_flag_off_reports_the_computed_price_next_to_the_cap(

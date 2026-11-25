@@ -666,6 +666,18 @@ class ResponseKey(str, Enum):
     MAX_PROMPT_BYTES = "max_prompt_bytes"
 
 
+# The off-chain request fields carried from the body onto the pending task.
+OFFCHAIN_BODY_TASK_KEYS = frozenset(
+    {
+        RequestKey.IPFS_HASH.value,
+        RequestKey.IPFS_DATA.value,
+        RequestKey.SENDER.value,
+        RequestKey.DELIVERY_RATE.value,
+        RequestKey.SIGNATURE.value,
+        RequestKey.NONCE.value,
+    }
+)
+
 # 402 challenge constants — surfaced so clients can branch on a stable label.
 PAYMENT_SCHEME = "olas-prepay"
 # ``Link`` relation type for the terms header (RFC 8288 registered relation).
@@ -3783,20 +3795,11 @@ class MechHttpHandler(AbstractResponseHandler):
         # ``TaskExecutionBaseBehaviour.remove_tasks`` silently failed its
         # equality check on a mixed-type batch.
         #
-        # The client-supplied body (``data``) is stripped of any key we
-        # own before merge, so a request carrying ``request_id=...``,
-        # ``is_offchain=...``, ``data=...``, or ``request_delivery_rate=...``
-        # can't override the trusted values above. This closes two
-        # separate problems: (a) a body-supplied ``request_id`` would
-        # re-plant the wire-format ``str`` and defeat the coercion, and
-        # (b) a body-supplied ``request_delivery_rate`` would land in
-        # ``request_id_to_delivery_rate_info`` and bypass the tool-
-        # minimum-price gate in
-        # :meth:`task_execution.behaviours.TaskExecutionBehaviour._handle_get_task`
-        # (see the ``req_id_delivery_rate < tool_pricing`` check).
-        # The signature verifies the request-id and delivery-rate at the
-        # marketplace on chain, not here, so pre-settlement trust in
-        # ``data`` values other than these four must be nil.
+        # Only the fields of the off-chain request format are carried from
+        # the body (``data``) onto the pending task. Every other task field
+        # is written by the mech: the behaviour spreads ``**executing_task``
+        # into ``done_task`` and reads its routing, pricing and settlement
+        # fields from there, so those fields must hold the mech's own values.
         #
         # The local ``request_id`` variable stays ``str`` — it is used as
         # a dict key in ``in_memory_requests`` and
@@ -3804,53 +3807,25 @@ class MechHttpHandler(AbstractResponseHandler):
         # and matched against the caller-visible response body. Only the
         # value that flows into the pending-task dict (and from there
         # into ``done_tasks``) is coerced.
-        # ``reserved_keys`` also covers three keys the behaviour later reads
-        # off ``_executing_task`` (``mech_address``, ``task_executor_address``,
-        # ``request_id_nonce``) and the ``tool`` used for pricing / metrics.
-        # The behaviour re-spreads ``**executing_task`` when it builds
-        # ``done_task`` in ``_handle_done_task``, so any of these leaking in
-        # from a client body would ride all the way to consensus and either
-        # (a) reroute the on-chain delivery (``mech_address``), (b)
-        # misattribute the executor for karma accounting
-        # (``task_executor_address``), (c) desync the on-chain signature
-        # (``request_id_nonce``, read as ``requestIdWithNonce`` upstream), or
-        # (d) point the tool-price gate at the wrong tool.
-        reserved_keys = {
-            RequestKey.REQUEST_ID.value,
-            RequestKey.REQUEST_ID_CAMEL.value,
-            RequestKey.IS_OFFCHAIN.value,
-            BodyKey.DATA.value,
-            RequestKey.REQUEST_DELIVERY_RATE.value,
-            "mech_address",
-            "task_executor_address",
-            "request_id_nonce",
-            "requestIdWithNonce",
-            RequestKey.NONCE_MODE.value,
-            RequestKey.DEADLINE.value,
-            "tool",
-            "enqueued_at_local",
-        }
-        # ``RequestKey.REQUEST_ID.value`` is mandatory on the body (read at
-        # ``_handle_signed_requests`` and 400 on missing), so it is present
-        # on every accepted request; excluding it here keeps the log
-        # a real anomaly signal instead of firing on 100% of requests.
-        # ``request_id`` and ``nonce_mode`` are legitimately on every body (the
-        # validated values are applied from the parameters), so they are not
-        # anomalies worth a log line.
+        #
+        # ``request_id``, ``nonce_mode`` and ``deadline`` are legitimately on
+        # every body (the validated values are applied from the parameters),
+        # so they are not worth a log line.
         expected_on_body = {
             RequestKey.REQUEST_ID.value,
             RequestKey.NONCE_MODE.value,
             RequestKey.DEADLINE.value,
         }
         dropped_keys = [
-            k for k in data.keys() if k in reserved_keys and k not in expected_on_body
+            k
+            for k in data.keys()
+            if k not in OFFCHAIN_BODY_TASK_KEYS and k not in expected_on_body
         ]
         if dropped_keys:
-            # Log at info: dropping is the safe outcome, but an integration
-            # sending one of these needs a way to notice their field was
-            # ignored rather than silently accepted.
+            # Log at info: an integration sending one of these needs a way to
+            # notice its field was ignored.
             self.context.logger.info(
-                "Dropping client-supplied reserved keys from offchain "
+                "Dropping body keys outside the offchain request format from "
                 "request %r: %s",
                 request_id,
                 sorted(dropped_keys),
@@ -3866,8 +3841,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 if nonce_mode == NONCE_MODE_EXPLICIT and deadline is not None
                 else {}
             ),
-            **{k: v for k, v in data.items() if k not in reserved_keys},
-            # Receipt time; kept last so it also wins if the filter above lapses.
+            **{k: v for k, v in data.items() if k in OFFCHAIN_BODY_TASK_KEYS},
             "enqueued_at_local": time.time(),
         }
         try:
