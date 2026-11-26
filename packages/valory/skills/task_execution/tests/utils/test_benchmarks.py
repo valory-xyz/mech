@@ -33,7 +33,7 @@ def _dummy_counter(prompt: str, model: str) -> int:
     return len(prompt.split())
 
 
-MODEL = "gpt-4"
+MODEL = "gpt-6.1-sol"
 INPUT_PRICE = TokenCounterCallback.TOKEN_PRICES[MODEL]["input"]
 OUTPUT_PRICE = TokenCounterCallback.TOKEN_PRICES[MODEL]["output"]
 
@@ -117,8 +117,8 @@ class TestTokenCounterCallbackCall:
     def test_self_hosted_model_is_supported_and_priced(self) -> None:
         """The self-hosted model must deliver and accrue cost, not raise.
 
-        `__call__` raises AFTER the LLM call has already been paid for, so a
-        missing key fails every delivery of a tool that serves the model.
+        A missing key would leave the self-hosted tokens uncounted, so the
+        request would fall back to the floor or the cap.
         """
         cb = TokenCounterCallback()
         cb("olas-predict-r1-14b", _dummy_counter, input_tokens=1000, output_tokens=500)
@@ -186,26 +186,24 @@ class TestTokenCounterCallbackCall:
             input_price + output_price
         )
 
-    def test_deepseek_flash_is_priced_at_its_listed_fireworks_rate(self) -> None:
-        """deepseek/deepseek-v4.1-flash accrues cost at 0.00045 / 0.0018 USD per 1k."""
-        model = "deepseek/deepseek-v4.1-flash"
-        input_tokens, output_tokens = 2000, 400
-        expected_input = input_tokens / PRICE_NUM_TOKENS * 0.00045
-        expected_output = output_tokens / PRICE_NUM_TOKENS * 0.0018
+    def test_deepseek_flash_is_charged_its_reported_cost(self) -> None:
+        """deepseek/deepseek-v4.1-flash is not in the table: the reported cost is the cost.
+
+        OpenRouter may serve it from any of several Fireworks endpoints at
+        different prices, so only the cost it reports for the call is exact.
+        """
         cb = TokenCounterCallback()
         cb(
-            model,
+            "deepseek/deepseek-v4.1-flash",
             _dummy_counter,
-            input_tokens=input_tokens,
-            output_tokens=output_tokens,
+            input_tokens=2000,
+            output_tokens=400,
+            call_cost=0.00078,
         )
-        assert cb.actual_model == model
-        assert cb.cost_dict["total_tokens"] == 2400
-        assert cb.cost_dict["input_cost"] == pytest.approx(expected_input)
-        assert cb.cost_dict["output_cost"] == pytest.approx(expected_output)
-        assert cb.cost_dict["total_cost"] == pytest.approx(
-            expected_input + expected_output
-        )
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.00078)
+        assert cb.cost_dict["input_cost"] == 0
+        assert cb.cost_dict["output_cost"] == 0
+        assert cb.cost_dict["unpriced_calls"] == 0
 
     @pytest.mark.parametrize(
         "model",
@@ -216,17 +214,76 @@ class TestTokenCounterCallbackCall:
             "",
         ],
     )
-    def test_model_id_not_matching_a_key_exactly_raises(self, model: str) -> None:
+    def test_model_id_not_matching_a_key_exactly_is_unpriced(self, model: str) -> None:
         """Lookup is by exact model id, so near-miss ids are not priced."""
         cb = TokenCounterCallback()
-        with pytest.raises(ValueError, match="not supported"):
-            cb(model, _dummy_counter, input_tokens=10, output_tokens=10)
+        cb(model, _dummy_counter, input_tokens=10, output_tokens=10)
+        assert cb.cost_dict["unpriced_calls"] == 1
+        assert cb.cost_dict["total_tokens"] == 0
+        assert cb.cost_dict["total_cost"] == 0
 
-    def test_unsupported_model_raises_value_error(self) -> None:
-        """Test __call__ raises ValueError for unsupported model."""
+    def test_gemini_flash_lite_tokens_are_counted_at_its_listed_price(self) -> None:
+        """A gemini-3.5-flash-lite call is priced from the table, not left unpriced."""
         cb = TokenCounterCallback()
-        with pytest.raises(ValueError, match="not supported"):
+        cb(
+            "gemini-3.5-flash-lite",
+            _dummy_counter,
+            input_tokens=2000,
+            output_tokens=400,
+        )
+        assert cb.cost_dict["unpriced_calls"] == 0
+        assert cb.cost_dict["total_tokens"] == 2400
+        assert cb.cost_dict["input_cost"] == pytest.approx(0.0003 * 2)
+        assert cb.cost_dict["output_cost"] == pytest.approx(0.0025 * 0.4)
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.0006 + 0.001)
+
+    def test_unpriced_model_counts_nothing_and_warns(self, caplog) -> None:  # type: ignore
+        """An unpriced model never raises; without a reported cost it leaves the tally at zero."""
+        cb = TokenCounterCallback()
+        with caplog.at_level(logging.WARNING):
             cb("unknown-model-xyz", _dummy_counter, input_tokens=10, output_tokens=10)
+        assert cb.actual_model == "unknown-model-xyz"
+        assert cb.cost_dict["total_cost"] == 0
+        assert cb.cost_dict["total_tokens"] == 0
+        assert cb.cost_dict["unpriced_calls"] == 1
+        assert "not in the price table" in caplog.text
+
+    def test_unpriced_model_counts_only_its_reported_cost(self) -> None:
+        """An unpriced model with a provider-reported cost adds exactly that cost, no tokens."""
+        cb = TokenCounterCallback()
+        cb(
+            "unknown-model-xyz",
+            _dummy_counter,
+            input_tokens=10,
+            output_tokens=10,
+            call_cost=0.02,
+        )
+        assert cb.cost_dict["extra_cost"] == pytest.approx(0.02)
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.02)
+        assert cb.cost_dict["total_tokens"] == 0
+        assert cb.cost_dict["unpriced_calls"] == 0
+
+    def test_priced_call_after_an_unpriced_one_keeps_the_tally_marked_incomplete(
+        self,
+    ) -> None:
+        """A priced call adds its own cost but does not clear ``unpriced_calls``."""
+        cb = TokenCounterCallback()
+        cb("unknown-model-xyz", _dummy_counter, input_tokens=10, output_tokens=10)
+        cb(MODEL, _dummy_counter, input_tokens=1000, output_tokens=1000)
+        priced = TokenCounterCallback.TOKEN_PRICES[MODEL]
+        assert cb.cost_dict["total_tokens"] == 2000
+        assert cb.cost_dict["total_cost"] == pytest.approx(
+            priced["input"] + priced["output"]
+        )
+        assert cb.cost_dict["unpriced_calls"] == 1
+
+    def test_unpriced_model_with_a_bad_cost_is_logged_not_raised(self, caplog) -> None:  # type: ignore
+        """A non-numeric reported cost on an unpriced model is caught like any other callback error."""
+        cb = TokenCounterCallback()
+        with caplog.at_level(logging.ERROR):
+            cb("unknown-model-xyz", _dummy_counter, input_tokens=10, call_cost="free")
+        assert cb.cost_dict["total_cost"] == 0
+        assert "Error in TokenCounterCallback" in caplog.text
 
     def test_exception_in_calculate_cost_is_caught(self, caplog) -> None:  # type: ignore
         """If calculate_cost raises internally, the error is logged, not re-raised."""

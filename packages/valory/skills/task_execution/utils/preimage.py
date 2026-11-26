@@ -66,6 +66,7 @@ Stored value (a JSON string, under key ``f"{prefix}{request_id}"``)::
       # ``fetched_at`` is visibility only; ``abandoned_at`` marks a
       # deliver the settlement retry cap gave up on.
       "settled_tx_hash": str | None,
+      "settled_tx_at": str | None,   # ISO 8601 UTC time the tx was confirmed
       "fetched_at": int | None,
       "posted_at": int | None,
       "abandoned_at": int | None,
@@ -149,6 +150,10 @@ PREIMAGE_PENDING_STAMPS_AT = "preimage_pending_stamps_at"  # Dict[str, float]
 # Published by task_submission_abci at setup; read here to decide whether
 # ``posted_at`` is required for a delivered row to count as complete.
 PREDICT_API_WRITE_CONFIGURED = "predict_api_write_configured"  # bool
+# True when the settlement skill routes off-chain deliveries through the
+# cap-and-actual overload. Published by task_submission_abci at setup; read
+# here to report the charge settlement will apply.
+CAP_AND_ACTUAL_ENABLED = "cap_and_actual_enabled"  # bool
 # Circuit breaker for a missing / dead kv_store connection. ``REPLY_SEEN``
 # flips to True on the first reply of any kind; ``TIMEOUTS_SINCE_REPLY``
 # counts consecutive watchdog timeouts. When the latter reaches the write
@@ -165,11 +170,13 @@ PREIMAGE_SWEEP_INCOMPLETE_COUNT = "preimage_sweep_incomplete_count"  # int
 FIELD_DONE_TASK = "done_task"
 FIELD_PREDICT_API_EVENT = "predict_api_event"
 FIELD_SETTLED_TX_HASH = "settled_tx_hash"
+FIELD_SETTLED_TX_AT = "settled_tx_at"
 FIELD_FETCHED_AT = "fetched_at"
 FIELD_POSTED_AT = "posted_at"
 FIELD_ABANDONED_AT = "abandoned_at"
 STAMP_FIELDS = (
     FIELD_SETTLED_TX_HASH,
+    FIELD_SETTLED_TX_AT,
     FIELD_FETCHED_AT,
     FIELD_POSTED_AT,
     FIELD_ABANDONED_AT,
@@ -177,7 +184,12 @@ STAMP_FIELDS = (
 # Stamps worth remembering for a row that is not in memory. ``fetched_at``
 # is visibility only, so a fetch of an already-popped row is dropped rather
 # than parked forever in ``PREIMAGE_PENDING_STAMPS``.
-DURABLE_STAMP_FIELDS = (FIELD_SETTLED_TX_HASH, FIELD_POSTED_AT, FIELD_ABANDONED_AT)
+DURABLE_STAMP_FIELDS = (
+    FIELD_SETTLED_TX_HASH,
+    FIELD_SETTLED_TX_AT,
+    FIELD_POSTED_AT,
+    FIELD_ABANDONED_AT,
+)
 
 # settlement_status values.
 STATUS_PROCESSING = "processing"
@@ -275,6 +287,7 @@ def _empty_replay_fields() -> Dict[str, Any]:
         FIELD_DONE_TASK: None,
         FIELD_PREDICT_API_EVENT: None,
         FIELD_SETTLED_TX_HASH: None,
+        FIELD_SETTLED_TX_AT: None,
         FIELD_FETCHED_AT: None,
         FIELD_POSTED_AT: None,
         FIELD_ABANDONED_AT: None,
@@ -527,7 +540,8 @@ def fetch_payload(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     Mirrors the two shapes the writers put in
     ``shared_state[OFFCHAIN_REQUEST_RESPONSES]``: the delivered shape (the
     committed response object verbatim under ``response`` plus the CID
-    envelope) and the rejection shape (``status`` + ``reason``).
+    envelope, ``status`` ``ok`` or ``failed``) and the rejection shape
+    (``status`` + ``reason``).
 
     :param record: the parsed preimage record.
     :return: the body to serve, or ``None`` when the record is not settled
@@ -552,9 +566,21 @@ def fetch_payload(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         response = json.loads(raw)
     except ValueError:
         return None
+    envelope: Dict[str, Any] = {"request_id": str(request_id), "status": "ok"}
+    if isinstance(response, dict) and response.get("fault") is not None:
+        # A failed run settles like an answered one; its committed response
+        # carries the error and the fault, and the done task the charge.
+        envelope = {
+            "request_id": str(request_id),
+            "status": "failed",
+            "error": response.get("error"),
+            "fault": response.get("fault"),
+        }
+        done_task = record.get(FIELD_DONE_TASK)
+        if isinstance(done_task, dict) and "actual_delivery_rate" in done_task:
+            envelope["delivery_rate"] = done_task["actual_delivery_rate"]
     return {
-        "request_id": str(request_id),
-        "status": "ok",
+        **envelope,
         "content_cid": record.get("response_cid"),
         "response": response,
     }

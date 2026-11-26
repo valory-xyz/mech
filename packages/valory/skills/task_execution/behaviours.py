@@ -23,11 +23,13 @@ import functools
 import json
 import math
 import os
+import re
 import threading
 import time
 from asyncio import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_CEILING
 from enum import Enum
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, cast
@@ -53,7 +55,11 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
-from packages.valory.contracts.olas_mech.contract import OlasMechContract
+from packages.valory.contracts.olas_mech.contract import (
+    OlasMechContract,
+    PAYMENT_TYPE_NATIVE_NVM,
+    PAYMENT_TYPE_TOKEN_NVM,
+)
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -62,15 +68,23 @@ from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import (
+    PRICING_CAP_AND_ACTUAL,
+    PRICING_FAILED_FLOOR,
+    PRICING_NVM_FLOOR,
+    PRICING_ONCHAIN_MAX,
+    PRICING_SIGNED_CAP,
     Params,
+    accepted_minimum_cap,
+    fixed_share_in_asset_units,
+    gross_up_for_fee,
+    is_partial_floor_map,
+    minimum_charge,
     offchain_metric_labels,
+    prompt_byte_length,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
-from packages.valory.skills.task_execution.utils.cost_calculation import (
-    get_cost_for_done_task,
-)
 from packages.valory.skills.task_execution.utils.ipfs import (
     ComponentPackageLoader,
     ensure_v1,
@@ -79,7 +93,7 @@ from packages.valory.skills.task_execution.utils.ipfs import (
 )
 from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 from packages.valory.skills.task_execution.utils.request_id import to_request_id_bytes32
-from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
+from packages.valory.skills.task_execution.utils.task import AnyToolAsTask, ToolError
 
 PENDING_TASKS = "pending_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
@@ -123,6 +137,12 @@ ACCEPTED_NONCES_BY_SENDER = "accepted_nonces_by_sender"
 SETTLING_NONCES_BY_SENDER = "settling_nonces_by_sender"
 # Kept as an alias for consumers still referring to the pre-split name.
 OUTSTANDING_NONCES_BY_SENDER = ACCEPTED_NONCES_BY_SENDER
+# Signed caps of the off-chain requests each sender has not paid for yet,
+# keyed by lowercase sender then by request id. Written by the handler at
+# acceptance; an entry is dropped as soon as its settlement is confirmed
+# (``release_signed_caps``), and on read once its request is neither in
+# ``in_memory_requests`` nor in ``DONE_TASKS`` (rejection, eviction).
+RESERVED_CAPS_BY_SENDER = "reserved_caps_by_sender"
 # Wire-body keys copied through into the pending task dict at accept time.
 # Kept as literals here (rather than importing from handlers) so the
 # behaviour does not add a cross-module import for a handful of string
@@ -151,18 +171,48 @@ FAILURE_REASON_TOOL_INVALID: FailureReason = "tool_invalid"
 FAILURE_REASON_EXECUTION_FAILED: FailureReason = "execution_failed"
 # Bounded ``reason`` label values for ``mech_offchain_failures_total``.
 OffchainFailureReason = Literal[
-    "execution_failed", "cid_failed", "tool_not_installed", "invalid_done_task"
+    "execution_failed",
+    "no_result",
+    "cid_failed",
+    "tool_not_installed",
+    "invalid_request",
+    "invalid_done_task",
 ]
 OFFCHAIN_FAILURE_EXECUTION_FAILED: OffchainFailureReason = "execution_failed"
+OFFCHAIN_FAILURE_NO_RESULT: OffchainFailureReason = "no_result"
 OFFCHAIN_FAILURE_CID_FAILED: OffchainFailureReason = "cid_failed"
 OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED: OffchainFailureReason = "tool_not_installed"
+OFFCHAIN_FAILURE_INVALID_REQUEST: OffchainFailureReason = "invalid_request"
 OFFCHAIN_FAILURE_INVALID_DONE_TASK: OffchainFailureReason = "invalid_done_task"
+# Who caused a failed off-chain run. A client fault is charged the signed cap,
+# a mech fault the mech's minimum charge.
+Fault = Literal["client", "mech"]
+FAULT_CLIENT: Fault = "client"
+FAULT_MECH: Fault = "mech"
+# Class name of the exception a tool raises for a request it cannot serve as
+# written. Matched by name only: tool code is not importable here.
+CLIENT_FAULT_EXCEPTION = "InvalidRequestError"
+NO_RESULT_ERROR = "tool returned no result"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
+REQUEST_DATA_FETCH_DEADLINE = 60.0
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
-MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+# Cap on the ``prompt`` field of a predict-api event. Independent of the
+# ``max_prompt_bytes`` param, which bounds the prompt a request may carry.
+MAX_EVENT_PROMPT_BYTES = 100_000
+# Wire field selecting the settlement path. Explicit-nonce tasks never touch
+# the sequential accepted/settling nonce sets: their replay protection is the
+# marketplace's per-request-id record, not the shared counter.
+NONCE_MODE_KEY = "nonce_mode"
+NONCE_MODE_SEQUENTIAL = "sequential"
+NONCE_MODE_EXPLICIT = "explicit"
+
+
+def is_explicit_nonce_task(task: Optional[Dict[str, Any]]) -> bool:
+    """Whether ``task`` settles through the explicit-nonce path."""
+    return task is not None and task.get(NONCE_MODE_KEY) == NONCE_MODE_EXPLICIT
 
 
 def _find_sender_key(
@@ -221,7 +271,7 @@ def _release_outstanding_nonce(
         is not enough — the maps are keyed by sender checksum, and
         the wire nonce (int) is the entry inside the per-sender set.
     """
-    if not executing_task:
+    if not executing_task or is_explicit_nonce_task(executing_task):
         return
     sender = executing_task.get(_SENDER_KEY)
     nonce = executing_task.get(_NONCE_KEY)
@@ -277,7 +327,7 @@ def _discard_outstanding_nonce(
     :param shared_state: the AEA shared-state dict.
     :param executing_task: the failed task dict (or None).
     """
-    if not executing_task:
+    if not executing_task or is_explicit_nonce_task(executing_task):
         return
     sender = executing_task.get(_SENDER_KEY)
     nonce = executing_task.get(_NONCE_KEY)
@@ -319,7 +369,7 @@ def _discard_settling_nonce(
     :param shared_state: the AEA shared-state dict.
     :param done_task: the abandoned done-task dict (or None).
     """
-    if not done_task:
+    if not done_task or is_explicit_nonce_task(done_task):
         return
     sender = done_task.get(_SENDER_KEY)
     nonce = done_task.get(_NONCE_KEY)
@@ -339,6 +389,36 @@ def _discard_settling_nonce(
     entries.discard(wire_nonce)
     if not entries:
         target.pop(sender_key, None)
+
+
+def release_signed_caps(shared_state: Dict[str, Any], request_ids: List[str]) -> None:
+    """Drop the reserved caps of ``request_ids``, whose settlement is confirmed.
+
+    A settled request is paid, so it no longer counts against its sender's
+    balance at acceptance.
+
+    :param shared_state: the AEA shared-state dict.
+    :param request_ids: ``str`` request ids included in a confirmed tx.
+    """
+    reserved = shared_state.get(RESERVED_CAPS_BY_SENDER)
+    settled = {str(request_id) for request_id in request_ids}
+    if not reserved or not settled:
+        return
+    for sender in list(reserved):
+        entries = reserved[sender]
+        for request_id in settled.intersection(entries):
+            del entries[request_id]
+        if not entries:
+            del reserved[sender]
+
+
+def _opt_int_str(value: Any) -> Optional[str]:
+    """An integer as the decimal string the predict-api wire carries, or None.
+
+    :param value: an int, or None.
+    :return: ``str(value)`` or None.
+    """
+    return None if value is None else str(int(value))
 
 
 def _source_label(task: Optional[Dict[str, Any]]) -> Source:
@@ -440,6 +520,91 @@ def _cap_raw_content(blob: Dict[str, Any]) -> Dict[str, Any]:
     if size <= MAX_RAW_CONTENT_BYTES:
         return blob
     return {"truncated": True, "size_bytes": size, "cap_bytes": MAX_RAW_CONTENT_BYTES}
+
+
+# Cap on the tool error text a requester sees. Room for a provider's own error
+# message; a tool that echoes a whole response body into its exception cannot
+# grow the failure envelope or the delivered result past it.
+MAX_TOOL_ERROR_CHARS = 500
+TOOL_ERROR_REDACTED = "[redacted]"
+# Keychain values shorter than this are settings (``google``, ``true``,
+# ``raw``), not secrets, and are left in the message.
+MIN_SECRET_CHARS = 12
+# Provider account identifiers: OpenAI organization, project and user ids,
+# provider-style secret keys, and UUIDs (Anthropic names its organization by
+# one).
+ACCOUNT_ID_PATTERN = re.compile(
+    r"\b(?:org|user)-[A-Za-z0-9]{8,}"
+    r"|\bproj_[A-Za-z0-9]{8,}"
+    r"|\bsk-[A-Za-z0-9_-]{8,}"
+    r"|\b[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}\b"
+)
+
+
+def _redact_secrets(message: str, keychain: Optional[KeyChain]) -> str:
+    """Mask configured secrets and provider account identifiers in ``message``.
+
+    Longer secrets are replaced first, so a secret that contains another one
+    is masked whole.
+
+    :param message: the text to scrub.
+    :param keychain: the configured API keys, or ``None`` when not loaded.
+    :return: ``message`` with every secret and account id replaced.
+    """
+    services = keychain.services if keychain is not None else {}
+    secrets = {
+        key
+        for keys in services.values()
+        for key in keys
+        if isinstance(key, str) and len(key) >= MIN_SECRET_CHARS
+    }
+    for secret in sorted(secrets, key=len, reverse=True):
+        message = message.replace(secret, TOOL_ERROR_REDACTED)
+    return ACCOUNT_ID_PATTERN.sub(TOOL_ERROR_REDACTED, message)
+
+
+def _tool_error_reason(exc: BaseException, keychain: Optional[KeyChain]) -> str:
+    """Describe a tool exception for the requester: its type and message only.
+
+    No traceback and no call arguments. Secrets and account identifiers are
+    masked (``_redact_secrets``) before the text is cut to MAX_TOOL_ERROR_CHARS.
+
+    :param exc: the exception the tool raised.
+    :param keychain: the configured API keys, or ``None`` when not loaded.
+    :return: ``"<ExceptionType>: <message>"``, redacted and capped.
+    """
+    try:
+        message = str(exc)
+    except Exception:  # pylint: disable=W0718
+        message = ""
+    message = _redact_secrets(message, keychain)
+    name = _exception_type_name(exc)
+    reason = f"{name}: {message}" if message else name
+    return reason[:MAX_TOOL_ERROR_CHARS]
+
+
+def _exception_type_name(exc: BaseException) -> str:
+    """Return the class name of the exception a tool raised.
+
+    :param exc: the exception from the tool future.
+    :return: the tool's own class name for a ``ToolError``, else the class name.
+    """
+    if isinstance(exc, ToolError):
+        return exc.type_name
+    return type(exc).__name__
+
+
+def _failed_response(
+    response: Dict[str, Any], error: str, fault: Fault
+) -> Dict[str, Any]:
+    """Return the response object committed for a failed off-chain run.
+
+    :param response: the response built so far for the run.
+    :param error: the error the requester sees.
+    :param fault: who caused the failure.
+    :return: ``response`` with no result and the error and fault set.
+    """
+    return {**response, "result": None, "error": error, "fault": fault}
 
 
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
@@ -559,9 +724,9 @@ class MechMetrics:
         )
         self.mech_offchain_failures_total = Counter(
             "mech_offchain_failures_total",
-            "Off-chain requests that ended in a rejection after being accepted "
-            "(reason is one of the OFFCHAIN_FAILURE_* constants)",
-            labelnames=["reason", "chain", "mech_address"],
+            "Off-chain requests that failed after being accepted, by tool (reason "
+            "is one of the OFFCHAIN_FAILURE_* constants, fault is client or mech)",
+            labelnames=["tool", "reason", "fault", "chain", "mech_address"],
         )
         self.mech_offchain_delivery_latency_seconds = Histogram(
             "mech_offchain_delivery_latency_seconds",
@@ -607,12 +772,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash: Dict[str, str] = {}
         self._tools_to_pricing: Dict[str, int] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
+        self._decimals_warned: bool = False
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
+        self._task_ipfs_nonce: Optional[str] = None
+        self._request_data: Dict[Any, Dict[str, Any]] = {}
+        self._prefetch_request_id: Optional[Any] = None
+        self._prefetch_nonce: Optional[str] = None
+        self._prefetch_deadline: float = 0.0
         self._done_task: Optional[Dict[str, Any]] = None
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
         self._ipfs_error_reason: Optional[str] = None
+        # Message of the exception the current task's tool raised, if any.
+        self._tool_error_reason: Optional[str] = None
+        # Error and metric reason when the current task failed because of
+        # what the request asked for; None otherwise.
+        self._client_fault: Optional[Tuple[str, OffchainFailureReason]] = None
+        # Whether the current task's failure is already in mech_tasks_failed_total.
+        self._task_failure_counted = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
@@ -668,6 +846,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if self.payment_model:
             self._payment_model_request_sent_at = None
+            self._require_whole_floor_map_on_nvm()
             return True
 
         if self.params.in_flight_req:
@@ -689,12 +868,35 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._request_payment_model()
         return False
 
+    def _require_whole_floor_map_on_nvm(self) -> None:
+        """Refuse a ``tools_to_pricing`` map that floors only some tools on an NVM mech.
+
+        An NVM deliver carries the tool floor as its rate and falls back to the
+        mech's max delivery rate without one, so the map lists every served
+        tool or none. The payment type is read from the chain, so this runs
+        once it is known rather than at params validation.
+
+        :raises ValueError: for a partial map on an NVM mech.
+        """
+        if self._mech_is_nvm() and is_partial_floor_map(
+            self.params.tools_to_pricing, self.params.tools_to_package_hash
+        ):
+            unlisted = sorted(
+                set(self.params.tools_to_package_hash)
+                - set(self.params.tools_to_pricing)
+            )
+            raise ValueError(
+                "tools_to_pricing must list every served tool, or none, on an "
+                f"NVM mech; missing: {', '.join(unlisted)}"
+            )
+
     def act(self) -> None:
         """Implement the act."""
         self._download_tools()
         if not self._ensure_payment_model():
             return
         self._execute_ipfs_tasks()
+        self._prefetch_request_data()
         self._execute_task()
         self._check_for_new_marketplace_reqs()
         self._filter_out_incompatible_reqs()
@@ -1142,12 +1344,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._handle_timeout_task()
             return
 
-        if len(self.pending_tasks) == 0:
-            if len(self.timed_out_tasks) == 0:
-                return
-            task_data = self.timed_out_tasks.pop(0)
-        else:
-            task_data = self.pending_tasks.pop(0)
+        ready = self._next_ready_task()
+        if ready is None:
+            return
+        task_data, request_data = ready
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # Start the time counter to measure time taken to prepare the task
         self.tool_preparation_start_time = time.perf_counter()
@@ -1166,6 +1366,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         self._request_handling_deadline = None
+        self._tool_error_reason = None
+        self._client_fault = None
+        self._task_failure_counted = False
 
         # Off-chain path: prompt JSON is already inline in ``task_data["ipfs_data"]``
         # (set by the handler in ``_enqueue_offchain_request`` and mirrored to
@@ -1216,13 +1419,123 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             task_data["request_cid"] = ipfs_hash
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
+        if "files" in request_data:
+            self._handle_get_task(
+                cast(Any, SimpleNamespace(files=request_data["files"])),
+                cast(Any, None),
+            )
+            return
+        if "error" in request_data:
+            self._handle_ipfs_error(cast(str, request_data["error"]))
+            return
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
-        self.send_message(
+        self._task_ipfs_nonce = self.send_message(
             ipfs_msg,
             message,
             self._handle_get_task,
             self._handle_ipfs_error,
         )
+
+    def _next_ready_task(self) -> Optional[Tuple[Dict[str, Any], Dict[str, Any]]]:
+        """Pop the next task that can run now, with its downloaded request data.
+
+        A pending task runs first: an off-chain one carries its request
+        inline, an on-chain one is ready once its request data download has
+        ended. A timed-out task of another mech runs only while nothing is
+        pending, and downloads its request data in the slot.
+
+        :return: the task and its stored download outcome (empty when it has
+            none), or None when no queued task is ready.
+        """
+        for index, task in enumerate(self.pending_tasks):
+            if task.get("is_offchain"):
+                return self.pending_tasks.pop(index), {}
+            if task["requestId"] in self._request_data:
+                request_data = self._request_data.pop(task["requestId"])
+                return self.pending_tasks.pop(index), request_data
+        if self.pending_tasks or not self.timed_out_tasks:
+            return None
+        return self.timed_out_tasks.pop(0), {}
+
+    def _prefetch_request_data(self) -> None:
+        """Download the IPFS request data of the next pending on-chain task.
+
+        One download runs at a time, outside the task slot: it never sets
+        ``in_flight_req``, so off-chain tasks are not held up by it. Only one
+        downloaded task waits for the slot, which bounds the data held. A
+        download still unanswered at ``REQUEST_DATA_FETCH_DEADLINE`` is marked
+        timed out on the next ``act()``; the task slot retries it. A download
+        whose task has left the queue is dropped.
+        """
+        queued = [task for task in self.pending_tasks if not task.get("is_offchain")]
+        queued_ids = {task["requestId"] for task in queued}
+        if self._prefetch_nonce is not None:
+            if self._prefetch_request_id not in queued_ids:
+                self._end_prefetch()
+            elif time.time() <= self._prefetch_deadline:
+                return
+            else:
+                self._end_prefetch({"error": "request data download timed out"})
+        self._request_data = {
+            request_id: data
+            for request_id, data in self._request_data.items()
+            if request_id in queued_ids
+        }
+        if self._request_data or not queued:
+            return
+        task = queued[0]
+        request_id = task["requestId"]
+        try:
+            ipfs_hash = get_ipfs_file_hash(task["data"])
+        except Exception:  # pylint: disable=W0718
+            # The task slot reports the malformed hash when the task runs.
+            self._request_data[request_id] = {}
+            return
+        message, dialogue = self._build_ipfs_get_file_req(
+            ipfs_hash, timeout=REQUEST_DATA_FETCH_DEADLINE
+        )
+        nonce = dialogue.dialogue_label.dialogue_reference[0]
+        self._prefetch_request_id = request_id
+        self._prefetch_nonce = nonce
+        self._prefetch_deadline = time.time() + REQUEST_DATA_FETCH_DEADLINE
+        self.params.background_ipfs_nonces.add(nonce)
+        self.params.req_to_callback[nonce] = (
+            lambda reply, _dialogue: self._store_request_data(
+                nonce, {"files": reply.files}
+            )
+        )
+        self.params.req_to_error_callback[nonce] = (
+            lambda reason: self._store_request_data(nonce, {"error": reason})
+        )
+        self.params.req_to_deadline[nonce] = self._prefetch_deadline
+        self.context.outbox.put_message(message=message)
+
+    def _store_request_data(self, nonce: str, request_data: Dict[str, Any]) -> None:
+        """Record the outcome of the current request data download.
+
+        :param nonce: the nonce of the download the outcome belongs to.
+        :param request_data: ``{"files": ...}`` or ``{"error": reason}``.
+        """
+        if nonce != self._prefetch_nonce:
+            return
+        self._request_data[self._prefetch_request_id] = request_data
+        self._prefetch_request_id = None
+        self._prefetch_nonce = None
+
+    def _end_prefetch(self, outcome: Optional[Dict[str, Any]] = None) -> None:
+        """End the current download without its reply; a later reply is dropped.
+
+        :param outcome: what to record for the task, or None to record nothing.
+        """
+        nonce = cast(str, self._prefetch_nonce)
+        self.params.req_to_callback.pop(nonce, None)
+        self.params.req_to_error_callback.pop(nonce, None)
+        self.params.req_to_deadline.pop(nonce, None)
+        self.params.background_ipfs_nonces.discard(nonce)
+        if outcome is not None:
+            self._request_data[self._prefetch_request_id] = outcome
+        self._prefetch_request_id = None
+        self._prefetch_nonce = None
 
     def _update_pending_tasks(self) -> None:
         if not self.params.use_mech_marketplace:
@@ -1280,8 +1593,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         dialogue: Dialogue,
         callback: Callable,
         error_callback: Optional[Callable] = None,
-    ) -> None:
-        """Send message."""
+    ) -> str:
+        """Send an IPFS request and register its callbacks.
+
+        :param msg: the request.
+        :param dialogue: the request's dialogue.
+        :param callback: called with the reply.
+        :param error_callback: called with the reason of an ERROR reply.
+        :return: the nonce the request's callbacks are registered under.
+        """
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
@@ -1292,6 +1612,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             float, self._request_handling_deadline
         )
         self.params.in_flight_req = True
+        return nonce
+
+    def _drop_task_ipfs_request(self) -> None:
+        """Forget the executing task's pending IPFS request.
+
+        A reply that arrives after the task gave up finds no callback and is
+        dropped, so it cannot run against the task that holds the slot by then.
+        """
+        nonce = self._task_ipfs_nonce
+        self._task_ipfs_nonce = None
+        if nonce is None:
+            return
+        self.params.req_to_callback.pop(nonce, None)
+        self.params.req_to_error_callback.pop(nonce, None)
+        self.params.req_to_deadline.pop(nonce, None)
 
     def _handle_ipfs_error(self, reason: str) -> None:
         """Handle an IPFS error reported by the handler.
@@ -1347,7 +1682,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        result_msg = self._ipfs_error_reason or "Invalid response"
+        client_error = (
+            self._client_fault[0]
+            if self._client_fault is not None and is_offchain
+            else None
+        )
+        result_msg = (
+            self._ipfs_error_reason
+            or client_error
+            or self._tool_error_reason
+            or "Invalid response"
+        )
         response = {
             "schema_version": RESPONSE_SCHEMA_VERSION,
             "requestId": req_id,
@@ -1439,13 +1784,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.mech_metrics.inc_counter(
             self.mech_metrics.mech_tasks_completed_total, tool=tool, source=source
         )
-        if self._invalid_request:
-            self.mech_metrics.inc_counter(
-                metric=self.mech_metrics.mech_tasks_failed_total,
-                tool=tool,
-                reason=FAILURE_REASON_EXECUTION_FAILED,
-                source=source,
-            )
+        run_failed = (
+            self._invalid_request
+            or not execution_succeeded
+            or response.get("result") is None
+        )
+        if run_failed and not self._task_failure_counted:
+            self._count_task_failure(tool, FAILURE_REASON_EXECUTION_FAILED)
 
         if is_offchain:
             # Off-chain path: skip the IPFS upload so the response stays private
@@ -1454,17 +1799,27 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
+            # A run without an answer still settles: the requester is charged
+            # by who caused the failure (``_price_failed_run``) and polls the
+            # error, not a result.
+            fault: Optional[Fault] = None
+            metric_reason = OFFCHAIN_FAILURE_EXECUTION_FAILED
+            error = ""
             if self._invalid_request or not execution_succeeded:
-                # No usable result: reject rather than deliver. A rejection
-                # never settles, and off-chain requesters are charged on
-                # settlement. The on-chain path below delivers either way,
-                # since those requesters pay at request time.
-                self._record_offchain_failure(
-                    str(req_id),
-                    cast(str, response.get("result") or "task execution failed"),
-                    metric_reason=OFFCHAIN_FAILURE_EXECUTION_FAILED,
+                if self._client_fault is not None:
+                    fault, metric_reason = FAULT_CLIENT, self._client_fault[1]
+                else:
+                    fault = FAULT_MECH
+                error = cast(str, response.get("result") or "task execution failed")
+            elif response.get("result") is None:
+                fault, metric_reason, error = (
+                    FAULT_MECH,
+                    OFFCHAIN_FAILURE_NO_RESULT,
+                    NO_RESULT_ERROR,
                 )
-                return
+            failure_base = dict(response)
+            if fault is not None:
+                response = _failed_response(response, error, fault)
             try:
                 # content_bytes is exactly what the CID commits to. The serving
                 # payload below carries this same object verbatim under
@@ -1480,20 +1835,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             except (ValueError, TypeError) as exc:
                 # compute_cidv1 raises ValueError above the single-block bound;
                 # json.dumps raises TypeError (non-serializable) / ValueError
-                # (circular ref). Both must stay inside this guard, or the crash
-                # this fix targets still escapes through act(). Fail cleanly so
-                # the executing-task slot resets and the requester gets a
-                # definitive rejection, rather than crashing the agent
-                # (propagate policy) or stalling forever (just_log policy).
+                # (circular ref). The run then settles as a mech-fault failure
+                # whose response holds only the scalar envelope fields and a
+                # capped error. Only if even that cannot be addressed is the
+                # request rejected, uncharged.
                 self.context.logger.error(
                     f"Off-chain CID computation failed for request {req_id}: {exc}"
                 )
-                self._record_offchain_failure(
-                    str(req_id),
-                    f"cid computation failed: {exc}",
-                    metric_reason=OFFCHAIN_FAILURE_CID_FAILED,
-                )
-                return
+                fault, metric_reason = FAULT_MECH, OFFCHAIN_FAILURE_CID_FAILED
+                error = f"cid computation failed: {exc}"[:MAX_TOOL_ERROR_CHARS]
+                base = {
+                    key: failure_base.get(key)
+                    for key in ("schema_version", "requestId", "tool", "executed_at")
+                }
+                response = _failed_response(base, error, fault)
+                try:
+                    content_bytes = json.dumps(response).encode("utf-8")
+                    local_cid = compute_cidv1(content_bytes)
+                except (ValueError, TypeError):
+                    self._record_offchain_failure(
+                        str(req_id), error, metric_reason=OFFCHAIN_FAILURE_CID_FAILED
+                    )
+                    return
             self.context.logger.info(
                 f"Off-chain response for request {req_id} kept private; "
                 f"local CID {local_cid}."
@@ -1515,15 +1878,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # ``deliverWithSignatures`` still charged them on chain.
             # ``str(req_id)`` performs the real conversion.
             request_id_str = str(req_id)
+            envelope: Dict[str, Any] = {"request_id": request_id_str, "status": "ok"}
+            if fault is not None:
+                envelope = {
+                    "request_id": request_id_str,
+                    "status": "failed",
+                    "error": error,
+                    "fault": fault,
+                }
             self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
                 request_id_str
-            ] = {
-                "request_id": request_id_str,
-                "status": "ok",
-                "content_cid": local_cid,
-                "response": response,
-            }
-            self._record_offchain_delivery(executing_task, tool)
+            ] = {**envelope, "content_cid": local_cid, "response": response}
+            if fault is None:
+                self._record_offchain_delivery(executing_task, tool)
+            else:
+                self._count_offchain_failure(metric_reason, fault, tool)
             # Mirror the (request, response) preimage into the durable buffer
             # after the in-memory return channel is populated. The response
             # stays private (not on IPFS), so this is the operator's only audit
@@ -1536,7 +1905,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 local_cid,
                 preimage_buffer.STATUS_DELIVERED,
             )
-            self._finalize_done_task(local_cid, response=response)
+            self._finalize_done_task(local_cid, response=response, fault=fault)
             return
 
         msg, dialogue = self._build_ipfs_store_file_req(
@@ -1545,7 +1914,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         callback = functools.partial(
             self._handle_store_response, response=response, req_id=req_id
         )
-        self.send_message(msg, dialogue, callback)
+        self._task_ipfs_nonce = self.send_message(msg, dialogue, callback)
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
@@ -1568,6 +1937,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # message reflects the underlying cause instead of only the
         # generic "timed out N times" string.
         preserved_reason = error_reason or self._ipfs_error_reason
+        self._drop_task_ipfs_request()
         self.params.in_flight_req = False
         self.params.is_cold_start = False
         self._request_handling_deadline = None
@@ -1683,7 +2053,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"{total_bytes} bytes, exceeds cap of {IPFS_MAX_TASK_BYTES}. "
                 f"Skipping request."
             )
-            self._invalid_request = True
+            self._fail_as_client_fault(
+                f"request metadata is {total_bytes} bytes, over the "
+                f"{IPFS_MAX_TASK_BYTES} byte limit"
+            )
             return
 
         try:
@@ -1693,7 +2066,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Malformed IPFS content for request {req_id}: {e}. "
                 f"Skipping request."
             )
-            self._invalid_request = True
+            self._fail_as_client_fault("request metadata is not valid JSON")
             return
         is_data_valid = (
             task_data
@@ -1704,16 +2077,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if not is_data_valid:
             self.context.logger.warning(f"Invalid {task_data=} for {executing_task=}.")
-            self._invalid_request = True
+            self._fail_as_client_fault(
+                "request metadata must be a JSON object with string "
+                "'prompt' and 'tool' fields"
+            )
             return
 
-        prompt_bytes = len(task_data["prompt"].encode("utf-8"))
-        if prompt_bytes > MAX_PROMPT_BYTES:
+        prompt_bytes = prompt_byte_length(task_data["prompt"])
+        max_prompt_bytes = self.params.max_prompt_bytes
+        if prompt_bytes > max_prompt_bytes:
             self.context.logger.warning(
                 f"Prompt for request {req_id} is {prompt_bytes} bytes, "
-                f"exceeds cap of {MAX_PROMPT_BYTES}. Skipping request."
+                f"exceeds cap of {max_prompt_bytes}. Skipping request."
             )
-            self._invalid_request = True
+            self._fail_as_client_fault(
+                f"prompt is {prompt_bytes} bytes, over the {max_prompt_bytes} "
+                "byte limit"
+            )
             return
 
         self.context.shared_state.setdefault(IN_MEMORY_REQUESTS, {})[str(req_id)] = (
@@ -1726,12 +2106,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # by the on-chain contract call reader; the accept path does not
         # populate it), so ``stepping_in`` evaluates to True for every
         # off-chain task and the tool-not-installed drop below always
-        # fires for a typo'd tool name. Route those drops through
-        # ``_record_offchain_failure`` so the client sees a definitive
-        # rejection over the polling endpoint AND the sender's
-        # outstanding-nonce entry is discarded — leaving it behind
-        # would inflate the admission gate's slot count forever, hard-
-        # 401'ing every subsequent request from the same sender.
+        # fires for a typo'd tool name. Off-chain that request settles as a
+        # client-fault failure, so the client polls a definitive outcome and
+        # the sender's nonce moves on to the settling set like any other.
         stepping_in = exec_prio != my_mech
         tool_name = task_data["tool"]
         if stepping_in and tool_name not in self._tools_to_package_hash:
@@ -1739,20 +2116,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._ignored_request_ids.add(rid)
             reason = f"Cannot step in. Tool {tool_name} is not installed. Ignoring request {rid}."
             self.context.logger.info(reason)
-            self.mech_metrics.inc_counter(
-                metric=self.mech_metrics.mech_tasks_failed_total,
-                tool=tool_name,
-                reason=FAILURE_REASON_TOOL_NOT_INSTALLED,
-                source=_source_label(executing_task),
-            )
+            self._count_task_failure(tool_name, FAILURE_REASON_TOOL_NOT_INSTALLED)
             if bool(executing_task.get("is_offchain", False)):
-                # Definitive rejection + nonce release + slot reset in
-                # one call. Reads sender / nonce off ``_executing_task``
-                # before the reset clears it.
-                self._record_offchain_failure(
-                    str(rid),
-                    reason,
-                    metric_reason=OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED,
+                self._fail_as_client_fault(
+                    f"tool {tool_name} is not available on this mech",
+                    OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED,
                 )
                 self.tool_preparation_start_time = 0.0
                 return
@@ -1767,21 +2135,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if tool_name in self._tools_to_package_hash:
-            if self._tools_to_pricing:
-                tool_pricing = self._tools_to_pricing[tool_name]
+            tool_pricing = self._tools_to_pricing.get(tool_name)
+            if tool_pricing is not None:
                 req_id_delivery_rate = self.request_id_to_delivery_rate_info[
                     executing_task["requestId"]
                 ]
                 if req_id_delivery_rate < tool_pricing:
                     reason = f"Requested pricing invalid. Actual {req_id_delivery_rate}, needed {tool_pricing}."
                     self.context.logger.warning(reason)
-                    self.mech_metrics.inc_counter(
-                        metric=self.mech_metrics.mech_tasks_failed_total,
-                        tool=tool_name,
-                        reason=FAILURE_REASON_PRICING_INVALID,
-                        source=_source_label(executing_task),
+                    self._count_task_failure(tool_name, FAILURE_REASON_PRICING_INVALID)
+                    self._fail_as_mech_fault(
+                        f"tool {tool_name} is priced at {tool_pricing}, above "
+                        f"the signed delivery rate {req_id_delivery_rate}"
                     )
-                    self._invalid_request = True
                     # reset the time counter used to measure time taken to prepare the task
                     self.tool_preparation_start_time = 0.0
                     return
@@ -1810,15 +2176,56 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             executing_task["tool"] = tool_name
             reason = f"Tool {tool_name} is not valid."
             self.context.logger.warning(reason)
-            self.mech_metrics.inc_counter(
-                metric=self.mech_metrics.mech_tasks_failed_total,
-                tool=tool_name,
-                reason=FAILURE_REASON_TOOL_INVALID,
-                source=_source_label(executing_task),
-            )
-            self._invalid_request = True
+            self._count_task_failure(tool_name, FAILURE_REASON_TOOL_INVALID)
+            self._fail_as_client_fault(reason)
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
+
+    def _count_task_failure(self, tool: Optional[str], reason: FailureReason) -> None:
+        """Count the current task once in ``mech_tasks_failed_total``.
+
+        :param tool: the tool the task named.
+        :param reason: bounded ``reason`` label value.
+        """
+        self.mech_metrics.inc_counter(
+            metric=self.mech_metrics.mech_tasks_failed_total,
+            tool=tool,
+            reason=reason,
+            source=_source_label(self._executing_task),
+        )
+        self._task_failure_counted = True
+
+    def _fail_as_client_fault(
+        self,
+        error: str,
+        metric_reason: OffchainFailureReason = OFFCHAIN_FAILURE_INVALID_REQUEST,
+    ) -> None:
+        """Mark the executing task failed because of what the request asked for.
+
+        The task skips execution. Off-chain it settles as a client-fault
+        failure carrying ``error``.
+
+        :param error: the error the requester sees.
+        :param metric_reason: bounded ``reason`` label for the failure counter.
+        """
+        self._client_fault = (error, metric_reason)
+        self._invalid_request = True
+
+    def _fail_as_mech_fault(self, error: str) -> None:
+        """Mark the executing task failed, before it ran, for a mech-side reason.
+
+        Requests whose signed rate is below the tool price are refused at
+        acceptance, so a price above the signed rate at run time means the
+        operator changed pricing in between. Off-chain the task settles as a
+        mech-fault failure carrying ``error``; the on-chain text is unchanged.
+
+        :param error: the error an off-chain requester sees.
+        """
+        if self._executing_task is not None and self._executing_task.get(
+            "is_offchain", False
+        ):
+            self._tool_error_reason = error
+        self._invalid_request = True
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         """Submit a task with a hard per-call timeout via Pebble."""
@@ -1863,6 +2270,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(f"Task expired: {e}")
         except Exception as e:
             self.context.logger.error(f"Exception during task: {e}")
+            self._tool_error_reason = _tool_error_reason(e, self._keychain)
+            if _exception_type_name(e) == CLIENT_FAULT_EXCEPTION:
+                self._client_fault = (
+                    self._tool_error_reason,
+                    OFFCHAIN_FAILURE_INVALID_REQUEST,
+                )
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
@@ -1972,8 +2385,222 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self._finalize_done_task(ipfs_hash, response=response)
 
+    def _measured_cost_in_asset_units(self, done_task: Dict[str, Any]) -> Optional[int]:
+        """Tool spend from ``cost_dict`` in payment-asset units; None if none reported."""
+        cost_dict = done_task.get("cost_dict")
+        if not isinstance(cost_dict, dict):
+            return None
+        total_cost = cost_dict.get("total_cost")
+        if total_cost is None:
+            return None
+        if (
+            isinstance(total_cost, bool)
+            or not isinstance(total_cost, (int, float))
+            or not math.isfinite(total_cost)
+            or total_cost < 0
+        ):
+            self.context.logger.warning(
+                f"Ignoring unusable total_cost {total_cost!r} for request "
+                f"{done_task.get('request_id')}."
+            )
+            return None
+        # A callback the tool never invoked still carries the zeroed default
+        # dict; that is "not measured", not a free run.
+        if total_cost == 0 and not cost_dict.get("total_tokens"):
+            return None
+        # A call the table could not price, and that reported no cost of its
+        # own, leaves the sum short: treat the whole measurement as missing.
+        if cost_dict.get("unpriced_calls"):
+            self.context.logger.warning(
+                f"Cost for request {done_task.get('request_id')} is incomplete: "
+                f"{cost_dict['unpriced_calls']} call(s) to an unpriced model; "
+                "charging the floor or the least accepted for the tool."
+            )
+            return None
+        usd = Decimal(str(total_cost))
+        scaled = usd * (10**self.params.payment_token_decimals)
+        return int(scaled.to_integral_value(rounding=ROUND_CEILING))
+
+    def _price_done_task(
+        self, done_task: Dict[str, Any], cap: Optional[int]
+    ) -> Optional[int]:
+        """Price for a done task: the grossed-up cost or the tool floor, up to the cap.
+
+        A run with neither a measured cost nor a floor is charged the least
+        the mech accepts for the tool (``accepted_minimum_cap``): an unmeasured
+        cost says nothing about what the run cost. No run is priced below the
+        minimum charge.
+
+        :param done_task: the done task, carrying ``cost_dict`` (V), ``tool``
+            and ``dynamic_tool_cost`` (the floor) when set.
+        :param cap: the rate the requester signed, or None when unknown.
+        :return: the rate in payment-asset units, at least the minimum charge
+            and never above ``cap``; None without a cap.
+        """
+        if cap is None:
+            return None
+        request_id = done_task.get("request_id")
+        candidates: List[int] = []
+        measured = self._measured_cost_in_asset_units(done_task)
+        decimals = self.params.payment_token_decimals
+        fixed = fixed_share_in_asset_units(self.params)
+        fee_bp = self.params.marketplace_fee_bp
+        floor = done_task.get("dynamic_tool_cost")
+        done_task["pricing"] = {
+            "measured_cost": measured,
+            "fixed_cost": fixed,
+            "marketplace_fee_bp": fee_bp,
+            "tool_floor": None if floor is None else int(floor),
+            "payment_token_decimals": decimals,
+        }
+        if measured is not None:
+            candidates.append(gross_up_for_fee(measured + fixed, fee_bp))
+        if floor is not None:
+            candidates.append(int(floor))
+        tool = done_task.get("tool")
+        if not candidates:
+            accepted = accepted_minimum_cap(
+                self.params,
+                tool,
+                self._marketplace_mech_delivery_rate(),
+                bool(
+                    self.context.shared_state.get(
+                        preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
+                    )
+                ),
+            )
+            self.context.logger.info(
+                f"No measured cost or tool floor for request {request_id}; "
+                f"charging the least accepted for the tool, {accepted}."
+            )
+            candidates.append(accepted)
+        price = max(candidates + [minimum_charge(self.params, tool)])
+        if price > cap:
+            self.context.logger.warning(
+                f"Price {price} for request {request_id} exceeds the signed cap "
+                f"{cap}; clamping to the cap."
+            )
+            return cap
+        return price
+
+    def _marketplace_mech_delivery_rate(self) -> Optional[int]:
+        """Return the marketplace mech's configured delivery rate, if any."""
+        try:
+            mech = self._get_designated_marketplace_mech_address()
+        except ValueError:
+            return None
+        rates = {
+            address.lower(): rate
+            for address, rate in self.params.mech_to_max_delivery_rate.items()
+        }
+        rate = rates.get(mech.lower())
+        return None if rate is None else int(rate)
+
+    def _price_failed_run(
+        self, done_task: Dict[str, Any], cap: Optional[int], fault: Fault
+    ) -> Optional[int]:
+        """Price for an off-chain run that produced no answer, set by its fault.
+
+        A client fault is charged the signed cap. A mech fault is charged the
+        mech's minimum charge (``minimum_charge``), never above the cap; what
+        the tool reported spending is not counted. A run skipped before the
+        tool started is not charged the tool floor.
+
+        :param done_task: the done task, carrying ``tool`` and
+            ``dynamic_tool_cost`` (the floor) when set.
+        :param cap: the rate the requester signed, or None when unknown.
+        :param fault: who caused the failure.
+        :return: the rate in payment-asset units; None without a cap.
+        """
+        if cap is None:
+            return None
+        tool_ran = not self._invalid_request
+        floor = done_task.get("dynamic_tool_cost") if tool_ran else None
+        done_task["pricing"] = {
+            "measured_cost": None,
+            "fixed_cost": fixed_share_in_asset_units(self.params),
+            "marketplace_fee_bp": self.params.marketplace_fee_bp,
+            "tool_floor": None if floor is None else int(floor),
+            "payment_token_decimals": self.params.payment_token_decimals,
+        }
+        if fault == FAULT_CLIENT:
+            return cap
+        tool = done_task.get("tool")
+        charged_tool = tool if tool and tool_ran else None
+        return min(minimum_charge(self.params, charged_tool), cap)
+
+    def _charged_delivery_rate(
+        self,
+        done_task: Dict[str, Any],
+        is_offchain: bool,
+        cap: Optional[int],
+        price: Optional[int],
+        fault: Optional[Fault] = None,
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """The rate settlement will charge for this task, and the rule that set it.
+
+        :param done_task: the done task, carrying ``dynamic_tool_cost`` when set.
+        :param is_offchain: whether the task settles through a signed delivery.
+        :param cap: the rate the requester signed, or None when unknown.
+        :param price: the cap-and-actual price, already clamped to ``cap``.
+        :param fault: who caused the failure of a run with no answer, if any.
+        :return: the amount the matching settlement path charges and its
+            ``pricing_mode`` label; ``(None, None)`` without a signed rate.
+        """
+        if cap is None:
+            return None, None
+        if is_offchain:
+            cap_and_actual = self.context.shared_state.get(
+                preimage_buffer.CAP_AND_ACTUAL_ENABLED, False
+            )
+            if cap_and_actual and price is not None:
+                if fault == FAULT_MECH:
+                    return price, PRICING_FAILED_FLOOR
+                if fault == FAULT_CLIENT:
+                    return price, PRICING_SIGNED_CAP
+                return price, PRICING_CAP_AND_ACTUAL
+            return cap, PRICING_SIGNED_CAP
+        # On-chain, only the NVM deliver carries a per-request rate (the tool
+        # floor); every other mech is charged its own max delivery rate.
+        floor = done_task.get("dynamic_tool_cost")
+        if floor is not None and self._mech_is_nvm():
+            return int(floor), PRICING_NVM_FLOOR
+        max_rates = self.params.mech_to_max_delivery_rate
+        rate = int(next(iter(max_rates.values()))) if max_rates else cap
+        return rate, PRICING_ONCHAIN_MAX
+
+    def _warn_once_on_default_decimals(self, is_offchain: bool) -> None:
+        """Warn once when cap-and-actual prices with the default 18 decimals.
+
+        18 is right for native and 18-decimal tokens and wrong for USDC-like
+        assets, so a deployment that never set ``PAYMENT_TOKEN_DECIMALS`` is
+        called out the first time the flag-on price path runs.
+
+        :param is_offchain: whether the task settles through a signed delivery.
+        """
+        if self._decimals_warned or not is_offchain:
+            return
+        if not self.context.shared_state.get(preimage_buffer.CAP_AND_ACTUAL_ENABLED):
+            return
+        self._decimals_warned = True
+        if self.params.payment_token_decimals == 18:
+            self.context.logger.warning(
+                "cap_and_actual_enabled is on with payment_token_decimals=18 (the "
+                "default); confirm this matches the mech's payment asset."
+            )
+
+    def _mech_is_nvm(self) -> bool:
+        """Whether the mech's payment type is one of the NVM subscription types."""
+        payment_model = self.payment_model
+        if not isinstance(payment_model, (bytes, bytearray)):
+            return False
+        return payment_model.hex() in (PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM)
+
     def _finalize_done_task(
-        self, cid: str, response: Optional[Dict[str, Any]] = None
+        self,
+        cid: str,
+        response: Optional[Dict[str, Any]] = None,
+        fault: Optional[Fault] = None,
     ) -> None:
         """Apply the CID to the in-flight done_task and publish it.
 
@@ -1989,6 +2616,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param response: the tool response envelope the predict-api event builder
             needs. Both call sites pass this in so the value flows down the
             synchronous stack rather than round-tripping through ``shared_state``.
+        :param fault: who caused the failure of an off-chain run that produced
+            no answer; None for a run with an answer and on the on-chain path.
         """
         executing_task = self._executing_task
         if executing_task is None:
@@ -2020,6 +2649,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         task_result = to_multihash(cid)
+        # The run's cost and the tool floor are the mech's own values, or absent.
+        done_task.pop("cost_dict", None)
+        done_task.pop("dynamic_tool_cost", None)
+        if response is not None and isinstance(response.get("cost_dict"), dict):
+            done_task["cost_dict"] = response["cost_dict"]
         tool = str(done_task.get("tool"))
         dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:
@@ -2028,9 +2662,36 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}."
             )
             done_task["dynamic_tool_cost"] = dynamic_tool_cost
+        signed_rate = executing_task.get(
+            "request_delivery_rate", executing_task.get("delivery_rate")
+        )
+        cap = None if signed_rate is None else int(signed_rate)
+        self._warn_once_on_default_decimals(is_offchain)
+        if fault is None:
+            price = self._price_done_task(done_task, cap)
         else:
-            cost = get_cost_for_done_task(done_task)
-            self.context.logger.info(f"Cost for task {req_id}: {cost}.")
+            price = self._price_failed_run(done_task, cap, fault)
+        if price is not None and "pricing" in done_task:
+            done_task["pricing"]["computed_price"] = price
+        actual_delivery_rate, pricing_mode = self._charged_delivery_rate(
+            done_task, is_offchain, cap, price, fault
+        )
+        if actual_delivery_rate is not None:
+            done_task["actual_delivery_rate"] = actual_delivery_rate
+            done_task["pricing"]["pricing_mode"] = pricing_mode
+            computed = (
+                "" if price == actual_delivery_rate else f" (computed price {price})"
+            )
+            failed = "" if fault is None else f" (failed run, {fault} fault)"
+            self.context.logger.info(
+                f"Delivery rate for task {req_id}: "
+                f"{actual_delivery_rate}{computed}{failed}."
+            )
+            offchain_entry = self.context.shared_state.get(
+                OFFCHAIN_REQUEST_RESPONSES, {}
+            ).get(str(req_id))
+            if offchain_entry is not None:
+                offchain_entry["delivery_rate"] = actual_delivery_rate
         mech_address = self._get_designated_marketplace_mech_address()
         mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
@@ -2152,6 +2813,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             replication and downstream signing in the post-tx behaviour.
         """
         req_id = done_task["request_id"]
+        pricing = done_task.get("pricing") or {}
         request_id_str = str(req_id)
         # ``IN_MEMORY_REQUESTS`` is ``str``-keyed by the handler; ``req_id``
         # is ``int`` for off-chain tasks (see ingress coercion in
@@ -2286,9 +2948,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         else:
             prompt = str(request_data.get("prompt") or "")
         prompt_bytes = prompt.encode("utf-8")
-        if len(prompt_bytes) > MAX_PROMPT_BYTES:
-            prompt = prompt_bytes[:MAX_PROMPT_BYTES].decode("utf-8", errors="ignore")
-        invalid = bool(self._invalid_request)
+        if len(prompt_bytes) > MAX_EVENT_PROMPT_BYTES:
+            prompt = prompt_bytes[:MAX_EVENT_PROMPT_BYTES].decode(
+                "utf-8", errors="ignore"
+            )
+        invalid = (
+            bool(self._invalid_request)
+            or self._tool_error_reason is not None
+            or self._client_fault is not None
+        )
         result_text = response_data.get("result") if response_data else None
         status = "failed" if invalid or result_text is None else "complete"
         # Failed-row ``error`` carries the available diagnostic, regardless
@@ -2297,7 +2965,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # response object), the field is ``None``; the predict-api server's
         # CHECK allows a ``failed`` row with empty error so the row still
         # lands as a settled failure.
-        error_text = str(result_text) if status == "failed" and result_text else None
+        # An off-chain failure carries its error in ``error``; the on-chain
+        # failure arm carries it in ``result``.
+        error_source = (response_data.get("error") if response_data else None) or (
+            result_text
+        )
+        error_text = str(error_source) if status == "failed" and error_source else None
         # Strip the result from the failed arm so the predict-api's
         # status/error/result shape CHECK accepts the row.
         result_value: Optional[str] = (
@@ -2403,6 +3076,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "error": error_text,
                 "executed_at": executed_at_iso,
                 "cost_dict": cost_dict,
+                "actual_delivery_rate": (
+                    str(done_task["actual_delivery_rate"])
+                    if done_task.get("actual_delivery_rate") is not None
+                    else None
+                ),
+                # Integers travel as strings, like the rates.
+                "measured_cost": _opt_int_str(pricing.get("measured_cost")),
+                "fixed_cost": _opt_int_str(pricing.get("fixed_cost")),
+                "marketplace_fee_bp": pricing.get("marketplace_fee_bp"),
+                "tool_floor": _opt_int_str(pricing.get("tool_floor")),
+                # What cap-and-actual pricing charges for this run, at or below
+                # the signed cap; with the flag off it differs from the charge.
+                "computed_price": _opt_int_str(pricing.get("computed_price")),
+                "payment_token_decimals": pricing.get("payment_token_decimals"),
+                "pricing_mode": pricing.get("pricing_mode"),
                 "is_offchain": is_offchain_task,
                 "tool_hash": tool_hash,
                 "execution_latency_ms": execution_latency_ms,
@@ -2424,6 +3112,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # ``None`` so pydantic on the server side accepts the
                 # payload if the enricher never ran (retry-safe).
                 "delivery_tx_hash": None,
+                "settled_at": None,
                 "delivered_at": now_iso,
             },
             "source": predict_api_source,
@@ -2456,6 +3145,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task = None
         self._invalid_request = False
         self._ipfs_error_reason = None
+        self._tool_error_reason = None
+        self._client_fault = None
+        self._task_failure_counted = False
         self._request_handling_deadline = None
         self._async_result = None
 
@@ -2496,6 +3188,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             **labels,
         )
 
+    def _count_offchain_failure(
+        self, metric_reason: OffchainFailureReason, fault: Fault, tool: Optional[str]
+    ) -> None:
+        """Count one off-chain request that failed after it was accepted.
+
+        The ``tool`` label is the tool name only when the mech serves it, else
+        ``"unknown"``, so a request cannot add series.
+
+        :param metric_reason: bounded ``reason`` label value.
+        :param fault: who caused the failure.
+        :param tool: the tool the request named.
+        """
+        labels = self._offchain_metric_labels()
+        self.mech_metrics.inc_counter(
+            self.mech_metrics.mech_offchain_failures_total,
+            1,
+            tool=tool if tool in self._tools_to_package_hash else "unknown",
+            reason=metric_reason,
+            fault=fault,
+            chain=labels["chain"],
+            mech_address=labels["mech_address"],
+        )
+
     def _record_offchain_failure(
         self,
         req_id: str,
@@ -2520,14 +3235,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "status": "rejected",
             "reason": reason,
         }
-        labels = self._offchain_metric_labels()
-        self.mech_metrics.inc_counter(
-            self.mech_metrics.mech_offchain_failures_total,
-            1,
-            reason=metric_reason,
-            chain=labels["chain"],
-            mech_address=labels["mech_address"],
-        )
+        tool = (self._executing_task or {}).get("tool")
+        self._count_offchain_failure(metric_reason, FAULT_MECH, tool)
         # Capture the rejection in the durable preimage buffer (no-op unless
         # off-chain preimage retention is enabled).
         self._buffer_preimage_settlement(

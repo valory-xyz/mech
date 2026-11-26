@@ -215,6 +215,189 @@ def test_params_marketplace_flag_true(params_kwargs: Dict[str, Any]) -> None:
     assert p.use_mech_marketplace is True
 
 
+def test_params_price_inputs_default(params_kwargs: Dict[str, Any]) -> None:
+    """The fixed share defaults to 0 and the fee to 15%."""
+    for key in ("fixed_cost_per_request", "marketplace_fee_bp"):
+        params_kwargs.pop(key, None)
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert (p.fixed_cost_per_request, p.marketplace_fee_bp) == (0, 1500)
+
+
+def test_params_require_payment_token_decimals(params_kwargs: Dict[str, Any]) -> None:
+    """Decimals have no default: a missing value fails at startup, not per task."""
+    params_kwargs.pop("payment_token_decimals")
+    with pytest.raises(AEAEnforceError, match="payment_token_decimals"):
+        m.Params(name="params", **params_kwargs)
+
+
+def test_params_tools_pricing_rejects_negative_floor(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """A negative tool floor is refused; it would otherwise price below zero."""
+    params_kwargs["tools_to_package_hash"] = {"sum": "h1"}
+    params_kwargs["tools_to_pricing"] = {"sum": -1}
+    with pytest.raises(AEAEnforceError, match="tools_to_pricing"):
+        m.Params(name="params", **params_kwargs)
+
+
+SERVED_TOOLS = {"sum": "h1", "mul": "h2"}
+
+
+def test_params_minimum_cap_may_list_some_of_the_served_tools(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """A minimum cap is optional per tool, and absent by default."""
+    params_kwargs["tools_to_package_hash"] = dict(SERVED_TOOLS)
+    assert m.Params(name="params", **dict(params_kwargs)).tools_to_minimum_cap == {}
+
+    params_kwargs["tools_to_minimum_cap"] = {"sum": 200}
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.tools_to_minimum_cap == {"sum": 200}
+
+
+@pytest.mark.parametrize(
+    "caps, message",
+    [
+        ({"div": 200}, "Unknown tools in tools_to_minimum_cap: div"),
+        ({"sum": -1}, "whole numbers >= 0"),
+        ({"sum": 1.5}, "whole numbers >= 0"),
+        ({"sum": "200"}, "whole numbers >= 0"),
+        ({"sum": True}, "whole numbers >= 0"),
+        ({"sum": None}, "whole numbers >= 0"),
+    ],
+    ids=["unserved_tool", "negative", "fraction", "text", "bool", "none"],
+)
+def test_params_minimum_cap_rejects_unusable_entries(
+    params_kwargs: Dict[str, Any], caps: Dict[str, Any], message: str
+) -> None:
+    """A cap for a tool the mech does not serve, or one that is not a whole number, stops startup."""
+    params_kwargs["tools_to_package_hash"] = dict(SERVED_TOOLS)
+    params_kwargs["tools_to_minimum_cap"] = caps
+    with pytest.raises(AEAEnforceError, match=message):
+        m.Params(name="params", **params_kwargs)
+
+
+@pytest.mark.parametrize(
+    "tool, floor, listed, expected_charge, expected_cap",
+    [
+        ("sum", 50, 200, 100, 200),
+        ("sum", 150, 120, 150, 150),
+        ("sum", 50, 0, 100, 100),
+        ("mul", 0, 0, 100, 100),
+        (None, 0, 0, 100, 100),
+    ],
+    ids=[
+        "cap_above_charge",
+        "cap_below_floor",
+        "zero_cap",
+        "tool_not_listed",
+        "unknown_tool",
+    ],
+)
+def test_minimum_cap_is_the_larger_of_the_listed_cap_and_the_minimum_charge(
+    tool: Any, floor: int, listed: int, expected_charge: int, expected_cap: int
+) -> None:
+    """The minimum cap never drops below the minimum charge, which it does not change."""
+    params = SimpleNamespace(
+        fixed_cost_per_request=85,
+        payment_token_decimals=6,
+        marketplace_fee_bp=1500,
+        tools_to_pricing={"sum": floor},
+        tools_to_minimum_cap={"sum": listed} if listed else {},
+    )
+    assert m.minimum_charge(params, tool) == expected_charge
+    assert m.minimum_cap(params, tool) == expected_cap
+
+
+def test_params_price_inputs_keep_explicit_zero(params_kwargs: Dict[str, Any]) -> None:
+    """An explicit 0 fee or 0 fixed share stays 0 instead of falling back to the default."""
+    params_kwargs.update(
+        payment_token_decimals=6, fixed_cost_per_request=0, marketplace_fee_bp=0
+    )
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert (
+        p.payment_token_decimals,
+        p.fixed_cost_per_request,
+        p.marketplace_fee_bp,
+    ) == (
+        6,
+        0,
+        0,
+    )
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("payment_token_decimals", 5),
+        ("fixed_cost_per_request", -1),
+        ("marketplace_fee_bp", 10_000),
+        ("marketplace_fee_bp", -1),
+    ],
+)
+def test_params_price_inputs_reject_out_of_range(
+    params_kwargs: Dict[str, Any], field: str, value: int
+) -> None:
+    """Decimals below 6, a negative fixed share, or a fee outside [0, 10000) are refused."""
+    params_kwargs[field] = value
+    with pytest.raises(AEAEnforceError, match=field):
+        m.Params(name="params", **params_kwargs)
+
+
+def test_params_max_prompt_bytes_defaults_when_unset(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """An unset or null ``max_prompt_bytes`` keeps the default bound."""
+    assert "max_prompt_bytes" not in params_kwargs
+    unset: m.Params = m.Params(name="params", **params_kwargs)
+    params_kwargs["max_prompt_bytes"] = None
+    null: m.Params = m.Params(name="params", **params_kwargs)
+
+    assert m.DEFAULT_MAX_PROMPT_BYTES == 100_000
+    assert unset.max_prompt_bytes == m.DEFAULT_MAX_PROMPT_BYTES
+    assert null.max_prompt_bytes == m.DEFAULT_MAX_PROMPT_BYTES
+
+
+@pytest.mark.parametrize("value", [1, 250_000, m.SINGLE_BLOCK_BYTES - 1])
+def test_params_max_prompt_bytes_accepts_values_below_single_block_bound(
+    params_kwargs: Dict[str, Any], value: int
+) -> None:
+    """A positive integer below the single-block bound is used as configured."""
+    params_kwargs["max_prompt_bytes"] = value
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.max_prompt_bytes == value
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0, -1, m.SINGLE_BLOCK_BYTES, m.SINGLE_BLOCK_BYTES + 1, 1.5, "250000", True, []],
+    ids=[
+        "zero",
+        "negative",
+        "single_block_bound",
+        "over_single_block_bound",
+        "float",
+        "string",
+        "bool",
+        "list",
+    ],
+)
+def test_params_max_prompt_bytes_rejects_values_outside_bound(
+    params_kwargs: Dict[str, Any], value: Any
+) -> None:
+    """A value that is not an integer in (0, single-block bound) fails at startup."""
+    params_kwargs["max_prompt_bytes"] = value
+    with pytest.raises(AEAEnforceError, match="max_prompt_bytes"):
+        m.Params(name="params", **params_kwargs)
+
+
+def test_single_block_bound_matches_offchain_request_bound() -> None:
+    """The bound ``max_prompt_bytes`` is checked against is the request-file bound."""
+    from packages.valory.skills.task_execution import handlers
+
+    assert m.SINGLE_BLOCK_BYTES == handlers.MAX_IPFS_DATA_BYTES == 256 * 1024
+
+
 def test_params_tools_pricing_keys_match_ok(params_kwargs: Dict[str, Any]) -> None:
     """
     When tools_to_pricing keys match tools_to_package_hash, initialization succeeds.
@@ -232,7 +415,7 @@ def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs: Dict[str, Any],
 ) -> None:
     """
-    Mismatched pricing/package keys should raise an enforcement error.
+    A priced tool the mech does not serve should raise an enforcement error.
 
     :param params_kwargs: Baseline keyword arguments used to construct Params.
     :type params_kwargs: Dict[str, Any]
@@ -241,7 +424,23 @@ def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs["tools_to_pricing"] = {"mul": 20}  # mismatch
     with pytest.raises(AEAEnforceError) as ei:
         m.Params(name="params", **params_kwargs)
-    assert "Extra keys" in str(ei.value)
+    assert "Unknown tools in tools_to_pricing: mul" in str(ei.value)
+
+
+@pytest.mark.parametrize("pricing", [{}, {"sum": 10}, {"sum": 0}])
+def test_params_tools_pricing_may_leave_tools_out(
+    params_kwargs: Dict[str, Any], pricing: Dict[str, int]
+) -> None:
+    """A tool the mech serves may have no floor; the listed ones keep theirs.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :param pricing: the tools_to_pricing map under test.
+    """
+    params_kwargs["tools_to_package_hash"] = {"sum": "h1", "mul": "h2"}
+    params_kwargs["tools_to_pricing"] = pricing
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.tools_to_pricing == pricing
+    assert m.minimum_charge(p, "mul") == m.MINIMUM_CHARGE_BASE_UNITS
 
 
 def test_params_missing_required_key_raises(
@@ -464,3 +663,50 @@ def test_params_preimage_retention_can_be_switched_off(
     params_kwargs["preimage_retention_enabled"] = False
     p: m.Params = m.Params(name="params", **params_kwargs)
     assert p.preimage_retention_enabled is False
+
+
+HELPER_TOOL = "sum"
+HELPER_LISTED_CAP = 15_000
+HELPER_MECH_RATE = 10_000
+
+
+@pytest.mark.parametrize(
+    "minimum_caps, priced, mech_rate, expected",
+    [
+        ({HELPER_TOOL: HELPER_LISTED_CAP}, True, HELPER_MECH_RATE, HELPER_LISTED_CAP),
+        ({HELPER_TOOL: HELPER_LISTED_CAP}, False, HELPER_MECH_RATE, HELPER_LISTED_CAP),
+        ({HELPER_TOOL: 500}, True, HELPER_MECH_RATE, 500),
+        ({}, True, HELPER_MECH_RATE, HELPER_MECH_RATE),
+        ({}, False, HELPER_MECH_RATE, m.MINIMUM_CHARGE_BASE_UNITS),
+        ({}, True, None, m.MINIMUM_CHARGE_BASE_UNITS),
+    ],
+)
+def test_accepted_minimum_cap(
+    minimum_caps: Dict[str, int],
+    priced: bool,
+    mech_rate: Any,
+    expected: int,
+) -> None:
+    """A tool with no listed minimum keeps the mech delivery rate only when priced."""
+    params = SimpleNamespace(
+        payment_token_decimals=6,
+        fixed_cost_per_request=0,
+        marketplace_fee_bp=0,
+        tools_to_pricing={},
+        tools_to_minimum_cap=dict(minimum_caps),
+    )
+    assert m.accepted_minimum_cap(params, HELPER_TOOL, mech_rate, priced) == expected
+
+
+@pytest.mark.parametrize(
+    "floors, expected",
+    [
+        ({}, False),
+        ({"sum": 1, "mul": 2}, False),
+        ({"sum": 1}, True),
+        ({"mul": 0}, True),
+    ],
+)
+def test_is_partial_floor_map(floors: Dict[str, int], expected: bool) -> None:
+    """A map is partial when it floors some served tools but not all."""
+    assert m.is_partial_floor_map(floors, {"sum": "h1", "mul": "h2"}) is expected

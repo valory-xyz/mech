@@ -25,7 +25,7 @@ part most likely to drift independently of the AEA async plumbing.
 """
 
 import json
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -277,6 +277,23 @@ def test_record_stamp_applies_write_once_and_queues_write() -> None:
     assert state[preimage.PREIMAGE_WRITE_QUEUE] == [REQUEST_ID]
 
 
+def test_settled_tx_at_is_a_durable_stamp() -> None:
+    """The settlement time is stamped beside the tx hash and parked for a missing row."""
+    state = _delivered_state()
+    preimage.record_stamp(
+        state,
+        REQUEST_ID,
+        settled_tx_hash=SETTLED_TX_HASH,
+        settled_tx_at="2026-10-22T10:00:00Z",
+    )
+    record = state[preimage.PREIMAGE_RECORDS][REQUEST_ID]
+    assert record[preimage.FIELD_SETTLED_TX_AT] == "2026-10-22T10:00:00Z"
+    preimage.record_stamp(state, "ghost", settled_tx_at="2026-10-22T10:00:00Z")
+    assert state[preimage.PREIMAGE_PENDING_STAMPS]["ghost"]["settled_tx_at"] == (
+        "2026-10-22T10:00:00Z"
+    )
+
+
 def test_record_stamp_with_none_value_changes_nothing() -> None:
     """A ``None`` stamp is ignored and does not queue a write."""
     state = _delivered_state()
@@ -463,6 +480,37 @@ def test_fetch_payload_rebuilds_delivered_shape() -> None:
         "status": "ok",
         "content_cid": "cid",
         "response": {"result": "p_yes=0.7"},
+    }
+
+
+@pytest.mark.parametrize(
+    "done_task, extra",
+    [
+        ({"actual_delivery_rate": 14_118}, {"delivery_rate": 14_118}),
+        (None, {}),
+    ],
+    ids=["with_charge", "no_done_task"],
+)
+def test_fetch_payload_rebuilds_failed_shape(
+    done_task: Optional[dict], extra: dict
+) -> None:
+    """A settled failure serves status ``failed`` with its error, fault and charge."""
+    response = {"result": None, "error": "RuntimeError: down", "fault": "mech"}
+    record = {
+        "request_id": 42,
+        "settlement_status": preimage.STATUS_DELIVERED,
+        "response": json.dumps(response),
+        "response_cid": "cid",
+        preimage.FIELD_DONE_TASK: done_task,
+    }
+    assert preimage.fetch_payload(record) == {
+        "request_id": "42",
+        "status": "failed",
+        "error": "RuntimeError: down",
+        "fault": "mech",
+        **extra,
+        "content_cid": "cid",
+        "response": response,
     }
 
 

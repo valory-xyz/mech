@@ -167,6 +167,10 @@ def params_stub() -> SimpleNamespace:
     ns = SimpleNamespace(
         tools_to_package_hash={},  # {tool_name: ipfs_cid}
         tools_to_pricing={},  # {tool_name: price}
+        tools_to_minimum_cap={},
+        payment_token_decimals=18,
+        fixed_cost_per_request=0,
+        marketplace_fee_bp=1500,
         api_keys={},
         openai_base_url="",
         req_params=SimpleNamespace(from_block={}, last_polling={}),
@@ -174,6 +178,7 @@ def params_stub() -> SimpleNamespace:
         in_flight_req=False,
         in_flight_read_req=False,
         req_to_callback={},
+        background_ipfs_nonces=set(),
         req_to_error_callback={},
         req_to_deadline={},
         request_count=0,
@@ -208,6 +213,7 @@ def params_stub() -> SimpleNamespace:
         preimage_max_write_attempts=5,
         preimage_max_list_attempts=5,
         max_block_window=10_000,
+        max_prompt_bytes=models.DEFAULT_MAX_PROMPT_BYTES,
         task_deadline=15.0,
         timeout_limit=2,
         request_id_to_num_timeouts=defaultdict(int),
@@ -449,6 +455,10 @@ def params_kwargs(dialogue_skill_context: SimpleNamespace) -> Dict[str, Any]:
         mech_marketplace_address=models.ZERO_ADDRESS,
         default_chain_id="1",
         tools_to_pricing={},
+        tools_to_minimum_cap={},
+        payment_token_decimals=18,
+        fixed_cost_per_request=0,
+        marketplace_fee_bp=1500,
         polling_interval=12.5,
         task_deadline=111.0,
         cleanup_freq=77,

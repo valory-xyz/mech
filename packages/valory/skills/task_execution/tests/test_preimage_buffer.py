@@ -946,6 +946,7 @@ from packages.valory.skills.task_execution.behaviours import (  # noqa: E402
 from packages.valory.skills.task_execution.handlers import (  # noqa: E402
     mech_preimage_incomplete_rows,
     mech_preimage_rows,
+    unsettled_signed_caps,
 )
 
 SENDER = "0x000000000000000000000000000000000000dEaD"
@@ -1008,6 +1009,20 @@ def test_list_response_requeues_unsettled_row_and_restores_fetch_and_event(
     assert ss[OFFCHAIN_REQUEST_RESPONSES]["1"]["content_cid"] == "cid-1"
     assert ss[OFFCHAIN_REQUEST_RESPONSES]["1"]["response"] == {"result": "p_yes=0.7"}
     assert "1" in ss[preimage.PREIMAGE_RECORDS]
+
+
+def test_list_response_requeue_restores_the_senders_cap_reservation(
+    handler_context: Any,
+) -> None:
+    """A requeued unsettled row holds its signed cap against the sender's balance."""
+    handler = _drainer_handler(handler_context)
+    ss = handler_context.shared_state
+    row = json.loads(_delivered_row("1"))
+    row[preimage.FIELD_DONE_TASK]["request_delivery_rate"] = 250
+    handler.handle(_list_reply({"mech_preimage/1": json.dumps(row)}))
+    assert unsettled_signed_caps(ss, SENDER) == 250
+    ss[DONE_TASKS] = []
+    assert unsettled_signed_caps(ss, SENDER) == 0
 
 
 def test_list_response_queued_done_task_is_detached_from_the_record(

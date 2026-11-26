@@ -21,14 +21,49 @@
 
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, Protocol
+from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Set
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
 
 from packages.valory.skills.abstract_round_abci.utils import check_type
+from packages.valory.skills.task_execution.utils.local_cid import (
+    _MAX_BLOCK_BYTES as SINGLE_BLOCK_BYTES,
+)
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+BASIS_POINTS = 10_000
+# fixed_cost_per_request is expressed in USD with this many decimals.
+USD_DECIMALS = 6
+# The least a failed run is priced at before the cap clamp, so a batch made of
+# failed runs never sums to zero, which BalanceTrackerBase.sol:269 rejects. A
+# requester who signed a cap of 0 is still clamped to 0.
+FAILED_RUN_MIN_RATE = 1
+# The least ``minimum_charge`` returns, in payment-asset base units, so no
+# accepted run is charged zero. An off-chain request whose signed cap is below
+# the minimum charge (any cap of 0) is refused at acceptance.
+MINIMUM_CHARGE_BASE_UNITS = 1
+# ``pricing_mode`` on the predict-api event: the rule that set the charge.
+PRICING_CAP_AND_ACTUAL = "cap_and_actual"
+PRICING_FAILED_FLOOR = "failed_floor"
+PRICING_SIGNED_CAP = "signed_cap"
+PRICING_NVM_FLOOR = "nvm_floor"
+PRICING_ONCHAIN_MAX = "onchain_max"
+# ``max_prompt_bytes`` when the deployment sets none: the bound on the UTF-8
+# byte length of a request's ``prompt`` field.
+DEFAULT_MAX_PROMPT_BYTES = 100_000
+
+
+def prompt_byte_length(prompt: str) -> int:
+    """Return the size of ``prompt`` as measured against ``max_prompt_bytes``.
+
+    The off-chain accept check and the execution check both measure with
+    this, so a prompt one of them admits is never refused by the other.
+
+    :param prompt: the decoded ``prompt`` field of the request metadata.
+    :return: the UTF-8 byte length of the prompt.
+    """
+    return len(prompt.encode("utf-8"))
 
 
 @dataclasses.dataclass
@@ -104,6 +139,111 @@ def offchain_metric_labels(params: MetricsParams) -> Dict[str, str]:
     }
 
 
+class PricingParams(Protocol):
+    """The subset of skill params the price helpers read."""
+
+    fixed_cost_per_request: int
+    payment_token_decimals: int
+    marketplace_fee_bp: int
+    tools_to_pricing: Dict[str, int]
+    tools_to_minimum_cap: Dict[str, int]
+
+
+def gross_up_for_fee(amount: int, fee_bp: int) -> int:
+    """Return the smallest charge that leaves ``amount`` after the marketplace fee.
+
+    :param amount: what the mech must keep, in payment-asset base units.
+    :param fee_bp: the marketplace fee in basis points, below ``BASIS_POINTS``.
+    :return: ``ceil(amount * BASIS_POINTS / (BASIS_POINTS - fee_bp))``.
+    """
+    net_bp = BASIS_POINTS - fee_bp
+    return (amount * BASIS_POINTS + net_bp - 1) // net_bp
+
+
+def fixed_share_in_asset_units(params: PricingParams) -> int:
+    """Return ``fixed_cost_per_request`` scaled to payment-asset base units.
+
+    :param params: the skill params.
+    :return: the fixed share per request, before the marketplace fee.
+    """
+    return params.fixed_cost_per_request * 10 ** (
+        params.payment_token_decimals - USD_DECIMALS
+    )
+
+
+def minimum_charge(params: PricingParams, tool: Optional[str]) -> int:
+    """Return the least the mech charges for one run of ``tool``.
+
+    Any run, answered or failed, is charged at least the grossed-up fixed
+    share and the tool's floor when it has one, and never less than one
+    base unit.
+
+    :param params: the skill params.
+    :param tool: the requested tool, or None when unknown.
+    :return: the minimum charge in payment-asset base units.
+    """
+    fixed = gross_up_for_fee(
+        fixed_share_in_asset_units(params), params.marketplace_fee_bp
+    )
+    floor = params.tools_to_pricing.get(tool, 0) if tool is not None else 0
+    return max(MINIMUM_CHARGE_BASE_UNITS, int(floor), fixed)
+
+
+def minimum_cap(params: PricingParams, tool: Optional[str]) -> int:
+    """Return the least an off-chain request for ``tool`` must sign.
+
+    The signed cap bounds what the run can be charged, so it has to cover the
+    tool's ``tools_to_minimum_cap`` entry as well as the minimum charge. A
+    tool without an entry is held to the minimum charge alone.
+
+    :param params: the skill params.
+    :param tool: the requested tool, or None when unknown.
+    :return: the minimum signed cap in payment-asset base units.
+    """
+    listed = params.tools_to_minimum_cap.get(tool, 0) if tool is not None else 0
+    return max(minimum_charge(params, tool), int(listed))
+
+
+def accepted_minimum_cap(
+    params: PricingParams,
+    tool: Optional[str],
+    mech_delivery_rate: Optional[int],
+    priced: bool,
+) -> int:
+    """Return the least an off-chain request for ``tool`` is accepted at.
+
+    With cap-and-actual pricing on, a tool with no ``tools_to_minimum_cap``
+    entry keeps the mech's delivery rate as the least a request must sign.
+
+    :param params: the skill params.
+    :param tool: the requested tool, or None when unknown.
+    :param mech_delivery_rate: the marketplace mech's configured delivery
+        rate, or None when none is configured.
+    :param priced: whether cap-and-actual pricing is on.
+    :return: the minimum accepted cap in payment-asset base units.
+    """
+    minimum = minimum_cap(params, tool)
+    if (
+        priced
+        and mech_delivery_rate is not None
+        and tool not in params.tools_to_minimum_cap
+    ):
+        minimum = max(minimum, int(mech_delivery_rate))
+    return minimum
+
+
+def is_partial_floor_map(
+    tools_to_pricing: Dict[str, int], served_tools: Iterable[str]
+) -> bool:
+    """Whether ``tools_to_pricing`` lists some of the served tools but not all.
+
+    :param tools_to_pricing: the per-tool floors.
+    :param served_tools: the tools the mech serves.
+    :return: True when the map is neither empty nor complete.
+    """
+    return bool(tools_to_pricing) and set(tools_to_pricing) != set(served_tools)
+
+
 class Params(Model):
     """A model to represent params for multiple abci apps."""
 
@@ -126,6 +266,9 @@ class Params(Model):
         self.req_to_callback: Dict[str, Callable] = {}
         self.req_to_error_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
+        # IPFS requests sent outside the task slot; their replies leave
+        # ``in_flight_req`` and ``is_cold_start`` to the slot's own request.
+        self.background_ipfs_nonces: Set[str] = set()
         self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure(
             "mech_to_max_delivery_rate", kwargs, Dict[str, int]
         )
@@ -264,10 +407,78 @@ class Params(Model):
             "preimage_max_list_attempts", 5
         )
         self.tools_to_pricing: Dict[str, int] = kwargs.pop("tools_to_pricing", {})
+        unknown_priced = sorted(
+            set(self.tools_to_pricing) - set(self.tools_to_package_hash)
+        )
+        enforce(
+            not unknown_priced,
+            f"Unknown tools in tools_to_pricing: {', '.join(unknown_priced)}",
+        )
         if self.tools_to_pricing:
-            self._ensure_same_keys(
-                kwargs, self.tools_to_package_hash, self.tools_to_pricing
+            enforce(
+                min(self.tools_to_pricing.values()) >= 0,
+                "tools_to_pricing values must be >= 0",
             )
+        # The least an off-chain request must sign per tool. A tool may be
+        # left out; every listed tool must be one the mech serves.
+        self.tools_to_minimum_cap: Dict[str, int] = (
+            kwargs.pop("tools_to_minimum_cap", None) or {}
+        )
+        unknown = sorted(
+            set(self.tools_to_minimum_cap) - set(self.tools_to_package_hash)
+        )
+        enforce(
+            not unknown,
+            f"Unknown tools in tools_to_minimum_cap: {', '.join(unknown)}",
+        )
+        enforce(
+            all(
+                isinstance(cap, int) and not isinstance(cap, bool) and cap >= 0
+                for cap in self.tools_to_minimum_cap.values()
+            ),
+            "tools_to_minimum_cap values must be whole numbers >= 0",
+        )
+        # Floor on how far away an explicit-nonce request's signed settlement
+        # deadline must be at acceptance: the mech executes, pools and settles
+        # through the Safe before then, and settlement past the deadline
+        # reverts unpaid.
+        self.explicit_nonce_min_deadline_seconds: int = int(
+            kwargs.pop("explicit_nonce_min_deadline_seconds", 600)
+        )
+        # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
+        # scale by payment_token_decimals; the payment asset is assumed worth 1 USD.
+        self.payment_token_decimals: int = self._ensure(
+            "payment_token_decimals", kwargs, int
+        )
+        enforce(
+            self.payment_token_decimals >= USD_DECIMALS,
+            f"payment_token_decimals must be >= {USD_DECIMALS}",
+        )
+        # Bound on the UTF-8 byte length of a request's decoded ``prompt``. An
+        # off-chain request over it is refused at accept, uncharged; an
+        # on-chain one is not executed. Off-chain metadata is also bounded as
+        # a whole: the JSON-encoded ``ipfs_data`` (prompt plus wrapper, after
+        # escaping) must fit one block, so a value near the ceiling below can
+        # only be met by on-chain requests.
+        raw_max_prompt = kwargs.pop("max_prompt_bytes", None)
+        self.max_prompt_bytes: int = (
+            DEFAULT_MAX_PROMPT_BYTES if raw_max_prompt is None else raw_max_prompt
+        )
+        enforce(
+            isinstance(self.max_prompt_bytes, int)
+            and not isinstance(self.max_prompt_bytes, bool)
+            and 0 < self.max_prompt_bytes < SINGLE_BLOCK_BYTES,
+            f"max_prompt_bytes must be an integer in (0, {SINGLE_BLOCK_BYTES})",
+        )
+        raw_fixed = kwargs.pop("fixed_cost_per_request", None)
+        self.fixed_cost_per_request: int = 0 if raw_fixed is None else int(raw_fixed)
+        enforce(self.fixed_cost_per_request >= 0, "fixed_cost_per_request must be >= 0")
+        raw_fee = kwargs.pop("marketplace_fee_bp", None)
+        self.marketplace_fee_bp: int = 1500 if raw_fee is None else int(raw_fee)
+        enforce(
+            0 <= self.marketplace_fee_bp < BASIS_POINTS,
+            f"marketplace_fee_bp must be in [0, {BASIS_POINTS})",
+        )
 
         super().__init__(*args, **kwargs)
 
@@ -289,29 +500,3 @@ class Params(Model):
                 f"{key!r} must be a {type_}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
             )
         return value
-
-    @classmethod
-    def _ensure_same_keys(
-        cls, kwargs: Dict, hash_dict: Dict, pricing_dict: Dict
-    ) -> None:
-        """Ensure that the same keys are available inside two dicts"""
-        enforce("skill_context" in kwargs, "Only use on models!")
-        hash_keys = set(hash_dict)
-        pricing_keys = set(pricing_dict)
-        extra_keys_in_hash_dict = sorted(hash_keys - pricing_keys)
-        extra_keys_in_pricing_dict = sorted(pricing_keys - hash_keys)
-
-        if extra_keys_in_hash_dict or extra_keys_in_pricing_dict:
-            errors = []
-            if extra_keys_in_hash_dict:
-                errors.append(
-                    f"Extra keys in tools_to_packages_hash dictionary: {', '.join(extra_keys_in_hash_dict)}"
-                )
-            if extra_keys_in_pricing_dict:
-                errors.append(
-                    f"Extra keys in tools_to_pricing dictionary: {', '.join(extra_keys_in_pricing_dict)}"
-                )
-            enforce(
-                False,
-                "; ".join(errors),
-            )

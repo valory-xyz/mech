@@ -43,18 +43,6 @@ from aea_ledger_ethereum import EthereumApi
 from requests.exceptions import RequestException, Timeout
 from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3Exception
 
-# Prefix web3 uses on ``BadFunctionCallOutput`` when the decode failure
-# comes from calling into an address that has no code (i.e. the sender
-# is a plain EOA rather than a contract with an ``isValidSignature``
-# view). See ``web3.contract.utils.call_contract_function``'s
-# ``is_missing_code_error`` branch — it substitutes this message when
-# both the return data and the contract's code are empty. The other
-# ``BadFunctionCallOutput`` shape ("Could not decode contract function
-# call to ... with return data: ...") fires when the target contract
-# has code but the ``eth_call`` response cannot be decoded, which is
-# what a pruned or lagging node returns.
-_MISSING_CODE_MESSAGE_PREFIX = "Could not transact with/call contract function"
-
 # bytes4 of ``keccak256("isValidSignature(bytes32,bytes)")``. A contract
 # sender must return exactly this value from its ``isValidSignature`` view
 # for the presented signature to be accepted per EIP-1271.
@@ -67,18 +55,17 @@ class Eip1271Verdict(str, Enum):
     * ``VALID`` — the contract returned the EIP-1271 magic value; the
       presented signature verifies. Accept.
     * ``DECLINED`` — the contract returned a different bytes4 value,
-      reverted with :class:`ContractLogicError`, or the target address
-      has no code (``BadFunctionCallOutput`` with the missing-code
-      message shape). Semantically "the signature does not verify".
+      reverted with :class:`ContractLogicError`, returned data that does
+      not decode as ``bytes4`` (``BadFunctionCallOutput``, e.g. empty data
+      from code without an ``isValidSignature`` function), or the sender
+      has no code. Semantically "the signature does not verify", and
+      final: settlement makes the same call and cannot decode it either.
       The caller should reject with 401.
     * ``CALL_FAILED`` — infra-side failure: ``Web3RPCError``,
       ``BadResponseFormat``, ``Web3ValidationError``, ``RequestException``,
-      ``BadFunctionCallOutput`` with the decode-failure shape (empty
-      or malformed ``eth_call`` return from a pruned or lagging node
-      against a target that DOES have code), ``ValueError``, or the
-      wall-clock deadline expired. The caller should reject with
-      503; the sender's credentials are not at fault, an RPC or
-      transport error is.
+      ``ValueError``, or the wall-clock deadline expired. The caller
+      should reject with 503; the sender's credentials are not at fault,
+      an RPC or transport error is.
 
     A single ``bool`` return flattened all three of the ``CALL_FAILED``
     reasons into the same outcome as a genuine ``DECLINED``, so a
@@ -133,6 +120,42 @@ _GET_REQUEST_ID_ABI: Dict[str, Any] = {
     "stateMutability": "view",
     "type": "function",
 }
+# Explicit-nonce view: the signed cap, the requester-chosen nonce and the
+# settlement deadline, hashed as EIP-712 typed data under the explicit-nonce
+# domain (``getDomainSeparatorWithNonce``).
+_GET_REQUEST_ID_WITH_NONCE_ABI: Dict[str, Any] = {
+    "inputs": [
+        {"internalType": "address", "name": "mech", "type": "address"},
+        {"internalType": "address", "name": "requester", "type": "address"},
+        {"internalType": "bytes", "name": "data", "type": "bytes"},
+        {"internalType": "uint256", "name": "maxDeliveryRate", "type": "uint256"},
+        {"internalType": "bytes32", "name": "paymentType", "type": "bytes32"},
+        {"internalType": "uint256", "name": "nonce", "type": "uint256"},
+        {"internalType": "uint256", "name": "deadline", "type": "uint256"},
+    ],
+    "name": "getRequestIdWithNonce",
+    "outputs": [{"internalType": "bytes32", "name": "requestId", "type": "bytes32"}],
+    "stateMutability": "view",
+    "type": "function",
+}
+_EXPLICIT_DOMAIN_SEPARATOR_ABI: Dict[str, Any] = {
+    **_DOMAIN_SEPARATOR_ABI,
+    "name": "getDomainSeparatorWithNonce",
+}
+
+
+def get_account_code(ledger_api: EthereumApi, address: str) -> bytes:
+    """Return the code stored at ``address`` (empty for an account without code).
+
+    An EOA with an EIP-7702 delegation returns its ``0xef0100`` designator.
+
+    :param ledger_api: the ledger API object.
+    :param address: the account to read.
+    :return: the code bytes.
+    """
+    return bytes(
+        ledger_api.api.eth.get_code(ledger_api.api.to_checksum_address(address))
+    )
 
 
 def check_eip1271_signature(
@@ -141,6 +164,7 @@ def check_eip1271_signature(
     message_hash: bytes,
     signature: bytes,
     gas: int,
+    has_code: bool,
     logger: Optional[logging.Logger] = None,
 ) -> Eip1271Verdict:
     """Verify the contract's ``isValidSignature`` view and return a tri-state.
@@ -170,6 +194,10 @@ def check_eip1271_signature(
     :param gas: the ``gas`` cap applied to the ``eth_call``. Bounds the
         amount of work a sender's ``isValidSignature`` view can force
         the RPC node to do per request.
+    :param has_code: whether the caller's code read found code at
+        ``contract_address``. Without code there is nothing to call and the
+        verdict is ``DECLINED``; with code, return data that does not decode
+        is the contract's answer, not a node fault.
     :param logger: optional logger used to record which of the three
         branches fired (including the exception type on ``DECLINED`` /
         ``CALL_FAILED``). Kept optional so callers with no logger in
@@ -177,14 +205,20 @@ def check_eip1271_signature(
         path so operator triage on 503s has the exception type
         visible.
     :return: an :class:`Eip1271Verdict`. ``VALID`` on magic-value
-        match; ``DECLINED`` on a non-magic return value or a revert;
-        ``CALL_FAILED`` on an infra-side failure (RPC error, transport
-        error, ABI-decode failure, empty/undecodable ``eth_call``
-        return from a pruned or lagging node).
+        match; ``DECLINED`` on a non-magic or undecodable return value, a
+        revert, or a sender without code; ``CALL_FAILED`` on an infra-side
+        failure (RPC error, transport error).
     :raises TimeoutError: when the underlying HTTP read times out (the
         provider-level ``timeout`` on the ``EthereumApi`` fires). The
         caller distinguishes this from a signature rejection.
     """
+    if not has_code:
+        if logger is not None:
+            logger.debug(
+                "check_eip1271_signature DECLINED for %s: no code at target",
+                contract_address,
+            )
+        return Eip1271Verdict.DECLINED
     contract_instance = ledger_api.api.eth.contract(
         address=ledger_api.api.to_checksum_address(contract_address),
         abi=[_IS_VALID_SIGNATURE_ABI],
@@ -214,32 +248,18 @@ def check_eip1271_signature(
             )
         return Eip1271Verdict.DECLINED
     except BadFunctionCallOutput as exc:
-        # Two distinct producers, disambiguated by the message shape
-        # web3 sets on the raise: the ``eth_call`` target has no code
-        # (the sender is a plain EOA whose ``ecrecover`` did not match
-        # the request id) versus the target has code but the return
-        # data does not decode (a pruned or lagging node responded
-        # with empty or malformed data for a genuine contract call).
-        # The first is a credential-side outcome and belongs in 401;
-        # the second is infra-side and belongs in 503.
-        message = str(exc)
-        if message.startswith(_MISSING_CODE_MESSAGE_PREFIX):
-            if logger is not None:
-                logger.debug(
-                    "check_eip1271_signature DECLINED for %s: no code at "
-                    "target (%s)",
-                    contract_address,
-                    exc,
-                )
-            return Eip1271Verdict.DECLINED
+        # The target has code and the call completed, but its return data
+        # is not a ``bytes4`` (for example empty data from code that has no
+        # ``isValidSignature`` function). Settlement decodes the same return
+        # and reverts, so this is a final "no", not an RPC fault.
         if logger is not None:
-            logger.warning(
-                "check_eip1271_signature CALL_FAILED for %s: undecodable "
+            logger.info(
+                "check_eip1271_signature DECLINED for %s: undecodable "
                 "return data (%s)",
                 contract_address,
                 exc,
             )
-        return Eip1271Verdict.CALL_FAILED
+        return Eip1271Verdict.DECLINED
     except (Web3Exception, RequestException, ValueError) as exc:
         # Infra-side failure classes at the JSON-RPC / transport
         # boundary: ``Web3RPCError`` on a JSON-RPC error,
@@ -251,8 +271,8 @@ def check_eip1271_signature(
         # failures the web3 layer surfaces without a
         # ``BadFunctionCallOutput`` wrap. All belong in the
         # retry-later bucket — the sender's credentials are not at
-        # fault. ``BadFunctionCallOutput`` is handled above so the
-        # codeless-target shape can route to ``DECLINED``.
+        # fault. ``BadFunctionCallOutput`` (a ``Web3Exception``) is
+        # handled above and routes to ``DECLINED``.
         if logger is not None:
             logger.warning(
                 "check_eip1271_signature CALL_FAILED for %s: %r",
@@ -328,23 +348,99 @@ def get_marketplace_request_id_view(
     :param delivery_rate: the delivery rate uint256.
     :param payment_type: the mech's ``paymentType`` bytes32.
     :param nonce: the requester nonce uint256.
-    :return: the 32-byte request id returned by the view.
-    :raises ValueError: only from the explicit 32-byte length guard.
-        Web3 raises ``BadFunctionCallOutput`` when ``eth_call`` returns
-        undecodable output, and ``ContractLogicError`` on a revert;
-        both propagate to the caller.
+    :return: the 32-byte request id returned by the view. Web3 raises
+        ``BadFunctionCallOutput`` when ``eth_call`` returns undecodable
+        output and ``ContractLogicError`` on a revert; both propagate.
+    """
+    return _call_request_id_view(
+        ledger_api,
+        marketplace_address,
+        _GET_REQUEST_ID_ABI,
+        mech,
+        requester,
+        data,
+        delivery_rate,
+        payment_type,
+        nonce,
+    )
+
+
+def get_marketplace_explicit_domain_separator(
+    ledger_api: EthereumApi, marketplace_address: str
+) -> bytes:
+    """Return the explicit-nonce signing domain, ``getDomainSeparatorWithNonce()``.
+
+    A separate EIP-712 domain from :func:`get_marketplace_domain_separator`;
+    the two are never interchangeable.
+
+    :param ledger_api: the ledger API object.
+    :param marketplace_address: the mech marketplace contract address.
+    :return: the 32-byte domain separator.
+    :raises ValueError: only from the explicit 32-byte length guard; Web3's
+        ``BadFunctionCallOutput`` and ``ContractLogicError`` propagate.
     """
     contract_instance = ledger_api.api.eth.contract(
         address=ledger_api.api.to_checksum_address(marketplace_address),
-        abi=[_GET_REQUEST_ID_ABI],
+        abi=[_EXPLICIT_DOMAIN_SEPARATOR_ABI],
     )
-    request_id = contract_instance.functions.getRequestId(
+    result = bytes(contract_instance.functions.getDomainSeparatorWithNonce().call())
+    if len(result) != 32:
+        raise ValueError(f"domain_separator length is {len(result)}, expected 32")
+    return result
+
+
+def get_marketplace_request_id_with_nonce_view(  # pylint: disable=too-many-arguments
+    ledger_api: EthereumApi,
+    marketplace_address: str,
+    mech: str,
+    requester: str,
+    data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+    deadline: int,
+) -> bytes:
+    """Call the marketplace ``getRequestIdWithNonce`` view and return its bytes32."""
+    return _call_request_id_view(
+        ledger_api,
+        marketplace_address,
+        _GET_REQUEST_ID_WITH_NONCE_ABI,
+        mech,
+        requester,
+        data,
+        delivery_rate,
+        payment_type,
+        nonce,
+        deadline,
+    )
+
+
+def _call_request_id_view(
+    ledger_api: EthereumApi,
+    marketplace_address: str,
+    abi: Dict[str, Any],
+    mech: str,
+    requester: str,
+    data: bytes,
+    delivery_rate: int,
+    payment_type: bytes,
+    nonce: int,
+    *extra_args: int,
+) -> bytes:
+    """Call one of the marketplace request-id views described by ``abi``."""
+    contract_instance = ledger_api.api.eth.contract(
+        address=ledger_api.api.to_checksum_address(marketplace_address),
+        abi=[abi],
+    )
+    view = getattr(contract_instance.functions, abi["name"])
+    request_id = view(
         ledger_api.api.to_checksum_address(mech),
         ledger_api.api.to_checksum_address(requester),
         data,
         delivery_rate,
         payment_type,
         nonce,
+        *extra_args,
     ).call()
     result = bytes(request_id)
     if len(result) != 32:

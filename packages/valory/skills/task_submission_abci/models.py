@@ -42,6 +42,7 @@ from packages.valory.skills.abstract_round_abci.models import (
 from packages.valory.skills.abstract_round_abci.utils import check_type
 from packages.valory.skills.task_execution.models import MechConfig
 from packages.valory.skills.task_execution.utils.preimage import (
+    CAP_AND_ACTUAL_ENABLED,
     PREDICT_API_WRITE_CONFIGURED,
 )
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
@@ -53,11 +54,14 @@ class SharedState(BaseSharedState):
     abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
 
     def setup(self) -> None:
-        """Set up the shared state and publish whether the predict-api write is on."""
+        """Set up the shared state and publish the flags task_execution reads."""
         super().setup()
         params = cast(Params, self.context.params)
         self.context.shared_state[PREDICT_API_WRITE_CONFIGURED] = bool(
             params.use_offchain and params.predict_api_events_url
+        )
+        self.context.shared_state[CAP_AND_ACTUAL_ENABLED] = (
+            params.cap_and_actual_enabled
         )
 
     # Prometheus metrics
@@ -97,6 +101,66 @@ class Params(BaseParams):
         self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
         self.task_mutable_params = MutableParams()
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
+        # Gas budgets for one settlement tx, all within ``manual_gas_limit``.
+        # Polygon fork, explicit-nonce off-chain items through the Safe
+        # multisend (gasUsed): 2 items 470,983, 4 items 736,326, 5 items
+        # 868,991, 50 items 6,851,735, so about 133k per item plus about
+        # 205k per tx (Safe, multisend and the usage checkpoint). 6 items ran
+        # out of gas at a 1M limit. A delivery wrapped in ``mech.exec``
+        # measured 6k to 18k below the mech's direct wrapper, so it needs no
+        # extra budget. The defaults keep a margin over these figures.
+        self.settlement_base_gas: int = int(kwargs.pop("settlement_base_gas", 300_000))
+        self.settlement_gas_per_request: int = int(
+            kwargs.pop("settlement_gas_per_request", 150_000)
+        )
+        # Each off-chain requester group past the first is its own deliver
+        # call with its own exec, karma, tracker and counter writes; the base
+        # covers the first. Gnosis fork, one-request groups from first-time
+        # requesters through the Safe multisend: 4 groups used 1,086,044 and
+        # ran out of gas at a 1M limit. Less the 4-item one-requester tx above
+        # that is about 117k per extra group, so the default sits at a
+        # first-time requester's cost with the per-request budget's margin.
+        self.settlement_gas_per_requester_group: int = int(
+            kwargs.pop("settlement_gas_per_requester_group", 110_000)
+        )
+        # Budgets for the other txs that can share the multisend, from
+        # eth_estimateGas on the same fork (each includes the 21k a call inside
+        # the multisend does not pay): processPaymentByMultisig 111,105; a
+        # profit transfer through ``mech.exec`` 62,850 (token) or 66,037
+        # (native, fresh receiver); changeHash 28,566. A legacy response tx is
+        # supplied by the tool, so its budget is a cap, not a measurement.
+        self.settlement_process_payment_gas: int = int(
+            kwargs.pop("settlement_process_payment_gas", 120_000)
+        )
+        self.settlement_profit_transfer_gas: int = int(
+            kwargs.pop("settlement_profit_transfer_gas", 70_000)
+        )
+        self.settlement_metadata_hash_gas: int = int(
+            kwargs.pop("settlement_metadata_hash_gas", 40_000)
+        )
+        self.settlement_legacy_response_gas: int = int(
+            kwargs.pop("settlement_legacy_response_gas", 150_000)
+        )
+        if self.settlement_gas_per_request <= 0 or (
+            self.manual_gas_limit
+            < self.settlement_base_gas + self.settlement_gas_per_request
+        ):
+            raise ValueError(
+                f"manual_gas_limit {self.manual_gas_limit} must cover "
+                f"settlement_base_gas {self.settlement_base_gas} plus one "
+                f"request at settlement_gas_per_request "
+                f"{self.settlement_gas_per_request} (which must be positive)."
+            )
+        for name in (
+            "settlement_base_gas",
+            "settlement_gas_per_requester_group",
+            "settlement_process_payment_gas",
+            "settlement_profit_transfer_gas",
+            "settlement_metadata_hash_gas",
+            "settlement_legacy_response_gas",
+        ):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must not be negative.")
         # We are using 10_000 for 100% so 1000 == 0.1 for the service_owner_share
         self.service_owner_share = self._ensure("service_owner_share", kwargs, int)
         self.profit_split_balance = self._ensure("profit_split_balance", kwargs, int)
@@ -155,6 +219,18 @@ class Params(BaseParams):
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
         self.use_offchain: bool = bool(kwargs.pop("use_offchain", False))
+        # Off-chain settlement via the cap-and-actual overload; off until the
+        # marketplace contracts that carry it are live.
+        self.cap_and_actual_enabled: bool = bool(
+            kwargs.pop("cap_and_actual_enabled", False)
+        )
+        # An explicit-nonce task closer than this to its signed deadline when a
+        # batch is built is dropped rather than risked: the batch still goes
+        # through payload consensus, signature collection and submission, and
+        # one expired item reverts the whole call.
+        self.explicit_deadline_settlement_margin_seconds: int = int(
+            kwargs.pop("explicit_deadline_settlement_margin_seconds", 180)
+        )
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No

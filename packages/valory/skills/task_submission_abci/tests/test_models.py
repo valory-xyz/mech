@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 """Tests for task_submission_abci.models."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -189,6 +189,69 @@ class TestParamsInit:
         assert isinstance(p.task_mutable_params, MutableParams)
         assert p.task_mutable_params.latest_metadata_hash is None
 
+    @pytest.mark.parametrize(
+        "overrides, error",
+        [
+            ({}, None),
+            ({"manual_gas_limit": 450_000}, None),
+            ({"manual_gas_limit": 449_999}, "must cover settlement_base_gas"),
+            ({"manual_gas_limit": 0}, "must cover settlement_base_gas"),
+            ({"settlement_gas_per_request": 0}, "must cover settlement_base_gas"),
+            ({"settlement_gas_per_request": -1}, "must cover settlement_base_gas"),
+            ({"settlement_base_gas": 400_000}, "must cover settlement_base_gas"),
+            ({"manual_gas_limit": 8_000_000, "settlement_base_gas": 0}, None),
+            ({"settlement_base_gas": -1}, "settlement_base_gas must not be negative"),
+            ({"settlement_gas_per_requester_group": 0}, None),
+            (
+                {"settlement_gas_per_requester_group": -1},
+                "settlement_gas_per_requester_group must not be negative",
+            ),
+            ({"settlement_metadata_hash_gas": 0}, None),
+            (
+                {"settlement_metadata_hash_gas": -1},
+                "settlement_metadata_hash_gas must not be negative",
+            ),
+            (
+                {"settlement_process_payment_gas": -1},
+                "settlement_process_payment_gas must not be negative",
+            ),
+            (
+                {"settlement_profit_transfer_gas": -1},
+                "settlement_profit_transfer_gas must not be negative",
+            ),
+            (
+                {"settlement_legacy_response_gas": -1},
+                "settlement_legacy_response_gas must not be negative",
+            ),
+        ],
+    )
+    def test_gas_config_is_validated(
+        self, overrides: Dict[str, Any], error: Optional[str]
+    ) -> None:
+        """A gas config that cannot carry one request, or has a negative budget, is refused."""
+        kwargs = self._make_kwargs(**overrides)
+        with patch.object(BaseParams, "__init__", return_value=None):
+            p = Params.__new__(Params)
+            if error is None:
+                Params.__init__(p, **kwargs)
+                assert p.manual_gas_limit == kwargs["manual_gas_limit"]
+            else:
+                with pytest.raises(ValueError, match=error):
+                    Params.__init__(p, **kwargs)
+
+    def test_gas_budgets_default_to_the_shipped_values(self) -> None:
+        """Budgets left out of the config take the documented defaults."""
+        with patch.object(BaseParams, "__init__", return_value=None):
+            p = Params.__new__(Params)
+            Params.__init__(p, **self._make_kwargs())
+        assert (
+            p.settlement_gas_per_requester_group,
+            p.settlement_process_payment_gas,
+            p.settlement_profit_transfer_gas,
+            p.settlement_metadata_hash_gas,
+            p.settlement_legacy_response_gas,
+        ) == (110_000, 120_000, 70_000, 40_000, 150_000)
+
     def test_calls_super_init(self) -> None:
         """Test Params.__init__ calls super().__init__."""
         kwargs = self._make_kwargs()
@@ -219,7 +282,9 @@ def test_shared_state_setup_publishes_whether_the_predict_api_write_is_configure
     for use_offchain, url, expected in cases:
         ctx = SimpleNamespace(
             params=SimpleNamespace(
-                use_offchain=use_offchain, predict_api_events_url=url
+                use_offchain=use_offchain,
+                predict_api_events_url=url,
+                cap_and_actual_enabled=False,
             ),
             shared_state={},
             is_abstract_component=False,
@@ -230,3 +295,29 @@ def test_shared_state_setup_publishes_whether_the_predict_api_write_is_configure
             use_offchain,
             url,
         )
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_shared_state_setup_publishes_the_cap_and_actual_flag(
+    monkeypatch: Any, enabled: bool
+) -> None:
+    """task_execution reads the flag from shared state, so setup must publish it as-is."""
+    from types import SimpleNamespace
+
+    from packages.valory.skills.task_execution.utils.preimage import (
+        CAP_AND_ACTUAL_ENABLED,
+    )
+    from packages.valory.skills.task_submission_abci import models as models_mod
+
+    monkeypatch.setattr(models_mod.BaseSharedState, "setup", lambda self: None)
+    ctx = SimpleNamespace(
+        params=SimpleNamespace(
+            use_offchain=False,
+            predict_api_events_url="",
+            cap_and_actual_enabled=enabled,
+        ),
+        shared_state={},
+        is_abstract_component=False,
+    )
+    models_mod.SharedState(name="state", skill_context=ctx).setup()
+    assert ctx.shared_state[CAP_AND_ACTUAL_ENABLED] is enabled

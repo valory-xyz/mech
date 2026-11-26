@@ -309,6 +309,51 @@ class MechOperation(Enum):
     DELEGATE_CALL = 1
 
 
+# The marketplace's settlement overloads, called through the mech's ``exec``
+# so that a mech deployed without these wrappers can still use them. The
+# marketplace takes ``msg.sender`` as the mech, so the delivery is recorded
+# against the mech that runs ``exec``.
+MARKETPLACE_DELIVER_WITH_CAP_SIGNATURE = (
+    "deliverMarketplaceWithSignatures("
+    "address,(bytes,bytes,bytes)[],uint256[],uint256[],bytes)"
+)
+MARKETPLACE_DELIVER_WITH_NONCES_SIGNATURE = (
+    "deliverMarketplaceWithSignatures("
+    "address,(bytes,bytes,bytes)[],uint256[],uint256[],uint256[],uint256[],bytes)"
+)
+
+
+def _marketplace_deliver_abi(uint_array_names: List[str]) -> Dict[str, Any]:
+    """ABI entry of a marketplace ``deliverMarketplaceWithSignatures`` overload."""
+    inputs: List[Dict[str, Any]] = [
+        {"name": "requester", "type": "address"},
+        {
+            "name": "deliverWithSignatures",
+            "type": "tuple[]",
+            "components": [
+                {"name": "requestData", "type": "bytes"},
+                {"name": "signature", "type": "bytes"},
+                {"name": "deliveryData", "type": "bytes"},
+            ],
+        },
+    ]
+    inputs.extend({"name": name, "type": "uint256[]"} for name in uint_array_names)
+    inputs.append({"name": "paymentData", "type": "bytes"})
+    return {
+        "name": "deliverMarketplaceWithSignatures",
+        "type": "function",
+        "stateMutability": "nonpayable",
+        "inputs": inputs,
+        "outputs": [],
+    }
+
+
+MARKETPLACE_SETTLEMENT_ABI = [
+    _marketplace_deliver_abi(["deliveryRates", "maxRates"]),
+    _marketplace_deliver_abi(["deliveryRates", "maxRates", "nonces", "deadlines"]),
+]
+
+
 def pad_address_for_topic(address: str) -> bytes:
     """Left-pad an Ethereum address to 32 bytes for use in a topic."""
     return bytes.fromhex(address[Ox_CHARS:].zfill(TOPIC_CHARS))
@@ -686,6 +731,112 @@ class OlasMechContract(Contract):
         return {"data": bytes.fromhex(data[2:]), **simulation}  # type: ignore
 
     @classmethod
+    def _marketplace_deliver_through_exec(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        marketplace_address: str,
+        sender: str,
+        overload_signature: str,
+        args: List[Any],
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
+    ) -> JSONLike:
+        """Encode a marketplace settlement overload wrapped in the mech's ``exec``.
+
+        :param ledger_api: the ledger API.
+        :param contract_address: the mech that runs ``exec``.
+        :param marketplace_address: the marketplace the mech is registered on.
+        :param sender: the mech operator (service Safe) the call is simulated from.
+        :param overload_signature: the marketplace overload to call.
+        :param args: the overload's arguments.
+        :param deadline_seconds: wall-clock bound for the deliver simulation.
+        :return: the ``exec`` calldata and the verdict built by ``_simulation_result``.
+        """
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        marketplace = contract_instance.w3.eth.contract(abi=MARKETPLACE_SETTLEMENT_ABI)
+        inner = marketplace.encode_abi(
+            abi_element_identifier=overload_signature, args=args
+        )
+        exec_data = cls.get_exec_tx_data(
+            ledger_api,
+            contract_address,
+            to=contract_instance.w3.to_checksum_address(marketplace_address),
+            value=0,
+            data=bytes.fromhex(inner[2:]),
+            operation=MechOperation.CALL.value,
+            tx_gas=0,
+        )["data"]
+        data = cast(bytes, exec_data)
+        simulation = simulate_with_deadline(
+            cast(EthereumApi, ledger_api),
+            contract_address,
+            sender,
+            "0x" + data.hex(),
+            deadline_seconds,
+        )
+        return {"data": data, **simulation}  # type: ignore
+
+    @classmethod
+    def get_offchain_deliver_data_with_cap(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        marketplace_address: str,
+        sender: str,
+        requester: str,
+        deliverWithSignatures: List[Dict[str, List]],
+        deliveryRates: List[int],
+        maxRates: List[int],
+        paymentData: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
+    ) -> JSONLike:
+        """Get ``exec`` calldata for the marketplace's 5-arg cap-and-actual deliver."""
+        return cls._marketplace_deliver_through_exec(
+            ledger_api,
+            contract_address,
+            marketplace_address,
+            sender,
+            MARKETPLACE_DELIVER_WITH_CAP_SIGNATURE,
+            [requester, deliverWithSignatures, deliveryRates, maxRates, paymentData],
+            deadline_seconds,
+        )
+
+    @classmethod
+    def get_offchain_deliver_data_with_nonces(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        marketplace_address: str,
+        sender: str,
+        requester: str,
+        deliverWithSignatures: List[Dict[str, List]],
+        deliveryRates: List[int],
+        maxRates: List[int],
+        nonces: List[int],
+        deadlines: List[int],
+        paymentData: str,
+        deadline_seconds: float = SIMULATION_RPC_DEADLINE_SECONDS,
+    ) -> JSONLike:
+        """Get ``exec`` calldata for the marketplace's 7-arg explicit-nonce deliver."""
+        return cls._marketplace_deliver_through_exec(
+            ledger_api,
+            contract_address,
+            marketplace_address,
+            sender,
+            MARKETPLACE_DELIVER_WITH_NONCES_SIGNATURE,
+            [
+                requester,
+                deliverWithSignatures,
+                deliveryRates,
+                maxRates,
+                nonces,
+                deadlines,
+                paymentData,
+            ],
+            deadline_seconds,
+        )
+
+    @classmethod
     def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
         """Get tx data"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
@@ -702,6 +853,17 @@ class OlasMechContract(Contract):
         payment_type_bytes = contract_instance.functions.paymentType().call()
 
         return {"mech_type": payment_type_bytes}
+
+    @classmethod
+    def get_mech_marketplace(
+        cls, ledger_api: LedgerApi, contract_address: str
+    ) -> JSONLike:
+        """Get the marketplace the mech is bound to (checksummed)."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        marketplace = contract_instance.functions.mechMarketplace().call()
+        return {
+            "mech_marketplace": contract_instance.w3.to_checksum_address(marketplace)
+        }
 
     @classmethod
     def get_mech_types(

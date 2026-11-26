@@ -15,11 +15,12 @@ fingerprint:
   models.py: bafybeidz3uijrjd5336t5yfhuneukcky44g2knyc5xjp3xs66nbcakijpy
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
   tests/conftest.py: bafybeiaqouyzclh4wvnf36jgcmgzm7k4snfghnm3v4yowb4pomyn6qvezu
+  tests/test_agent_config.py: bafybeiar2zenxmaz2yldbfaynyc4veuopj44hf6xseaag4k3mn3vghil7y
   tests/test_behaviours.py: bafybeibjw3tusfxxmr3byy6sdmu7gefotya4xvhd7ia43ll7fgyqggx7ye
   tests/test_composition.py: bafybeihrzdjr7w4dght6bhstcni4zswp4rzgzkgx5bpx4lcesh46h6noqm
   tests/test_dialogues.py: bafybeiaicu6h4d3rppxbjhkifwlrfpjmxd6y4sdqnlskdjqijkct2tvhci
   tests/test_handlers.py: bafybeigbbq6itamleikkqsinopod2ionm4qqdhqn7mxdfgh5iik5lrq42a
-  tests/test_models.py: bafybeidkvlcaewm5kdsoe6mho5xwa6wd5osfkbxtw4nyse7xxgox4klmye
+  tests/test_models.py: bafybeigyrliyxvrzsj4rbfsp245nv35yhytssbbpf3rgpzauepfqxzea3i
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
@@ -27,14 +28,14 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiedcsiiv4s3iu4uilbbys3yemzs2vvkblbwtumnrcwqbnalgiv5pi
-- valory/delivery_rate_abci:0.1.0:bafybeib3uiiybgaufm7xyetjutmal4m7megtgdjnfx6nsbzux5j44vw6m4
-- valory/registration_abci:0.1.0:bafybeiczrxjc4dvw35q6ve2sdozqsmamqrlrhaxj5fcvajd3cmgfzx34hm
-- valory/reset_pause_abci:0.1.0:bafybeig2zorapaqx6ubr3e63ujztidafzhstitgqdjocvec77ytr6jggzy
-- valory/task_execution:0.1.0:bafybeiazwbzovm5ge5y27sofszjk2nevfc7aox7nurhmgcyql6inazw5ja
-- valory/task_submission_abci:0.1.0:bafybeidmm2viijj4ga5rq3a73xgjjrtnoe26uqnm3vk3lnuflduy26ghgm
-- valory/termination_abci:0.1.0:bafybeifs63hjdekvstdanmiwyo3qzyn5qegkvmjemm4poago7x6lcly7ni
-- valory/transaction_settlement_abci:0.1.0:bafybeidkkgo6tmpybsmzun3tnxrfzdkjvtvaxgqhx52yw3657tn25ybkri
+- valory/abstract_round_abci:0.1.0:bafybeidvedqepygcbmztrglxlxq2tpbfwnnwjpzenjhx6zrrxbu6nloxe4
+- valory/delivery_rate_abci:0.1.0:bafybeic4wocghv2hraf7nucbgmdby6onqa62qyapfx6q5w5qxwa5luskta
+- valory/registration_abci:0.1.0:bafybeighv2nsflckd2yn5vbi7r2jquv3przolw6ghqkpklbgby3gtmgohm
+- valory/reset_pause_abci:0.1.0:bafybeiabponbevtbzdwppwf2trf6fve7ru2qyrbfxzjo3y5gipo4ylpxiq
+- valory/task_execution:0.1.0:bafybeieh333jz4jjpsw75rupo3ocapgreftp7qdwkwbfum22vevaqesqri
+- valory/task_submission_abci:0.1.0:bafybeihq5har5lakfwig5tkbcuc2ebui66mgctrk2oeuiliur4alfe44fm
+- valory/termination_abci:0.1.0:bafybeifqg3ourob3lyx7j3okqbsb5mi6lgqx2jyygfbgevlggpi2itd5vm
+- valory/transaction_settlement_abci:0.1.0:bafybeiamnm26osevzjawbjx3rabeibnbkptdckadlucz6ef5u4jtgtlzc4
 behaviours:
   main:
     args: {}
@@ -87,12 +88,14 @@ models:
   params:
     args:
       agent_funding_amount: 200000000000000000
+      cap_and_actual_enabled: false
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
       default_chain_id: gnosis
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       erc8004_agent_id: null
+      explicit_deadline_settlement_margin_seconds: 180
       finalize_timeout: 60.0
       gas_params:
         gas_price: null
@@ -153,6 +156,13 @@ models:
       service_id: mech
       service_owner_share: 1000
       service_registry_address: null
+      settlement_base_gas: 300000
+      settlement_gas_per_request: 150000
+      settlement_gas_per_requester_group: 110000
+      settlement_process_payment_gas: 120000
+      settlement_profit_transfer_gas: 70000
+      settlement_metadata_hash_gas: 40000
+      settlement_legacy_response_gas: 150000
       setup:
         all_participants: []
         safe_contract_address: '0x0000000000000000000000000000000000000000'

@@ -34,9 +34,14 @@ from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 from packages.valory.skills.task_execution.behaviours import TaskExecutionBehaviour
+from packages.valory.skills.task_execution.models import (
+    DEFAULT_MAX_PROMPT_BYTES,
+    MINIMUM_CHARGE_BASE_UNITS,
+)
 from packages.valory.skills.task_execution.utils.request_id import (
     to_request_id_bytes32,
 )
+from packages.valory.skills.task_execution.utils.task import ToolError
 
 
 def _dispatch_target(cb: Any) -> Any:
@@ -67,6 +72,22 @@ def cleanup() -> Generator[None, None, None]:
     clear_registry()
 
 
+HAPPY_PATH_SIGNED_RATE = 100
+OTHER_TOOL = "mul"
+
+
+@pytest.mark.parametrize(
+    "floors, expected_floor",
+    [
+        # the tool has a floor at or below the signed rate
+        ({"sum": 0}, 0),
+        ({"sum": HAPPY_PATH_SIGNED_RATE}, HAPPY_PATH_SIGNED_RATE),
+        # no tool has a floor
+        ({}, None),
+        # only another tool has one, above the signed rate: it does not apply
+        ({OTHER_TOOL: HAPPY_PATH_SIGNED_RATE + 1}, None),
+    ],
+)
 def test_happy_path_executes_and_stores(
     behaviour: Any,
     shared_state: Dict[str, Any],
@@ -76,10 +97,13 @@ def test_happy_path_executes_and_stores(
     monkeypatch: Any,
     patch_ipfs_multihash: Callable[[], None],
     disable_polling: Callable[[], None],
+    floors: Dict[str, int],
+    expected_floor: Optional[int],
 ) -> None:
-    """Execute a valid task and store the result."""
+    """Execute a valid task and store the result, with or without a floor for its tool."""
     patch_ipfs_multihash()
     disable_polling()
+    behaviour._tools_to_pricing = dict(floors)
 
     valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
 
@@ -89,19 +113,21 @@ def test_happy_path_executes_and_stores(
         {"params": {"default_model": "gpt-4o-mini"}},
     )
     behaviour._tools_to_package_hash["sum"] = "hashsum"
-    params_stub.tools_to_pricing = {"sum": 0}
+    params_stub.tools_to_pricing = dict(floors)
 
     req_id: int = 42
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
-            "request_delivery_rate": 100,
+            "request_delivery_rate": HAPPY_PATH_SIGNED_RATE,
             "data": b"fake-ipfs-pointer",
             "contract_address": "0xmech",
         }
     )
     params_stub.request_id_to_num_timeouts[req_id] = 0
-    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
+    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][
+        req_id
+    ] = HAPPY_PATH_SIGNED_RATE
 
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
@@ -117,7 +143,7 @@ def test_happy_path_executes_and_stores(
     task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
     get_response = SimpleNamespace(files={"task.json": json.dumps(task_body)})
     store_response = SimpleNamespace(ipfs_hash=valid_cid)
-    responses = iter([get_response, store_response])
+    responses = iter([store_response])
 
     def send_message_stub(
         msg: Any,
@@ -125,7 +151,7 @@ def test_happy_path_executes_and_stores(
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """Stub send_message with sequential GET then STORE responses."""
+        """Stub send_message with the STORE response."""
         callback(next(responses), dlg)
         params_stub.in_flight_req = True
 
@@ -140,6 +166,12 @@ def test_happy_path_executes_and_stores(
 
     params_stub.in_flight_req = False
     behaviour.act()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(get_response, dlg),
+    )
+    params_stub.in_flight_req = False
+    behaviour.act()
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -149,6 +181,7 @@ def test_happy_path_executes_and_stores(
     assert done["tool"] == "sum"
     assert done["mech_address"] == "0xmech"
     assert done["task_result"] == f"mh:{valid_cid}"
+    assert done.get("dynamic_tool_cost") == expected_floor
 
     assert behaviour._executing_task is None
     assert behaviour._async_result is None
@@ -206,7 +239,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     get_response = SimpleNamespace(files={"task.json": json.dumps(task_body)})
     store_response = SimpleNamespace(ipfs_hash=valid_cid)
     send_calls: list = []
-    responses = iter([get_response, store_response])
+    responses = iter([store_response])
 
     def send_message_stub(
         msg: Any,
@@ -214,7 +247,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """Stub send_message with sequential GET then STORE responses."""
+        """Stub send_message with the STORE response."""
         send_calls.append(1)
         callback(next(responses), dlg)
         params_stub.in_flight_req = True
@@ -223,10 +256,16 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
 
     params_stub.in_flight_req = False
     behaviour.act()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(get_response, dlg),
+    )
+    params_stub.in_flight_req = False
+    behaviour.act()
     params_stub.in_flight_req = False
     behaviour.act()
 
-    assert len(send_calls) == 2
+    assert len(send_calls) == 1
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
@@ -314,10 +353,7 @@ def test_broken_process_pool_restart(
         msg: Any, dlg: Any, cb: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
         func = _dispatch_target(cb)
-        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
-            cb(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
-        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
+        if func is beh_mod.TaskExecutionBehaviour._handle_store_response:
             cb(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         else:
             raise AssertionError(f"Unexpected callback: {cb}")
@@ -329,7 +365,17 @@ def test_broken_process_pool_restart(
     # second time schedules successfully and completes the flow.
     params_stub.in_flight_req = False
     behaviour.act()
-
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(
+                files={"task.json": json.dumps({"prompt": "p", "tool": "sum"})}
+            ),
+            dlg,
+        ),
+    )
+    params_stub.in_flight_req = False
+    behaviour.act()
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -388,7 +434,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         msg: Any, dlg: Any, cb: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
         """
-        Stub send_message to produce unknown tool on GET and store afterwards.
+        Stub send_message to answer the STORE call.
 
         :param msg: Message-like object passed by the behaviour.
         :type msg: Any
@@ -400,14 +446,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         :type error_cb: Any
         """
         func = _dispatch_target(cb)
-        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            cb(
-                SimpleNamespace(
-                    files={"task.json": json.dumps({"prompt": "p", "tool": "unknown"})}
-                ),
-                dlg,
-            )
-        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
+        if func is beh_mod.TaskExecutionBehaviour._handle_store_response:
             cb(SimpleNamespace(ipfs_hash="bafyinval"), dlg)
         else:
             raise AssertionError(f"Unexpected callback: {cb}")
@@ -415,6 +454,17 @@ def test_invalid_tool_is_recorded_and_no_execution(
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(
+                files={"task.json": json.dumps({"prompt": "p", "tool": "unknown"})}
+            ),
+            dlg,
+        ),
+    )
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -588,39 +638,70 @@ def _enqueue_task(
 def _make_send_stub(
     behaviour: Any,
     params_stub: Any,
-    get_action: Callable[[Any, Any, Callable], None],
+    get_action: Callable[..., None],
     store_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u",
 ) -> Callable:
-    """Build a send_message stub that dispatches GET vs STORE callbacks.
+    """Build a send_message stub for the STORE call, carrying the GET action.
+
+    The request data download is sent outside ``send_message``;
+    ``_run_act_cycles`` answers it with ``get_action``.
 
     :param behaviour: The behaviour under test.
     :param params_stub: Params-like namespace.
-    :param get_action: Callable invoked on the first (GET) send.
+    :param get_action: Callable answering the request data download.
     :param store_cid: CID returned by the STORE callback.
     :returns: The stub function.
     """
     store_response = SimpleNamespace(ipfs_hash=store_cid)
-    is_first_call = iter([True, False])
 
     def stub(
         msg: Any, dlg: Any, callback: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
-        """Route GET vs STORE calls."""
-        if next(is_first_call):
-            get_action(msg, dlg, callback)
-        else:
-            callback(store_response, dlg)
+        """Answer the STORE call."""
+        callback(store_response, dlg)
         params_stub.in_flight_req = True
 
+    stub.get_action = get_action  # type: ignore[attr-defined]
     return stub
 
 
-def _run_two_act_cycles(behaviour: Any, params_stub: Any) -> None:
-    """Run two act cycles, clearing in_flight between them.
+def _answer_download(params_stub: Any, get_action: Callable[..., None]) -> None:
+    """Answer the pending request data download as ``IpfsHandler`` would.
+
+    :param params_stub: Params-like namespace holding the download's callbacks.
+    :param get_action: called with ``(msg, dlg, callback, error_callback)``.
+    """
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+    params_stub.background_ipfs_nonces.discard(nonce)
+    params_stub.req_to_deadline.pop(nonce, None)
+    callback = params_stub.req_to_callback.pop(nonce)
+    error_callback = params_stub.req_to_error_callback.pop(nonce)
+    get_action(None, None, callback, error_callback)
+
+
+def _mark_download_finished(behaviour: Any, task: Dict[str, Any]) -> Dict[str, Any]:
+    """Mark a queued on-chain task's request data download as finished.
+
+    The download ended in an IPFS error, so the task takes the slot and fails
+    through ``_handle_ipfs_error`` without running a tool.
+
+    :param behaviour: Behaviour under test.
+    :param task: the queued task.
+    :returns: the same task.
+    """
+    behaviour._request_data[task["requestId"]] = {"error": "content unpinned"}
+    return task
+
+
+def _run_act_cycles(behaviour: Any, params_stub: Any) -> None:
+    """Run one on-chain task through download, execution and delivery.
 
     :param behaviour: Behaviour under test.
     :param params_stub: Params-like namespace.
     """
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, behaviour.send_message.get_action)
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -673,13 +754,13 @@ def test_ipfs_error_codec_mismatch_delivers_descriptive_rejection(
     error_reason = "protobuf: (PBNode) invalid wireType, expected 2, got 3"
 
     def simulate_ipfs_error(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
-        """Simulate what IpfsHandler ERROR path does."""
-        behaviour._invalid_request = True
-        behaviour._ipfs_error_reason = (
-            f"Request data could not be retrieved from IPFS (detail: {error_reason})"
-        )
+        """Report an IPFS ERROR reply for the download."""
+        error_callback(error_reason)
 
     monkeypatch.setattr(
         behaviour,
@@ -687,7 +768,7 @@ def test_ipfs_error_codec_mismatch_delivers_descriptive_rejection(
         _make_send_stub(behaviour, params_stub, simulate_ipfs_error),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
@@ -735,14 +816,13 @@ def test_ipfs_error_network_failure_delivers_rejection(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def simulate_network_error(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
-        """Simulate network-level IPFS failure."""
-        behaviour._invalid_request = True
-        behaviour._ipfs_error_reason = (
-            "Request data could not be retrieved from IPFS"
-            " (detail: Failed to download: bafybeiabc123)"
-        )
+        """Report a network-level IPFS failure for the download."""
+        error_callback("Failed to download: bafybeiabc123")
 
     monkeypatch.setattr(
         behaviour,
@@ -750,7 +830,7 @@ def test_ipfs_error_network_failure_delivers_rejection(
         _make_send_stub(behaviour, params_stub, simulate_network_error),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -791,7 +871,10 @@ def test_ipfs_success_invalid_task_data_delivers_invalid_response(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def deliver_bad_task_data(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver IPFS response with missing 'tool' field."""
         bad_body: Dict[str, Any] = {"prompt": "some prompt"}  # no 'tool' key
@@ -806,7 +889,7 @@ def test_ipfs_success_invalid_task_data_delivers_invalid_response(
         _make_send_stub(behaviour, params_stub, deliver_bad_task_data),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -864,7 +947,10 @@ def test_ipfs_success_valid_task_delivers_result(
     valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
 
     def deliver_valid_task(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver valid task data via IPFS callback."""
         body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
@@ -878,7 +964,7 @@ def test_ipfs_success_valid_task_delivers_result(
         ),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
@@ -936,36 +1022,41 @@ def test_ipfs_error_does_not_cascade_to_next_task(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
     )
 
-    task_num: Dict[str, int] = {"n": 0}
-
     def send_message_stub(
         msg: Any,
         dlg: Any,
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """First task: IPFS error. Second task: success. STORE always succeeds."""
-        task_num["n"] += 1
-        func = _dispatch_target(callback)
-        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            if task_num["n"] == 1:
-                # Task 100: IPFS download fails
-                behaviour._invalid_request = True
-                behaviour._ipfs_error_reason = (
-                    "Request data could not be retrieved from IPFS"
-                    " (detail: content unpinned)"
-                )
-            else:
-                # Task 101: IPFS download succeeds
-                body: Dict[str, Any] = {"prompt": "prompt", "tool": "sum"}
-                callback(SimpleNamespace(files={"t.json": json.dumps(body)}), dlg)
-        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
-            callback(SimpleNamespace(ipfs_hash="bafyok"), dlg)
+        """STORE always succeeds."""
+        callback(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         params_stub.in_flight_req = True
+
+    def report_unpinned(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
+    ) -> None:
+        """Task 100: IPFS download fails."""
+        error_callback("content unpinned")
+
+    def deliver_task(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
+    ) -> None:
+        """Task 101: IPFS download succeeds."""
+        body: Dict[str, Any] = {"prompt": "prompt", "tool": "sum"}
+        callback(SimpleNamespace(files={"t.json": json.dumps(body)}), dlg)
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
     # Task 100: IPFS error → rejection pipeline
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, report_unpinned)
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -977,6 +1068,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     _assert_clean_state(behaviour)
 
     # Task 101: should execute normally — no cascading failure
+    _answer_download(params_stub, deliver_task)
     params_stub.in_flight_req = False
     behaviour.act()
     params_stub.in_flight_req = False
@@ -987,6 +1079,408 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     assert second_done["request_id"] == 101
     assert second_done["task_result"] == "mh:bafyok"
     _assert_clean_state(behaviour)
+
+
+def _queue_offchain(shared_state: Dict[str, Any], req_id: int) -> Dict[str, Any]:
+    """Queue an off-chain task, whose request travels inline.
+
+    :param shared_state: Shared state dict.
+    :param req_id: Request ID for the task.
+    :returns: the queued task.
+    """
+    task: Dict[str, Any] = {
+        "requestId": req_id,
+        "request_delivery_rate": 100,
+        "data": b"raw-bytes",
+        "is_offchain": True,
+        "ipfs_data": json.dumps({"prompt": "p", "tool": "sum"}),
+        "contract_address": "0xmech",
+    }
+    shared_state[beh_mod.PENDING_TASKS].append(task)
+    return task
+
+
+def test_offchain_task_runs_while_an_onchain_download_is_pending(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """An on-chain task still downloading its data does not hold the slot."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=500)
+    _queue_offchain(shared_state, req_id=501)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+
+    behaviour._prefetch_request_data()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 501
+    assert params_stub.in_flight_req is False
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert [t["requestId"] for t in shared_state[beh_mod.PENDING_TASKS]] == [500]
+
+
+def test_downloaded_onchain_task_runs_from_its_stored_data(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """The slot runs a downloaded task from the stored files, without a second download."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=502)
+    files = {"metadata.json": json.dumps({"prompt": "p", "tool": "sum"})}
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    sent: List[Any] = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    handled: List[Any] = []
+    monkeypatch.setattr(
+        behaviour, "_handle_get_task", lambda msg, _dlg: handled.append(msg.files)
+    )
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(files=files), dlg
+        ),
+    )
+    behaviour._execute_task()
+
+    assert handled == [files]
+    assert sent == []
+    assert behaviour._request_data == {}
+
+
+def test_download_without_reply_by_its_deadline_is_retried_as_a_timeout(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A download that never answers ends as a timeout and the task downloads again."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.timeout_limit = 3
+    _enqueue_task(shared_state, params_stub, req_id=503)
+    params_stub.request_id_to_num_timeouts[503] = 0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    now = [1000.0]
+    monkeypatch.setattr(beh_mod.time, "time", lambda: now[0])
+
+    behaviour._prefetch_request_data()
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+    now[0] += beh_mod.REQUEST_DATA_FETCH_DEADLINE + 1
+    behaviour._prefetch_request_data()
+
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.background_ipfs_nonces
+    behaviour._execute_task()
+    assert behaviour._executing_task is None
+    assert params_stub.request_id_to_num_timeouts[503] == 1
+    requeued = [t for t in shared_state[beh_mod.PENDING_TASKS] if t["requestId"] == 503]
+    assert len(requeued) == 1
+    assert behaviour._request_data == {}
+
+
+def _step_in_setup(params_stub: Any, shared_state: Dict[str, Any]) -> None:
+    """Configure a marketplace mech that may step in for ``0xmech1``.
+
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared state dictionary.
+    """
+    params_stub.use_mech_marketplace = True
+    params_stub.agent_mech_contract_address = "0xother"
+    params_stub.step_in_list_size = 20
+    shared_state[beh_mod.PAYMENT_MODEL] = "fixed"
+    shared_state[beh_mod.PAYMENT_INFO] = {"0xmech1": "fixed"}
+
+
+def test_only_one_downloaded_task_waits_for_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """No second download starts while a downloaded task still waits for the slot."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=510)
+    _enqueue_task(shared_state, params_stub, req_id=511)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub,
+        lambda msg, dlg, callback, error_callback: callback(
+            SimpleNamespace(files={"m.json": "{}"}), dlg
+        ),
+    )
+    behaviour._prefetch_request_data()
+
+    assert list(behaviour._request_data) == [510]
+    assert params_stub.background_ipfs_nonces == set()
+
+
+def test_request_data_download_is_bounded_by_its_deadline(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """The IPFS request carries the download deadline as its own timeout."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=540)
+    timeouts: List[Any] = []
+
+    def build(_ipfs_hash: str, timeout: Any = None) -> Tuple[Any, Any]:
+        timeouts.append(timeout)
+        return object(), fake_dialogue
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req", build)
+
+    behaviour._prefetch_request_data()
+
+    assert timeouts == [beh_mod.REQUEST_DATA_FETCH_DEADLINE]
+
+
+STEP_IN_TASK = {
+    "priorityMech": "0xmech1",
+    "requestId": 560,
+    "request_delivery_rate": 100,
+    "data": b"ipfs-pointer",
+    "contract_address": "0xmech1",
+}
+
+
+def _stub_downloads(behaviour: Any, monkeypatch: Any, fake_dialogue: Any) -> List[Any]:
+    """Stub the IPFS request builder and the in-slot sender.
+
+    :param behaviour: Behaviour under test.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: Dialogue-like object returned by the builder.
+    :return: the list that collects in-slot sends.
+    """
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    sent: List[Any] = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    return sent
+
+
+def test_timed_out_task_downloads_in_the_slot_when_nothing_is_pending(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """Another mech's timed-out task is not downloaded ahead; the slot fetches it."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    assert params_stub.background_ipfs_nonces == set()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == STEP_IN_TASK["requestId"]
+    assert len(sent) == 1
+    assert shared_state[beh_mod.TIMED_OUT_TASKS] == []
+
+
+def test_timed_out_task_waits_while_a_pending_task_is_downloading(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A listed timed-out task neither takes the slot nor the download from a pending task."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    _enqueue_task(shared_state, params_stub, req_id=561)
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    behaviour._execute_task()
+
+    assert behaviour._prefetch_request_id == 561
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert behaviour._executing_task is None
+    assert sent == []
+    assert len(shared_state[beh_mod.TIMED_OUT_TASKS]) == 1
+
+
+def test_downloaded_pending_task_runs_before_a_timed_out_task(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """With a ready task in each queue, the pending one takes the slot."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    shared_state[beh_mod.TIMED_OUT_TASKS] = [dict(STEP_IN_TASK)]
+    _enqueue_task(shared_state, params_stub, req_id=562)
+    behaviour._request_data[562] = {"files": {"metadata.json": "{}"}}
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 562
+    assert len(shared_state[beh_mod.TIMED_OUT_TASKS]) == 1
+
+
+def test_malformed_request_pointer_is_reported_by_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+) -> None:
+    """A task whose pointer cannot be read starts no download and fails in the slot."""
+    params_stub.in_flight_req = False
+    _enqueue_task(shared_state, params_stub, req_id=563)
+    sent = _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(
+        beh_mod,
+        "get_ipfs_file_hash",
+        lambda _data: (_ for _ in ()).throw(ValueError("bad pointer")),
+    )
+
+    behaviour._prefetch_request_data()
+    assert behaviour._request_data == {563: {}}
+    assert params_stub.background_ipfs_nonces == set()
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 563
+    assert behaviour._invalid_request is True
+    assert sent == []
+
+
+@pytest.mark.parametrize(
+    "reason, timeouts, invalid",
+    [("socket timed out", 1, False), ("content unpinned", 0, True)],
+    ids=["timeout_is_retried", "other_error_is_terminal"],
+)
+def test_error_reply_of_a_download_reaches_the_task_in_the_slot(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    reason: str,
+    timeouts: int,
+    invalid: bool,
+) -> None:
+    """An error reply is stored by the registered callback and handled when the task runs."""
+    patch_ipfs_multihash()
+    params_stub.in_flight_req = False
+    params_stub.timeout_limit = 3
+    _enqueue_task(shared_state, params_stub, req_id=564)
+    params_stub.request_id_to_num_timeouts[564] = 0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._prefetch_request_data()
+    _answer_download(
+        params_stub, lambda msg, dlg, callback, error_callback: error_callback(reason)
+    )
+    assert behaviour._request_data == {564: {"error": reason}}
+    behaviour._execute_task()
+
+    assert params_stub.request_id_to_num_timeouts[564] == timeouts
+    assert behaviour._invalid_request is invalid
+
+
+def test_download_of_a_task_that_left_the_queue_is_dropped(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """A download in flight for a task no longer pending frees the download for the next one."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=565)
+    _stub_downloads(behaviour, monkeypatch, fake_dialogue)
+    behaviour._prefetch_request_data()
+    nonce = next(iter(params_stub.background_ipfs_nonces))
+
+    shared_state[beh_mod.PENDING_TASKS].clear()
+    behaviour._prefetch_request_data()
+
+    assert behaviour._prefetch_nonce is None
+    assert behaviour._request_data == {}
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.background_ipfs_nonces
+
+
+def test_request_data_of_a_task_no_longer_queued_is_dropped(
+    behaviour: Any, shared_state: Dict[str, Any]
+) -> None:
+    """Downloaded data is released once its task has left the queues."""
+    behaviour._request_data[520] = {"files": {"m.json": "{}"}}
+    shared_state[beh_mod.PENDING_TASKS].clear()
+
+    behaviour._prefetch_request_data()
+
+    assert behaviour._request_data == {}
+
+
+def test_reply_of_an_abandoned_download_is_not_stored(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+) -> None:
+    """Only the current download's outcome is recorded."""
+    patch_ipfs_multihash()
+    _enqueue_task(shared_state, params_stub, req_id=530)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    behaviour._prefetch_request_data()
+
+    behaviour._store_request_data("another-nonce", {"files": {"m.json": "{}"}})
+
+    assert behaviour._request_data == {}
+    assert behaviour._prefetch_request_id == 530
 
 
 # Scenario F: IPFS download succeeds but empty task data → invalid response
@@ -1021,7 +1515,10 @@ def test_ipfs_success_empty_task_data_delivers_invalid_response(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def deliver_empty_data(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver empty task data."""
         callback(SimpleNamespace(files={"task.json": json.dumps({})}), dlg)
@@ -1032,7 +1529,7 @@ def test_ipfs_success_empty_task_data_delivers_invalid_response(
         _make_send_stub(behaviour, params_stub, deliver_empty_data),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -1077,7 +1574,10 @@ def test_non_ipfs_failure_uses_generic_invalid_response(
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def deliver_valid_task(
-        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Callable[[str], None],
     ) -> None:
         """Deliver valid task data — pricing rejection happens in callback."""
         body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
@@ -1089,7 +1589,7 @@ def test_non_ipfs_failure_uses_generic_invalid_response(
         _make_send_stub(behaviour, params_stub, deliver_valid_task),
     )
 
-    _run_two_act_cycles(behaviour, params_stub)
+    _run_act_cycles(behaviour, params_stub)
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     payload = json.loads(stored_payloads[0][str(req_id)])
@@ -1227,6 +1727,48 @@ def test_ensure_payment_model_payment_model_already_set(
     params_stub.in_flight_req = False
     shared_state[beh_mod.PAYMENT_MODEL] = "some_model"
     assert behaviour._ensure_payment_model() is True
+
+
+NVM_PAYMENT_MODEL = bytes.fromhex(beh_mod.PAYMENT_TYPE_NATIVE_NVM)
+TOKEN_NVM_PAYMENT_MODEL = bytes.fromhex(beh_mod.PAYMENT_TYPE_TOKEN_NVM)
+NON_NVM_PAYMENT_MODEL = bytes.fromhex("cd" * 32)
+SERVED_TOOLS = {"sum": "h1", "mul": "h2"}
+
+
+@pytest.mark.parametrize(
+    "payment_model, floors, refused",
+    [
+        # an NVM mech floors every served tool, or none
+        (NVM_PAYMENT_MODEL, {"sum": 10}, True),
+        (TOKEN_NVM_PAYMENT_MODEL, {"mul": 10}, True),
+        (NVM_PAYMENT_MODEL, {"sum": 10, "mul": 20}, False),
+        (NVM_PAYMENT_MODEL, {}, False),
+        # any other mech may floor some of its tools
+        (NON_NVM_PAYMENT_MODEL, {"sum": 10}, False),
+        (NON_NVM_PAYMENT_MODEL, {}, False),
+        ("fixed", {"sum": 10}, False),
+    ],
+)
+def test_partial_floor_map_is_refused_on_an_nvm_mech_only(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    payment_model: Any,
+    floors: Dict[str, int],
+    refused: bool,
+) -> None:
+    """Once the payment type is known, an NVM mech with a partial floor map does not run."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = False
+    params_stub.tools_to_package_hash = dict(SERVED_TOOLS)
+    params_stub.tools_to_pricing = dict(floors)
+    shared_state[beh_mod.PAYMENT_MODEL] = payment_model
+
+    if refused:
+        with pytest.raises(ValueError, match="every served tool, or none"):
+            behaviour._ensure_payment_model()
+    else:
+        assert behaviour._ensure_payment_model() is True
 
 
 def test_ensure_payment_model_requests_model_when_missing(
@@ -1460,7 +2002,9 @@ def test_execute_task_pops_from_timed_out_when_pending_empty(
         "data": b"ptr",
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.TIMED_OUT_TASKS].append(timed_task)
+    shared_state[beh_mod.TIMED_OUT_TASKS].append(
+        _mark_download_finished(behaviour, timed_task)
+    )
     assert shared_state[beh_mod.PENDING_TASKS] == []
     monkeypatch.setattr(
         behaviour,
@@ -1493,7 +2037,7 @@ def test_execute_task_bytes_request_id_converted(
         "data": b"ptr",
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.PENDING_TASKS].append(task)
+    shared_state[beh_mod.PENDING_TASKS].append(_mark_download_finished(behaviour, task))
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_get_file_req",
@@ -1537,7 +2081,7 @@ def test_execute_task_onchain_stamps_request_cid_on_executing_task(
         "data": b"raw-bytes",
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.PENDING_TASKS].append(task)
+    shared_state[beh_mod.PENDING_TASKS].append(_mark_download_finished(behaviour, task))
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_get_file_req",
@@ -1655,7 +2199,7 @@ def test_execute_task_onchain_request_cid_with_real_cid_helpers(
         "data": RAW_REQUEST_DIGEST,
         "contract_address": "0xmech",
     }
-    shared_state[beh_mod.PENDING_TASKS].append(task)
+    shared_state[beh_mod.PENDING_TASKS].append(_mark_download_finished(behaviour, task))
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_get_file_req",
@@ -2027,6 +2571,7 @@ def _seed_executing_task(
     behaviour._done_task = None  # _handle_done_task assigns it
     behaviour._invalid_request = False  # default to the success shape
     behaviour._ipfs_error_reason = None
+    behaviour._tools_to_package_hash = {"mytool": "bafymytool"}
 
 
 def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
@@ -2102,38 +2647,30 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     assert "predict_api_event" not in done
 
 
-def test_handle_done_task_offchain_invalid_request_recorded_as_failure(
+def test_handle_done_task_offchain_invalid_request_settles_as_failed(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """A failed off-chain task is served as a rejection, never as status 'ok'."""
-    # A tool/execution failure (_invalid_request) must not land in the success
-    # bucket: a paying requester keys refund/retry on `status`, so "ran but
-    # failed" has to be distinguishable from "succeeded".
+    """A failed off-chain task settles with status 'failed', never 'ok'."""
     _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-15")
     behaviour._invalid_request = True
     behaviour._ipfs_error_reason = "tool boom"
-
-    send_calls: list = []
-    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
-    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    sent, _ = _stub_offchain_io(behaviour, monkeypatch)
 
     behaviour._handle_done_task(task_result=None)
 
-    # No IPFS upload, no on-chain delivery for a failed offchain task.
-    assert send_calls == []
-    assert shared_state[beh_mod.DONE_TASKS] == []
+    # No IPFS upload; the failure goes to settlement like an answer would.
+    assert sent == []
+    assert [t["request_id"] for t in shared_state[beh_mod.DONE_TASKS]] == ["req-15"]
     assert behaviour._executing_task is None
-
-    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-15"]
-    assert rejection["status"] == "rejected"
-    assert rejection["status"] != "ok"
-    # The failure reason surfaces to the requester rather than being masked.
-    assert rejection["reason"] == "tool boom"
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-15"]
+    assert (stored["status"], stored["error"], stored["fault"]) == (
+        "failed",
+        "tool boom",
+        beh_mod.FAULT_MECH,
+    )
 
 
 def test_handle_done_task_onchain_still_uploads_to_ipfs(
@@ -2372,30 +2909,56 @@ def test_handle_store_response_invalid_done_task_resets_state(
     assert behaviour._done_task is None
 
 
-def test_handle_done_task_offchain_oversized_records_failure_and_resets(
+def test_handle_done_task_offchain_oversized_settles_a_mech_fault_failure(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """Oversized off-chain response fails cleanly and writes a rejection."""
-    # String request_id — production keys these shared-state dicts by the str
-    # request_id parsed from the HTTP body, never an int.
+    """A response too large to address settles as a small mech-fault failure."""
     _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-13")
     monkeypatch.setattr(
         beh_mod,
         "compute_cidv1",
-        MagicMock(side_effect=ValueError("exceeds single-block bound")),
+        MagicMock(side_effect=[ValueError("exceeds single-block bound"), "bafysmall"]),
     )
-    send_calls: list = []
-    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
-    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    monkeypatch.setattr(beh_mod, "to_multihash", lambda x: f"mh:{x}")
+    _stub_offchain_io(behaviour, monkeypatch)
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-13"]
+    assert (stored["status"], stored["fault"]) == ("failed", beh_mod.FAULT_MECH)
+    assert stored["error"] == "cid computation failed: exceeds single-block bound"
+    assert stored["content_cid"] == "bafysmall"
+    assert set(stored["response"]) == {
+        "schema_version",
+        "requestId",
+        "tool",
+        "executed_at",
+        "result",
+        "error",
+        "fault",
+    }
+    assert shared_state[beh_mod.DONE_TASKS][0]["task_result"] == "mh:bafysmall"
+
+
+def test_handle_done_task_offchain_unaddressable_failure_is_rejected(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """If even the failure response cannot be addressed, the request is rejected."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-13")
+    monkeypatch.setattr(
+        beh_mod, "compute_cidv1", MagicMock(side_effect=ValueError("bound"))
+    )
+    sent, _ = _stub_offchain_io(behaviour, monkeypatch)
 
     behaviour._handle_done_task(task_result=None)
 
-    assert send_calls == []
+    assert sent == []
     assert shared_state[beh_mod.DONE_TASKS] == []
     assert behaviour._executing_task is None
     rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-13"]
@@ -2674,6 +3237,31 @@ def test_handle_timeout_task_adds_back_to_queue(
     behaviour._handle_timeout_task()
     assert behaviour._executing_task is None
     assert any(t.get("requestId") == 7 for t in behaviour.pending_tasks)
+
+
+def test_handle_timeout_task_drops_the_tasks_pending_ipfs_request(
+    behaviour: Any, params_stub: Any, fake_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A timed-out task's IPFS request is forgotten; another request's is kept."""
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    behaviour._executing_task = {"requestId": 8, "request_delivery_rate": 100}
+    behaviour._async_result = None
+    params_stub.request_id_to_num_timeouts[8] = 0
+    params_stub.timeout_limit = 3
+    params_stub.req_to_callback["other"] = lambda *_: None
+    behaviour._task_ipfs_nonce = behaviour.send_message(
+        object(), fake_dialogue, lambda *_: None, lambda _reason: None
+    )
+    nonce = fake_dialogue.dialogue_label.dialogue_reference[0]
+    assert nonce in params_stub.req_to_callback
+
+    behaviour._handle_timeout_task()
+
+    assert nonce not in params_stub.req_to_callback
+    assert nonce not in params_stub.req_to_error_callback
+    assert nonce not in params_stub.req_to_deadline
+    assert "other" in params_stub.req_to_callback
+    assert behaviour._task_ipfs_nonce is None
 
 
 def test_handle_timeout_task_limit_reached_calls_handle_done(
@@ -3410,20 +3998,21 @@ def test_malformed_ipfs_content_sets_invalid_request(
     # Return garbage (non-JSON) from IPFS
     garbage_response = SimpleNamespace(files={"task.json": "NOT VALID JSON {{{"})
 
-    def send_message_stub(
+    def answer_with_content(
         msg: Any,
         dlg: Any,
         callback: Callable[[Any, Any], None],
-        error_callback: Any = None,
+        error_callback: Callable[[str], None],
     ) -> None:
         callback(garbage_response, dlg)
-        params_stub.in_flight_req = True
 
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
     )
-    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, answer_with_content)
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -3458,20 +4047,21 @@ def test_empty_ipfs_files_sets_invalid_request(
     # Return empty files from IPFS → IndexError on [0]
     empty_response = SimpleNamespace(files={})
 
-    def send_message_stub(
+    def answer_with_content(
         msg: Any,
         dlg: Any,
         callback: Callable[[Any, Any], None],
-        error_callback: Any = None,
+        error_callback: Callable[[str], None],
     ) -> None:
         callback(empty_response, dlg)
-        params_stub.in_flight_req = True
 
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
     )
-    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    params_stub.in_flight_req = False
+    behaviour.act()
+    _answer_download(params_stub, answer_with_content)
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -3524,8 +4114,9 @@ def test_valid_32_byte_data_still_works(
 
     # Should NOT be marked invalid — normal path
     assert behaviour._invalid_request is False
-    # IPFS get request should have been sent
-    assert len(send_calls) == 1
+    # The request data download was started, outside the task slot
+    assert len(params_stub.background_ipfs_nonces) == 1
+    assert send_calls == []
 
 
 # ---------------------------------------------------------------------------
@@ -3614,7 +4205,7 @@ def test_handle_get_task_rejects_prompt_over_cap(
         _track_mech_lookup(mech_lookup_calls),
     )
 
-    huge_prompt = "A" * (beh_mod.MAX_PROMPT_BYTES + 1)
+    huge_prompt = "A" * (DEFAULT_MAX_PROMPT_BYTES + 1)
     payload = json.dumps({"prompt": huge_prompt, "tool": "sum"})
     msg = SimpleNamespace(files={"task.json": payload})
 
@@ -3672,6 +4263,125 @@ def test_handle_get_task_populates_in_memory_requests(
     cached = behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS].get("77")
     assert cached is not None, "in_memory_requests not populated for request 77"
     assert json.loads(cached) == task_data
+
+
+# ---------------------------------------------------------------------------
+# Configurable prompt length bound
+# ---------------------------------------------------------------------------
+
+PROMPT_BOUND_REQ_ID = 78
+RAISED_MAX_PROMPT_BYTES = 250_000
+ONE_BYTE_CHAR = "A"
+TWO_BYTE_CHAR = "\u00e9"
+HALF_DEFAULT_MAX_PROMPT = DEFAULT_MAX_PROMPT_BYTES // 2
+
+
+def _feed_prompt_to_get_task(
+    behaviour: Any, monkeypatch: Any, prompt: str, max_prompt_bytes: int
+) -> Optional[str]:
+    """Run ``_handle_get_task`` on a prompt under a configured bound.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param prompt: the prompt carried by the request metadata.
+    :param max_prompt_bytes: the configured ``max_prompt_bytes``.
+    :return: the request metadata cached for execution, None if it was skipped.
+    """
+    behaviour.params.max_prompt_bytes = max_prompt_bytes
+    behaviour._executing_task = {"requestId": PROMPT_BOUND_REQ_ID}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+    behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS] = {}
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    payload = json.dumps({"prompt": prompt, "tool": SAMPLE_TOOL})
+    behaviour._handle_get_task(
+        SimpleNamespace(files={"task.json": payload}), MagicMock()
+    )
+    return behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS].get(
+        str(PROMPT_BOUND_REQ_ID)
+    )
+
+
+@pytest.mark.parametrize(
+    "prompt, max_prompt_bytes",
+    [
+        ("", DEFAULT_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * DEFAULT_MAX_PROMPT_BYTES, DEFAULT_MAX_PROMPT_BYTES),
+        (TWO_BYTE_CHAR * HALF_DEFAULT_MAX_PROMPT, DEFAULT_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * (DEFAULT_MAX_PROMPT_BYTES + 1), RAISED_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * RAISED_MAX_PROMPT_BYTES, RAISED_MAX_PROMPT_BYTES),
+    ],
+    ids=[
+        "empty_default_bound",
+        "at_default_bound",
+        "multibyte_at_default_bound",
+        "over_default_under_raised_bound",
+        "at_raised_bound",
+    ],
+)
+def test_handle_get_task_keeps_prompt_within_configured_bound(
+    behaviour: Any, monkeypatch: Any, prompt: str, max_prompt_bytes: int
+) -> None:
+    """A prompt whose UTF-8 length is within ``max_prompt_bytes`` is kept."""
+    cached = _feed_prompt_to_get_task(behaviour, monkeypatch, prompt, max_prompt_bytes)
+
+    assert cached is not None
+    assert json.loads(cached)["prompt"] == prompt
+
+
+@pytest.mark.parametrize(
+    "prompt, max_prompt_bytes",
+    [
+        (ONE_BYTE_CHAR * (DEFAULT_MAX_PROMPT_BYTES + 1), DEFAULT_MAX_PROMPT_BYTES),
+        (TWO_BYTE_CHAR * (HALF_DEFAULT_MAX_PROMPT + 1), DEFAULT_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * (RAISED_MAX_PROMPT_BYTES + 1), RAISED_MAX_PROMPT_BYTES),
+        (ONE_BYTE_CHAR * 2, 1),
+    ],
+    ids=[
+        "one_byte_over_default_bound",
+        "multibyte_over_default_bound_in_bytes_only",
+        "one_byte_over_raised_bound",
+        "over_lowered_bound",
+    ],
+)
+def test_handle_get_task_skips_prompt_over_configured_bound(
+    behaviour: Any, monkeypatch: Any, prompt: str, max_prompt_bytes: int
+) -> None:
+    """A prompt whose UTF-8 length exceeds ``max_prompt_bytes`` is skipped."""
+    cached = _feed_prompt_to_get_task(behaviour, monkeypatch, prompt, max_prompt_bytes)
+
+    prompt_bytes = len(prompt.encode("utf-8"))
+    assert cached is None
+    assert behaviour._invalid_request is True
+    assert behaviour._client_fault is not None
+    assert behaviour._client_fault[0] == (
+        f"prompt is {prompt_bytes} bytes, over the {max_prompt_bytes} byte limit"
+    )
+
+
+def test_build_predict_api_event_prompt_cap_is_independent_of_request_bound(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The event prompt stays within its own cap under a raised request bound."""
+    params_stub.max_prompt_bytes = RAISED_MAX_PROMPT_BYTES
+    prompt = ONE_BYTE_CHAR + TWO_BYTE_CHAR * HALF_DEFAULT_MAX_PROMPT
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, {"prompt": prompt, "tool": SAMPLE_TOOL}
+    )
+
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+
+    # The cap falls inside the last two-byte character, which is dropped whole.
+    assert event["request"]["prompt"] == prompt[:-1]
+    assert (
+        len(event["request"]["prompt"].encode("utf-8"))
+        == beh_mod.MAX_EVENT_PROMPT_BYTES - 1
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -4926,6 +5636,809 @@ def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
     assert entry["event"].get("source") == "mech_offchain"
 
 
+def test_finalize_done_task_attaches_cost_dict_from_response(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The response's ``cost_dict`` lands on the done task and on the predict-api event.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    cost_dict = {"total_cost": 0.5, "input_tokens": 10}
+    behaviour._finalize_done_task("bafycid", response={"cost_dict": cost_dict})
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["cost_dict"] == cost_dict
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
+    assert event["event"]["response"]["cost_dict"] == cost_dict
+
+
+CAP_ONE_USD_6DEC = 1_000_000
+
+
+def _priced_task(**extra: Any) -> Dict[str, Any]:
+    """A done task shaped for ``_price_done_task``."""
+    return {"request_id": "r1", **extra}
+
+
+# A tool floor below the 1e16 cap the finalize gate fixture signs.
+CONFIGURED_TOOL_FLOOR = 4 * 10**15
+
+
+def _set_price_params(
+    params_stub: Any, decimals: int = 6, fixed: int = 0, fee_bp: int = 0
+) -> None:
+    params_stub.payment_token_decimals = decimals
+    params_stub.fixed_cost_per_request = fixed
+    params_stub.marketplace_fee_bp = fee_bp
+
+
+def test_price_is_measured_plus_fixed_grossed_up_for_fee(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Price is (V + F) / (1 - fee): 0.5 USD spend, 0.012 USD share, 15% fee."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    # (500_000 + 12_000) * 10_000 / 8_500 = 602_352.9 -> 602_353
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 602_353
+
+
+def test_price_keeps_sub_cent_costs(behaviour: Any, params_stub: Any) -> None:
+    """A 0.002 USD run is exactly 2e15 at 18 decimals, not rounded to a cent."""
+    _set_price_params(params_stub, decimals=18)
+    task = _priced_task(cost_dict={"total_cost": 0.002})
+    assert behaviour._price_done_task(task, 10**18) == 2 * 10**15
+
+
+def test_price_rounds_fee_gross_up_up(behaviour: Any, params_stub: Any) -> None:
+    """A fractional grossed-up unit rounds up, never down."""
+    _set_price_params(params_stub, decimals=6, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.000001})
+    # 1 unit * 10_000 / 8_500 = 1.18 -> 2
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 2
+
+
+@pytest.mark.parametrize(
+    "floor, expected", [(800_000, 800_000), (10, 500_000), (500_000, 500_000)]
+)
+def test_price_is_the_higher_of_computed_and_floor(
+    behaviour: Any, params_stub: Any, floor: int, expected: int
+) -> None:
+    """The tools_to_pricing floor wins when higher; the computed price otherwise."""
+    _set_price_params(params_stub, decimals=6)
+    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=floor)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == expected
+
+
+def test_price_clamps_to_cap_and_warns(behaviour: Any, params_stub: Any) -> None:
+    """A price above the signed cap is clamped to the cap and logged."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    assert behaviour._price_done_task(task, 50) == 50
+    behaviour.context.logger.warning.assert_called_once()
+
+
+MINIMUM_CHARGE = MINIMUM_CHARGE_BASE_UNITS
+SUB_CENT_COST_USD = 0.0042
+SUB_CENT_COST_6DEC = 4_200
+TOOL_FLOOR = 30
+UNLISTED_TOOL = "unlisted-tool"
+LISTED_TOOL = "listed-tool"
+
+
+UNMEASURED_TOOL = "mytool"
+LISTED_MINIMUM_CAP = 15_000
+MECH_DELIVERY_RATE = 10_000
+
+
+def _set_mech_delivery_rate(params_stub: Any, rate: Optional[int]) -> None:
+    """Configure the marketplace mech's delivery rate, or none."""
+    (mech,) = params_stub.mech_to_config
+    params_stub.mech_to_max_delivery_rate = {} if rate is None else {mech: rate}
+
+
+@pytest.mark.parametrize(
+    "minimum_caps, priced, mech_rate, cap, expected",
+    [
+        # a listed minimum cap is charged, pricing on or off
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            CAP_ONE_USD_6DEC,
+            LISTED_MINIMUM_CAP,
+        ),
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            False,
+            MECH_DELIVERY_RATE,
+            CAP_ONE_USD_6DEC,
+            LISTED_MINIMUM_CAP,
+        ),
+        # a listed minimum below the mech rate is not raised to it
+        ({UNMEASURED_TOOL: 500}, True, MECH_DELIVERY_RATE, CAP_ONE_USD_6DEC, 500),
+        # a tool with no listed minimum keeps the mech delivery rate when priced
+        ({}, True, MECH_DELIVERY_RATE, CAP_ONE_USD_6DEC, MECH_DELIVERY_RATE),
+        (
+            {"othertool": LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            CAP_ONE_USD_6DEC,
+            MECH_DELIVERY_RATE,
+        ),
+        # ... and only the minimum charge with pricing off or no rate configured
+        ({}, False, MECH_DELIVERY_RATE, CAP_ONE_USD_6DEC, MINIMUM_CHARGE),
+        ({}, True, None, CAP_ONE_USD_6DEC, MINIMUM_CHARGE),
+        # the signed cap still bounds it: exactly at, and one below
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            LISTED_MINIMUM_CAP,
+            LISTED_MINIMUM_CAP,
+        ),
+        (
+            {UNMEASURED_TOOL: LISTED_MINIMUM_CAP},
+            True,
+            MECH_DELIVERY_RATE,
+            LISTED_MINIMUM_CAP - 1,
+            LISTED_MINIMUM_CAP - 1,
+        ),
+    ],
+)
+def test_unmeasured_run_without_a_floor_is_charged_the_least_accepted(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    minimum_caps: Dict[str, int],
+    priced: bool,
+    mech_rate: Optional[int],
+    cap: int,
+    expected: int,
+) -> None:
+    """No measured cost and no floor charges what intake accepts for the tool, up to the cap."""
+    _set_price_params(params_stub)
+    params_stub.tools_to_minimum_cap = dict(minimum_caps)
+    _set_mech_delivery_rate(params_stub, mech_rate)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = priced
+    task = _priced_task(tool=UNMEASURED_TOOL)
+
+    assert behaviour._price_done_task(task, cap) == expected
+
+
+def test_unmeasured_run_is_logged_at_info(behaviour: Any, params_stub: Any) -> None:
+    """The unmeasured fallback is an expected configuration, logged at info."""
+    _set_price_params(params_stub)
+    behaviour.context.logger = MagicMock()
+
+    behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC)
+
+    behaviour.context.logger.warning.assert_not_called()
+    (message,) = behaviour.context.logger.info.call_args.args
+    assert "No measured cost or tool floor" in message
+
+
+def test_measured_run_is_not_raised_to_the_least_accepted(
+    behaviour: Any, params_stub: Any, shared_state: Dict[str, Any]
+) -> None:
+    """A measured sub-cent cost is charged as measured, below the tool's minimum cap."""
+    _set_price_params(params_stub)
+    params_stub.tools_to_minimum_cap = {UNMEASURED_TOOL: LISTED_MINIMUM_CAP}
+    _set_mech_delivery_rate(params_stub, MECH_DELIVERY_RATE)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    task = _priced_task(
+        tool=UNMEASURED_TOOL, cost_dict={"total_cost": SUB_CENT_COST_USD}
+    )
+
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == SUB_CENT_COST_6DEC
+
+
+def test_unmeasured_run_is_charged_the_fixed_share_when_it_is_the_minimum(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """With a fixed share set, the minimum charge of an unmeasured run is that share."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
+    assert behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC) == 14_118
+
+
+@pytest.mark.parametrize(
+    "cost_dict, floor, cap, expected",
+    [
+        # measured, no floor: the measured cost, sub-cent included
+        ({"total_cost": SUB_CENT_COST_USD}, None, CAP_ONE_USD_6DEC, SUB_CENT_COST_6DEC),
+        # measured below a floor: the floor
+        ({"total_cost": 0.00001}, TOOL_FLOOR, CAP_ONE_USD_6DEC, TOOL_FLOOR),
+        # unmeasured with a floor: the floor
+        (None, TOOL_FLOOR, CAP_ONE_USD_6DEC, TOOL_FLOOR),
+        # unmeasured, no floor: the minimum charge
+        (None, None, CAP_ONE_USD_6DEC, MINIMUM_CHARGE),
+        # a cap exactly at the price is charged in full; one below clamps
+        (
+            {"total_cost": SUB_CENT_COST_USD},
+            None,
+            SUB_CENT_COST_6DEC,
+            SUB_CENT_COST_6DEC,
+        ),
+        (
+            {"total_cost": SUB_CENT_COST_USD},
+            None,
+            SUB_CENT_COST_6DEC - 1,
+            SUB_CENT_COST_6DEC - 1,
+        ),
+        # a cap exactly at the minimum charge, and a cap of zero
+        (None, None, MINIMUM_CHARGE, MINIMUM_CHARGE),
+        (None, None, 0, 0),
+    ],
+)
+def test_price_without_a_required_floor(
+    behaviour: Any,
+    params_stub: Any,
+    cost_dict: Any,
+    floor: Optional[int],
+    cap: int,
+    expected: int,
+) -> None:
+    """The price is the measured cost or the floor, at least the minimum charge, up to the cap."""
+    _set_price_params(params_stub)
+    extra: Dict[str, Any] = {}
+    if cost_dict is not None:
+        extra["cost_dict"] = cost_dict
+    if floor is not None:
+        extra["dynamic_tool_cost"] = floor
+    assert behaviour._price_done_task(_priced_task(**extra), cap) == expected
+
+
+@pytest.mark.parametrize(
+    "cost_dict", [{}, {"total_cost": None}, {"input_cost": 0.1}, "not-a-dict", None]
+)
+def test_price_treats_cost_dict_without_total_as_no_cost(
+    behaviour: Any, params_stub: Any, cost_dict: Any
+) -> None:
+    """A cost_dict without total_cost is 'no cost', so the floor applies."""
+    _set_price_params(params_stub)
+    task = _priced_task(cost_dict=cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+
+
+def test_price_zero_cost_with_tokens_charges_only_the_fixed_share(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """A measured run that cost 0 charges F grossed up; the minimum charge when F is 0."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.0, "total_tokens": 120})
+    # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 14_118
+    _set_price_params(params_stub, decimals=6)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == MINIMUM_CHARGE
+
+
+def test_price_treats_an_unused_callback_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """An untouched callback's zeroed dict is 'not measured': floor or minimum charge."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    pristine = beh_mod.TokenCounterCallback().cost_dict
+    assert (
+        behaviour._price_done_task(_priced_task(cost_dict=pristine), 70)
+        == MINIMUM_CHARGE
+    )
+    behaviour.context.logger.warning.assert_not_called()
+    floored = _priced_task(cost_dict=pristine, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(floored, 70) == 30
+
+
+def test_price_treats_an_unpriced_only_run_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """A callback that only saw an unpriced model is 'not measured': floor or minimum."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    callback = beh_mod.TokenCounterCallback()
+    callback(
+        "unknown-model-xyz", lambda text, model: 0, input_tokens=10, output_tokens=10
+    )
+    assert (
+        behaviour._price_done_task(_priced_task(cost_dict=callback.cost_dict), 70)
+        == MINIMUM_CHARGE
+    )
+    floored = _priced_task(cost_dict=callback.cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(floored, 70) == 30
+
+
+def test_price_treats_a_partly_unpriced_run_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """One priced call plus one unpriced call is not charged at the priced part alone."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    callback = beh_mod.TokenCounterCallback()
+    callback(
+        "gpt-6.1-sol", lambda text, model: 0, input_tokens=1000, output_tokens=1000
+    )
+    callback(
+        "unknown-model-xyz", lambda text, model: 0, input_tokens=10, output_tokens=10
+    )
+    assert callback.cost_dict["total_cost"] > 0
+    task = _priced_task(cost_dict=callback.cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+    behaviour.context.logger.warning.assert_called_once()
+    assert "incomplete" in behaviour.context.logger.warning.call_args.args[0]
+
+
+@pytest.mark.parametrize("total_cost", ["0.5", float("nan"), float("inf"), -0.01, True])
+def test_price_ignores_unusable_total_cost(
+    behaviour: Any, params_stub: Any, total_cost: Any
+) -> None:
+    """Unusable total_cost values are ignored with a warning, never raised on."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    task = _priced_task(cost_dict={"total_cost": total_cost}, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+    behaviour.context.logger.warning.assert_called_once()
+
+
+PRICING_EVENT_FIELDS = (
+    "measured_cost",
+    "fixed_cost",
+    "marketplace_fee_bp",
+    "tool_floor",
+    "computed_price",
+    "payment_token_decimals",
+    "pricing_mode",
+    "settled_at",
+)
+
+
+@pytest.mark.parametrize(
+    "is_nvm, max_rates, expected",
+    [
+        (True, {}, (20_000, "nvm_floor")),
+        (False, {"0xmech": 7_000}, (7_000, "onchain_max")),
+        (False, {}, (CAP_ONE_USD_6DEC, "onchain_max")),
+    ],
+)
+def test_onchain_charge_and_mode(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+    is_nvm: bool,
+    max_rates: Dict[str, int],
+    expected: Any,
+) -> None:
+    """On-chain, an NVM mech charges the floor and any other mech its own max."""
+    monkeypatch.setattr(behaviour, "_mech_is_nvm", lambda: is_nvm)
+    params_stub.mech_to_max_delivery_rate = max_rates
+    task = _priced_task(dynamic_tool_cost=20_000)
+    assert (
+        behaviour._charged_delivery_rate(task, False, CAP_ONE_USD_6DEC, 1) == expected
+    )
+
+
+@pytest.mark.parametrize(
+    "pricing, expected_mode",
+    [
+        ({"measured_cost": None, "tool_floor": None}, "cap_and_actual"),
+        ({"measured_cost": 5_000, "tool_floor": None}, "cap_and_actual"),
+        ({"measured_cost": None, "tool_floor": 20_000}, "cap_and_actual"),
+        ({}, "cap_and_actual"),
+    ],
+)
+def test_offchain_mode_names_where_the_rate_came_from(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    pricing: Dict[str, Any],
+    expected_mode: str,
+) -> None:
+    """With the flag on, an answered run's price is labelled ``cap_and_actual``."""
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    task = _priced_task(pricing=pricing)
+    _, mode = behaviour._charged_delivery_rate(task, True, 10_000, 9_000)
+    assert mode == expected_mode
+
+
+def test_charge_is_unknown_without_a_signed_rate(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """No signed rate means no charge and no pricing mode."""
+    assert behaviour._charged_delivery_rate(_priced_task(), True, None, None) == (
+        None,
+        None,
+    )
+
+
+def test_price_is_none_without_a_signed_rate(behaviour: Any, params_stub: Any) -> None:
+    """Without a signed rate there is no cap to price against."""
+    _set_price_params(params_stub)
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    assert behaviour._price_done_task(task, None) is None
+
+
+def test_finalize_done_task_stores_price_and_reports_it(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The price lands on the done task, the poll envelope and the predict-api event.
+
+    The gate fixture signs a cap of 1e16 at 18 decimals; a 0.005 USD run with
+    the 15% fee prices at 5e15 * 10_000 / 8_500, rounded up.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 5_882_352_941_176_471
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 5_882_352_941_176_471
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
+    response = event["event"]["response"]
+    assert response["actual_delivery_rate"] == "5882352941176471"
+    assert {k: response[k] for k in PRICING_EVENT_FIELDS} == {
+        "measured_cost": str(5 * 10**15),
+        "fixed_cost": "0",
+        "marketplace_fee_bp": 1500,
+        "tool_floor": None,
+        "computed_price": "5882352941176471",
+        "payment_token_decimals": 18,
+        "pricing_mode": "cap_and_actual",
+        "settled_at": None,
+    }
+
+
+def test_finalize_done_task_reports_the_cap_when_the_flag_is_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: the stored rate and the poll envelope carry the signed cap, not the price.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 10**16
+    assert done_task["pricing"]["pricing_mode"] == "signed_cap"
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 10**16
+
+
+@pytest.mark.parametrize("cap_and_actual", [True, False])
+@pytest.mark.parametrize(
+    "seeded_floor, seeded_cost_dict",
+    [
+        ("not-a-number", None),
+        (1, None),
+        ([1], None),
+        (None, {"total_cost": 0.000001, "total_tokens": 5}),
+        (1, {"total_cost": 0.000001, "total_tokens": 5}),
+        (None, "not-a-dict"),
+    ],
+)
+def test_finalize_done_task_prices_from_the_mech_values_only(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    cap_and_actual: bool,
+    seeded_floor: Any,
+    seeded_cost_dict: Any,
+) -> None:
+    """A floor or cost already on the task is not what the run is priced from.
+
+    With no configured floor for the tool and no cost in the response, the
+    done task carries neither field, whatever the task held before.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param cap_and_actual: whether the cap-and-actual flag is on.
+    :param seeded_floor: a ``dynamic_tool_cost`` put on the task beforehand.
+    :param seeded_cost_dict: a ``cost_dict`` put on the task beforehand.
+    """
+    _set_price_params(params_stub, decimals=18)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = cap_and_actual
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = {}
+    if seeded_floor is not None:
+        behaviour._done_task["dynamic_tool_cost"] = seeded_floor
+    if seeded_cost_dict is not None:
+        behaviour._done_task["cost_dict"] = seeded_cost_dict
+
+    behaviour._finalize_done_task("bafycid", response={"result": "p_yes=0.7"})
+
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert "dynamic_tool_cost" not in done_task
+    assert "cost_dict" not in done_task
+    assert done_task["pricing"]["tool_floor"] is None
+    assert done_task["pricing"]["measured_cost"] is None
+
+
+def test_finalize_done_task_takes_the_floor_from_the_configured_map(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The configured floor of the tool replaces any floor already on the task.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = {"prediction-offline": CONFIGURED_TOOL_FLOOR}
+    behaviour._done_task["dynamic_tool_cost"] = 1
+
+    behaviour._finalize_done_task("bafycid", response={"result": "p_yes=0.7"})
+
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["dynamic_tool_cost"] == CONFIGURED_TOOL_FLOOR
+    assert done_task["pricing"]["tool_floor"] == CONFIGURED_TOOL_FLOOR
+    assert done_task["actual_delivery_rate"] == CONFIGURED_TOOL_FLOOR
+
+
+def test_flag_off_reports_the_computed_price_next_to_the_cap(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: the event charges the cap and still carries the price the run would cost.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_task["request_id"])]
+    response = event["event"]["response"]
+    assert response["actual_delivery_rate"] == str(10**16)
+    assert response["computed_price"] == "5882352941176471"
+
+
+NVM_TOKEN_PAYMENT_TYPE = bytes.fromhex(beh_mod.PAYMENT_TYPE_TOKEN_NVM)
+FIXED_PRICE_PAYMENT_TYPE = bytes(32)
+
+
+@pytest.mark.parametrize("flag", [True, False])
+@pytest.mark.parametrize(
+    "payment_type, tools_to_pricing, max_rates, expected",
+    [
+        (NVM_TOKEN_PAYMENT_TYPE, {"prediction-offline": 123}, {"0xmech": 777}, 123),
+        (NVM_TOKEN_PAYMENT_TYPE, {}, {"0xmech": 777}, 777),
+        (FIXED_PRICE_PAYMENT_TYPE, {"prediction-offline": 123}, {"0xmech": 777}, 777),
+        (FIXED_PRICE_PAYMENT_TYPE, {}, {}, 10**16),
+    ],
+)
+def test_finalize_done_task_reports_what_the_onchain_deliver_charges(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    flag: bool,
+    payment_type: bytes,
+    tools_to_pricing: Dict[str, int],
+    max_rates: Dict[str, int],
+    expected: int,
+) -> None:
+    """On-chain: NVM mechs report the tool floor, every other mech its max rate.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param flag: the cap-and-actual flag, which must not matter on-chain.
+    :param payment_type: the mech payment type published at boot.
+    :param tools_to_pricing: the per-tool floors the behaviour is configured with.
+    :param max_rates: the ``mech_to_max_delivery_rate`` param.
+    :param expected: the rate settlement will charge.
+    """
+    params_stub.mech_to_max_delivery_rate = max_rates
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = flag
+    shared_state[beh_mod.PAYMENT_MODEL] = payment_type
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=False,
+        is_marketplace_mech=True,
+    )
+    behaviour._tools_to_pricing = tools_to_pricing
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == expected
+
+
+def test_finalize_done_task_treats_a_missing_flag_as_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Without the shared-state flag an off-chain task is charged the signed cap.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    shared_state.pop(beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED, None)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == 10**16
+
+
+@pytest.mark.parametrize("decimals, warns", [(18, True), (6, False)])
+def test_finalize_done_task_warns_once_on_default_decimals_with_the_flag_on(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    decimals: int,
+    warns: bool,
+) -> None:
+    """The first flag-on off-chain price with 18 decimals logs one warning.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param decimals: the configured ``payment_token_decimals``.
+    :param warns: whether the warning is expected.
+    """
+    _set_price_params(params_stub, decimals=decimals, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour.context.logger = MagicMock()
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    behaviour._warn_once_on_default_decimals(is_offchain=True)
+    calls = [
+        c
+        for c in behaviour.context.logger.warning.call_args_list
+        if "payment_token_decimals=18" in str(c)
+    ]
+    assert len(calls) == (1 if warns else 0)
+
+
+@pytest.mark.parametrize(
+    "response", [None, {}, {"cost_dict": None}, {"cost_dict": "not-a-dict"}]
+)
+def test_finalize_done_task_leaves_cost_dict_absent_without_one(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    response: Any,
+) -> None:
+    """No usable ``cost_dict`` on the response leaves the done_task without one.
+
+    Settlement treats an absent key as "no measured cost" and falls back to
+    the tool floor or the signed cap, so nothing must fabricate the key.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param response: the response envelope handed to ``_finalize_done_task``.
+    """
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid", response=response)
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert "cost_dict" not in done_tasks[0]
+
+
 def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     behaviour: Any,
     params_stub: Any,
@@ -5130,62 +6643,161 @@ def test_release_outstanding_nonce_case_insensitive_sender_match(
     assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {checksum: {7}}
 
 
-def test_handle_get_task_offchain_typo_tool_releases_nonce(
+def test_handle_get_task_offchain_typo_tool_settles_as_client_fault(
     behaviour: Any,
     params_stub: Any,
     monkeypatch: Any,
     shared_state: Any,
 ) -> None:
-    """Off-chain task with a typo'd tool name releases the nonce, not just drops.
+    """An off-chain request for a tool the mech lacks settles at its signed cap.
 
-    Off-chain tasks never carry ``priorityMech`` (the field is set by
-    the on-chain contract call reader; the accept path does not
-    populate it), so ``stepping_in`` evaluates to True for every
-    off-chain task and the tool-not-installed drop branch always
-    fires for a typo. Without the release, the nonce stays in the
-    accepted set forever and the sender's next legitimate request
-    hard-503s at the admission gate.
+    Off-chain tasks never carry ``priorityMech``, so the tool-not-installed
+    branch fires for a typo. The run is skipped, settled as a client fault,
+    and the nonce moves to the settling set rather than lingering.
 
     :param behaviour: pytest fixture, TaskExecutionBehaviour.
     :param params_stub: pytest fixture, params namespace.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     :param shared_state: pytest fixture, initial shared_state map.
     """
-    from types import SimpleNamespace as NS
-
-    my_mech = "0xmymech"
-    params_stub.mech_to_config = {
-        my_mech: NS(is_marketplace_mech=True, use_dynamic_pricing=False)
-    }
     sender = "0xSenderAddress"
-    # Preload the sender's accepted set — as if the accept path had
-    # just enqueued the task.
     shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {42}}
-    behaviour._executing_task = {
-        "requestId": 55,
-        # No priorityMech: off-chain path never carries it.
-        "request_delivery_rate": 100,
-        "contract_address": "0xmech",
-        "sender": sender,
-        "nonce": 42,
-        "is_offchain": True,
-    }
-    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=55)
+    behaviour._executing_task.update(
+        {"request_delivery_rate": 100, "sender": sender, "nonce": 42}
+    )
+    behaviour._executing_task.pop("tool")
+    _stub_offchain_io(behaviour, monkeypatch)
     msg = SimpleNamespace(
         files={"task.json": json.dumps({"prompt": "hi", "tool": "unknown_tool"})}
     )
-    behaviour._handle_get_task(msg, MagicMock())
 
-    # Task slot cleared.
+    behaviour._handle_get_task(msg, MagicMock())
+    behaviour._handle_done_task(behaviour._get_executing_task_result())
+
     assert behaviour._executing_task is None
-    # Nonce discarded from the accepted set — key gone, no leak.
     assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
-    # Definitive rejection landed on the poll-response cache so the
-    # client learns the outcome instead of polling forever.
-    rejections = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]
-    assert "55" in rejections
-    assert rejections["55"]["status"] == "rejected"
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {42}}
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["55"]
+    assert (stored["status"], stored["fault"], stored["delivery_rate"]) == (
+        "failed",
+        beh_mod.FAULT_CLIENT,
+        100,
+    )
+    assert stored["error"] == "tool unknown_tool is not available on this mech"
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == 100
+
+
+MALFORMED_CAP = 100
+
+
+@pytest.mark.parametrize(
+    "payload, error",
+    [
+        ("{not json", "request metadata is not valid JSON"),
+        (
+            json.dumps(["prompt", "tool"]),
+            "request metadata must be a JSON object with string 'prompt' and "
+            "'tool' fields",
+        ),
+        (
+            json.dumps({"prompt": "hi"}),
+            "request metadata must be a JSON object with string 'prompt' and "
+            "'tool' fields",
+        ),
+        (
+            json.dumps({"prompt": None, "tool": "mytool"}),
+            "request metadata must be a JSON object with string 'prompt' and "
+            "'tool' fields",
+        ),
+        (
+            json.dumps({"prompt": "x" * (DEFAULT_MAX_PROMPT_BYTES + 1), "tool": "t"}),
+            f"prompt is {DEFAULT_MAX_PROMPT_BYTES + 1} bytes, over the "
+            f"{DEFAULT_MAX_PROMPT_BYTES} byte limit",
+        ),
+        (
+            "x" * (beh_mod.IPFS_MAX_TASK_BYTES + 1),
+            f"request metadata is {beh_mod.IPFS_MAX_TASK_BYTES + 1} bytes, over "
+            f"the {beh_mod.IPFS_MAX_TASK_BYTES} byte limit",
+        ),
+    ],
+    ids=[
+        "not_json",
+        "not_an_object",
+        "no_tool",
+        "prompt_not_a_string",
+        "prompt_over_limit",
+        "metadata_over_limit",
+    ],
+)
+def test_offchain_malformed_request_is_skipped_and_charged_the_signed_cap(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    payload: str,
+    error: str,
+) -> None:
+    """Signed, funded metadata the mech cannot run settles as a client fault.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param payload: the inline request metadata.
+    :param error: the error the requester must see.
+    """
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=56)
+    behaviour._executing_task["request_delivery_rate"] = MALFORMED_CAP
+    behaviour.request_id_to_delivery_rate_info[56] = MALFORMED_CAP
+    behaviour._tools_to_package_hash = {"priced_tool": "bafytool"}
+    behaviour._tools_to_pricing = {"priced_tool": MALFORMED_CAP + 1}
+    behaviour._executing_task["priorityMech"] = (
+        behaviour._get_designated_marketplace_mech_address()
+    )
+    prepared = MagicMock()
+    monkeypatch.setattr(behaviour, "_prepare_task", prepared)
+    _stub_offchain_io(behaviour, monkeypatch)
+
+    behaviour._handle_get_task(
+        SimpleNamespace(files={"metadata.json": payload}), MagicMock()
+    )
+    behaviour._handle_done_task(behaviour._get_executing_task_result())
+
+    prepared.assert_not_called()
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["56"]
+    assert {k: stored[k] for k in ("status", "error", "fault", "delivery_rate")} == {
+        "status": "failed",
+        "error": error,
+        "fault": beh_mod.FAULT_CLIENT,
+        "delivery_rate": MALFORMED_CAP,
+    }
+    assert shared_state[beh_mod.DONE_TASKS][0]["actual_delivery_rate"] == MALFORMED_CAP
+
+
+def test_offchain_well_formed_request_is_prepared_not_failed(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Metadata that passes every check runs the tool and records no fault."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=57)
+    behaviour.request_id_to_delivery_rate_info[57] = MALFORMED_CAP
+    behaviour._tools_to_package_hash = {"priced_tool": "bafytool"}
+    behaviour._tools_to_pricing = {"priced_tool": MALFORMED_CAP}
+    prepared = MagicMock()
+    monkeypatch.setattr(behaviour, "_prepare_task", prepared)
+    _stub_offchain_io(behaviour, monkeypatch)
+    payload = json.dumps({"prompt": "hi", "tool": "priced_tool"})
+
+    behaviour._handle_get_task(
+        SimpleNamespace(files={"metadata.json": payload}), MagicMock()
+    )
+
+    prepared.assert_called_once()
+    assert behaviour._client_fault is None
+    assert behaviour._invalid_request is False
 
 
 def test_reset_executing_task_defensive_discard_on_offchain_task(
@@ -5352,7 +6964,8 @@ def test_record_offchain_failure_counts_bounded_reason(
     inc = MagicMock()
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
     monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
-    behaviour._executing_task = {"requestId": 9, "is_offchain": True}
+    behaviour._executing_task = {"requestId": 9, "is_offchain": True, "tool": "x"}
+    behaviour._tools_to_package_hash = {"x": "bafyx"}
     free_text = "Cannot step in. Tool x is not installed. Ignoring request 9."
 
     if metric_reason is None:
@@ -5365,11 +6978,33 @@ def test_record_offchain_failure_counts_bounded_reason(
     inc.assert_called_once_with(
         behaviour.mech_metrics.mech_offchain_failures_total,
         1,
+        tool="x",
         reason=expected,
+        fault=beh_mod.FAULT_MECH,
         **_OFFCHAIN_LABELS,
     )
     # The human-readable reason still reaches the requester unchanged.
     assert shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["9"]["reason"] == free_text
+
+
+@pytest.mark.parametrize(
+    "tool, label",
+    [("x", "x"), ("not_a_tool", "unknown"), ("", "unknown"), (None, "unknown")],
+    ids=["served_tool", "unserved_tool", "empty", "none"],
+)
+def test_offchain_failure_tool_label_is_bounded_to_served_tools(
+    behaviour: Any, monkeypatch: Any, tool: Optional[str], label: str
+) -> None:
+    """Only a tool the mech serves becomes a label value; anything else is unknown."""
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    behaviour._tools_to_package_hash = {"x": "bafyx"}
+
+    behaviour._count_offchain_failure(
+        beh_mod.OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED, beh_mod.FAULT_CLIENT, tool
+    )
+
+    assert inc.call_args.kwargs["tool"] == label
 
 
 def _metric_calls(mock: MagicMock, metric: Any) -> List[Any]:
@@ -5440,9 +7075,153 @@ def test_handle_done_task_invalid_request_uses_bounded_failure_reason(
     ]
     # Off-chain failure counted once, delivery not counted.
     assert _metric_calls(inc, m.mech_offchain_failures_total) == [
-        {"reason": beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED, **_OFFCHAIN_LABELS}
+        {
+            "tool": "mytool",
+            "reason": beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED,
+            "fault": beh_mod.FAULT_MECH,
+            **_OFFCHAIN_LABELS,
+        }
     ]
     assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+
+
+OFFCHAIN_RUN_COST_USD = 0.005
+# 0.005 USD at 6 decimals is 5_000 units; grossed up for a 15% fee, rounded up.
+OFFCHAIN_RUN_PRICE = 5_883
+
+
+def _tool_result(deliver_msg: Optional[str]) -> Tuple[Any, ...]:
+    """A 5-tuple tool result carrying ``deliver_msg`` and a measured spend."""
+    token_cb = SimpleNamespace(
+        cost_dict={"total_cost": OFFCHAIN_RUN_COST_USD}, actual_model="gpt-4o"
+    )
+    return (deliver_msg, "Will BTC hit $100k?", {"tx": "0xabc"}, token_cb, object())
+
+
+def _run_priced_offchain_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    deliver_msg: Optional[str],
+    fixed: int = 0,
+) -> Tuple[list, MagicMock]:
+    """Run ``_handle_done_task`` for a signed off-chain request with pricing on.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param deliver_msg: the tool's answer, or None for a run with no answer.
+    :param fixed: ``fixed_cost_per_request`` in USD micro-units.
+    :return: the captured ``send_message`` calls and the ``inc_counter`` mock.
+    """
+    params_stub.use_offchain = True
+    _set_price_params(params_stub, decimals=6, fixed=fixed, fee_bp=1500)
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-31")
+    behaviour._executing_task["request_delivery_rate"] = CAP_ONE_USD_6DEC
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    behaviour._handle_done_task(task_result=_tool_result(deliver_msg))
+    return send_calls, inc
+
+
+# 0.012 USD fixed share at 6 decimals, grossed up for a 15% fee, rounded up.
+FIXED_SHARE_USD_6DEC = 12_000
+MECH_FAULT_CHARGE = 14_118
+
+
+def test_offchain_run_with_no_answer_is_a_mech_fault_charged_the_minimum(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A run with no answer settles at the minimum charge, not its reported spend."""
+    send_calls, inc = _run_priced_offchain_task(
+        behaviour,
+        params_stub,
+        shared_state,
+        monkeypatch,
+        deliver_msg=None,
+        fixed=FIXED_SHARE_USD_6DEC,
+    )
+
+    assert send_calls == []
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == MECH_FAULT_CHARGE
+    assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_FAILED_FLOOR
+    assert done_task["pricing"]["measured_cost"] is None
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-31"]
+    assert {k: envelope[k] for k in ("status", "error", "fault", "delivery_rate")} == {
+        "status": "failed",
+        "error": beh_mod.NO_RESULT_ERROR,
+        "fault": beh_mod.FAULT_MECH,
+        "delivery_rate": MECH_FAULT_CHARGE,
+    }
+    m = behaviour.mech_metrics
+    assert _metric_calls(inc, m.mech_offchain_failures_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.OFFCHAIN_FAILURE_NO_RESULT,
+            "fault": beh_mod.FAULT_MECH,
+            **_OFFCHAIN_LABELS,
+        }
+    ]
+    assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+    assert _metric_calls(inc, m.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_EXECUTION_FAILED,
+            "source": beh_mod.SOURCE_OFFCHAIN,
+        }
+    ]
+
+
+def test_offchain_run_with_an_answer_is_priced_from_its_spend(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A run with an answer settles at its grossed-up spend, below the signed cap."""
+    _run_priced_offchain_task(
+        behaviour, params_stub, shared_state, monkeypatch, deliver_msg="yes"
+    )
+
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["actual_delivery_rate"] == OFFCHAIN_RUN_PRICE
+    assert done_tasks[0]["pricing"]["pricing_mode"] == beh_mod.PRICING_CAP_AND_ACTUAL
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-31"]
+    assert envelope["status"] == "ok"
+    assert envelope["delivery_rate"] == OFFCHAIN_RUN_PRICE
+
+
+def test_onchain_run_with_no_answer_is_still_delivered(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain requests are paid up front, so a run with no answer is still delivered."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=32)
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._handle_done_task(task_result=_tool_result(None))
+
+    assert len(captured_callback) == 1
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert done_tasks[0]["request_id"] == 32
+    assert "32" not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
 
 
 @pytest.mark.parametrize(
@@ -5605,20 +7384,17 @@ def test_finalize_done_task_leaves_record_alone_when_retention_disabled(
     assert shared_state[preimage.PREIMAGE_WRITE_QUEUE] == []
 
 
-def test_offchain_tool_exception_is_rejected_not_delivered(
+def test_offchain_tool_exception_is_settled_as_failed_not_ok(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """A tool that raises must not be served as a successful off-chain delivery.
+    """A tool that raises is never served as a successful off-chain delivery.
 
-    ``_get_executing_task_result`` swallows a tool exception into ``None``
-    without setting ``_invalid_request``, so before this guard the requester
-    received ``status="ok"`` carrying the string "Invalid response", and the
-    task still became a done_task and settled on chain. Off-chain requesters
-    are charged only when the delivery settles, so that billed them for work
-    the mech never delivered.
+    ``_get_executing_task_result`` turns a tool exception into ``None``
+    without setting ``_invalid_request``; the run must still come out
+    ``failed``, both on the poll and on the predict-api event.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
@@ -5635,14 +7411,13 @@ def test_offchain_tool_exception_is_rejected_not_delivered(
         is_marketplace_mech=True,
     )
     behaviour._invalid_request = False  # the tool raised; the flag stays unset
-    monkeypatch.setattr(behaviour, "_get_executing_task_result", lambda: None)
 
     behaviour._handle_done_task(None)
 
     stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
-    assert stored["status"] == "rejected"
-    # Nothing settles, so the requester is never charged for it.
-    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert stored["status"] == "failed"
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["req-gate"]["event"]["response"]
+    assert (event["status"], event["result"]) == ("failed", None)
 
 
 def test_onchain_tool_exception_still_delivers(
@@ -5683,6 +7458,729 @@ def test_onchain_tool_exception_still_delivers(
     assert sent, "on-chain failure should still be uploaded and delivered"
     stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
     assert stored.get("status") != "rejected"
+
+
+TOOL_ERROR = ValueError("Gemini API error: model not available")
+TOOL_ERROR_REASON = "ValueError: Gemini API error: model not available"
+CONFIGURED_API_KEY = "AIzaSy-configured-test-key"
+
+
+def _failed_future(exc: BaseException) -> Future:
+    """A completed tool future that raises ``exc`` from ``result()``."""
+    fut: Future = Future()
+    fut.set_exception(exc)
+    return fut
+
+
+def _finish_tool_run(
+    behaviour: Any, params_stub: Any, is_offchain: bool, req_id: Any, future: Future
+) -> None:
+    """Seed an executing task whose tool future is done, then run one execute step.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param is_offchain: whether the task came through the off-chain path.
+    :param req_id: the request id of the task.
+    :param future: the executor future the tool run produced.
+    """
+    _seed_executing_task(behaviour, params_stub, is_offchain=is_offchain, req_id=req_id)
+    behaviour._async_result = future
+    params_stub.in_flight_req = False
+    behaviour._execute_task()
+
+
+def _stub_offchain_io(behaviour: Any, monkeypatch: Any) -> Tuple[list, MagicMock]:
+    """Capture ``send_message`` and the counters; silence gauges and histograms.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :return: the captured ``send_message`` calls and the ``inc_counter`` mock.
+    """
+    sent: list = []
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    return sent, inc
+
+
+class InvalidRequestError(ValueError):
+    """Stands in for the class a tool defines to flag a client fault."""
+
+
+class InvalidRequestErrorV2(ValueError):
+    """A near miss on the client-fault class name."""
+
+
+def _priced_failed_run(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    exc: BaseException,
+    cap_and_actual: bool = True,
+    floor: Optional[int] = None,
+) -> Tuple[Dict[str, Any], Dict[str, Any], MagicMock]:
+    """Run an off-chain task whose tool raises ``exc`` through to settlement.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param exc: what the tool future raises.
+    :param cap_and_actual: the settlement flag.
+    :param floor: the tool floor for ``mytool``, if any.
+    :return: the done task, the poll envelope and the ``inc_counter`` mock.
+    """
+    params_stub.use_offchain = True
+    _set_price_params(params_stub, decimals=6, fixed=FIXED_SHARE_USD_6DEC, fee_bp=1500)
+    pricing = {} if floor is None else {"mytool": floor}
+    params_stub.tools_to_pricing = pricing
+    behaviour._tools_to_pricing = pricing
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = cap_and_actual
+    _, inc = _stub_offchain_io(behaviour, monkeypatch)
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-41")
+    behaviour._executing_task["request_delivery_rate"] = CAP_ONE_USD_6DEC
+    behaviour._async_result = _failed_future(exc)
+    params_stub.in_flight_req = False
+    behaviour._execute_task()
+    return (
+        shared_state[beh_mod.DONE_TASKS][0],
+        shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-41"],
+        inc,
+    )
+
+
+@pytest.mark.parametrize(
+    "exc, fault",
+    [
+        (ToolError("InvalidRequestError", "prompt is empty"), beh_mod.FAULT_CLIENT),
+        (InvalidRequestError("prompt is empty"), beh_mod.FAULT_CLIENT),
+        (ValueError("prompt is empty"), beh_mod.FAULT_MECH),
+        (ToolError("ValueError", "prompt is empty"), beh_mod.FAULT_MECH),
+        (InvalidRequestErrorV2("prompt is empty"), beh_mod.FAULT_MECH),
+        (ToolError("invalidrequesterror", "prompt is empty"), beh_mod.FAULT_MECH),
+        (ToolError("InvalidRequest", "prompt is empty"), beh_mod.FAULT_MECH),
+        (RuntimeError("provider outage"), beh_mod.FAULT_MECH),
+    ],
+    ids=[
+        "tool_error_named_invalid_request",
+        "local_class_named_invalid_request",
+        "plain_value_error",
+        "tool_error_named_value_error",
+        "near_miss_name",
+        "wrong_case",
+        "prefix_only",
+        "runtime_error",
+    ],
+)
+def test_offchain_fault_is_set_by_the_exception_class_name_only(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    exc: BaseException,
+    fault: str,
+) -> None:
+    """Only a class named exactly ``InvalidRequestError`` is the client's fault."""
+    _, envelope, _ = _priced_failed_run(
+        behaviour, params_stub, shared_state, monkeypatch, exc
+    )
+
+    assert envelope["fault"] == fault
+
+
+def test_offchain_client_fault_is_charged_the_signed_cap(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A client fault settles at the full signed cap with the tool's error."""
+    exc = ToolError("InvalidRequestError", "prompt is empty")
+    done_task, envelope, inc = _priced_failed_run(
+        behaviour, params_stub, shared_state, monkeypatch, exc
+    )
+
+    assert done_task["actual_delivery_rate"] == CAP_ONE_USD_6DEC
+    assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_SIGNED_CAP
+    assert {k: v for k, v in envelope.items() if k != "response"} == {
+        "request_id": "req-41",
+        "status": "failed",
+        "error": "InvalidRequestError: prompt is empty",
+        "fault": beh_mod.FAULT_CLIENT,
+        "content_cid": envelope["content_cid"],
+        "delivery_rate": CAP_ONE_USD_6DEC,
+    }
+    assert _metric_calls(inc, behaviour.mech_metrics.mech_offchain_failures_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.OFFCHAIN_FAILURE_INVALID_REQUEST,
+            "fault": beh_mod.FAULT_CLIENT,
+            **_OFFCHAIN_LABELS,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "floor, expected",
+    [(None, MECH_FAULT_CHARGE), (20_000, 20_000), (10_000, MECH_FAULT_CHARGE)],
+    ids=["fixed_share_only", "floor_above_fixed_share", "floor_below_fixed_share"],
+)
+def test_offchain_mech_fault_is_charged_the_minimum_charge(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    floor: Optional[int],
+    expected: int,
+) -> None:
+    """A mech fault settles at max(1, tool floor, grossed-up fixed share)."""
+    done_task, envelope, _ = _priced_failed_run(
+        behaviour,
+        params_stub,
+        shared_state,
+        monkeypatch,
+        RuntimeError("provider outage"),
+        floor=floor,
+    )
+
+    assert done_task["actual_delivery_rate"] == expected
+    assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_FAILED_FLOOR
+    assert envelope["delivery_rate"] == expected
+    assert envelope["error"] == "RuntimeError: provider outage"
+
+
+def test_flag_off_mech_fault_reports_the_minimum_as_computed_price(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Flag off: a mech-fault run is charged the cap, and the event records the minimum it would pay.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _priced_failed_run(
+        behaviour,
+        params_stub,
+        shared_state,
+        monkeypatch,
+        RuntimeError("provider outage"),
+        cap_and_actual=False,
+    )
+
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["req-41"]["event"]["response"]
+    assert event["actual_delivery_rate"] == str(CAP_ONE_USD_6DEC)
+    assert event["computed_price"] == str(MECH_FAULT_CHARGE)
+
+
+def test_offchain_tool_priced_above_the_signed_rate_is_a_mech_fault(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A tool price above the signed rate at run time is the operator's change.
+
+    The tool is skipped and the run settles as a mech fault at the minimum
+    charge without the tool floor, well under the signed cap.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=6, fixed=FIXED_SHARE_USD_6DEC, fee_bp=1500)
+    pricing = {"priced_tool": CAP_ONE_USD_6DEC + 1}
+    params_stub.tools_to_pricing = pricing
+    behaviour._tools_to_pricing = pricing
+    shared_state[beh_mod.preimage_buffer.CAP_AND_ACTUAL_ENABLED] = True
+    _stub_offchain_io(behaviour, monkeypatch)
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=58)
+    behaviour._tools_to_package_hash = {"priced_tool": "bafytool"}
+    behaviour._executing_task["request_delivery_rate"] = CAP_ONE_USD_6DEC
+    behaviour.request_id_to_delivery_rate_info[58] = CAP_ONE_USD_6DEC
+    prepared = MagicMock()
+    monkeypatch.setattr(behaviour, "_prepare_task", prepared)
+    payload = json.dumps({"prompt": "hi", "tool": "priced_tool"})
+
+    behaviour._handle_get_task(
+        SimpleNamespace(files={"metadata.json": payload}), MagicMock()
+    )
+    behaviour._handle_done_task(behaviour._get_executing_task_result())
+
+    prepared.assert_not_called()
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["58"]
+    assert {k: stored[k] for k in ("status", "error", "fault", "delivery_rate")} == {
+        "status": "failed",
+        "error": f"tool priced_tool is priced at {CAP_ONE_USD_6DEC + 1}, above "
+        f"the signed delivery rate {CAP_ONE_USD_6DEC}",
+        "fault": beh_mod.FAULT_MECH,
+        "delivery_rate": MECH_FAULT_CHARGE,
+    }
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_FAILED_FLOOR
+    assert done_task["pricing"]["tool_floor"] is None
+
+
+@pytest.mark.parametrize(
+    "fault, floors, cap, expected",
+    [
+        # a mech fault with no floor and no fixed share pays the minimum charge
+        (beh_mod.FAULT_MECH, {}, CAP_ONE_USD_6DEC, MINIMUM_CHARGE_BASE_UNITS),
+        # only another tool is floored: still the minimum charge
+        (
+            beh_mod.FAULT_MECH,
+            {"othertool": 20_000},
+            CAP_ONE_USD_6DEC,
+            MINIMUM_CHARGE_BASE_UNITS,
+        ),
+        # the tool's own floor applies
+        (beh_mod.FAULT_MECH, {"mytool": 20_000}, CAP_ONE_USD_6DEC, 20_000),
+        # a cap exactly at the minimum charge, and a cap of zero
+        (
+            beh_mod.FAULT_MECH,
+            {},
+            MINIMUM_CHARGE_BASE_UNITS,
+            MINIMUM_CHARGE_BASE_UNITS,
+        ),
+        (beh_mod.FAULT_MECH, {}, 0, 0),
+        # a client fault pays the signed cap whatever the floors
+        (beh_mod.FAULT_CLIENT, {}, CAP_ONE_USD_6DEC, CAP_ONE_USD_6DEC),
+        (beh_mod.FAULT_CLIENT, {"mytool": 20_000}, 50, 50),
+    ],
+)
+def test_failed_run_price_without_a_required_floor(
+    behaviour: Any,
+    params_stub: Any,
+    fault: str,
+    floors: Dict[str, int],
+    cap: int,
+    expected: int,
+) -> None:
+    """A mech fault pays the minimum charge up to the cap; a client fault pays the cap."""
+    _set_price_params(params_stub)
+    params_stub.tools_to_pricing = dict(floors)
+    task = _priced_task(tool="mytool")
+    if "mytool" in floors:
+        task["dynamic_tool_cost"] = floors["mytool"]
+
+    assert behaviour._price_failed_run(task, cap, fault) == expected
+
+
+def test_offchain_mech_fault_is_never_charged_above_the_signed_cap(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """The minimum charge is clamped to the cap the requester signed."""
+    _set_price_params(params_stub, decimals=6, fixed=FIXED_SHARE_USD_6DEC, fee_bp=1500)
+    task = _priced_task(tool="mytool")
+
+    assert behaviour._price_failed_run(task, 10_000, beh_mod.FAULT_MECH) == 10_000
+    assert behaviour._price_failed_run(task, None, beh_mod.FAULT_MECH) is None
+
+
+@pytest.mark.parametrize(
+    "exc, fault",
+    [
+        (ToolError("InvalidRequestError", "bad"), beh_mod.FAULT_CLIENT),
+        (RuntimeError("down"), beh_mod.FAULT_MECH),
+    ],
+    ids=["client_fault", "mech_fault"],
+)
+def test_offchain_failed_run_settles_at_the_signed_cap_with_the_flag_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    exc: BaseException,
+    fault: str,
+) -> None:
+    """With cap-and-actual off a failed run still settles, at the signed value."""
+    done_task, envelope, _ = _priced_failed_run(
+        behaviour, params_stub, shared_state, monkeypatch, exc, cap_and_actual=False
+    )
+
+    assert done_task["actual_delivery_rate"] == CAP_ONE_USD_6DEC
+    assert done_task["pricing"]["pricing_mode"] == beh_mod.PRICING_SIGNED_CAP
+    assert (envelope["status"], envelope["fault"]) == ("failed", fault)
+    assert envelope["delivery_rate"] == CAP_ONE_USD_6DEC
+
+
+def test_offchain_failed_run_event_reports_status_error_and_charge(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The predict-api event carries the failure and its charge in accepted fields."""
+    # ``fault`` rides inside ``raw_content`` only: a top-level key the server
+    # does not know would change the signed batch hash it recomputes.
+    _priced_failed_run(
+        behaviour,
+        params_stub,
+        shared_state,
+        monkeypatch,
+        ToolError("InvalidRequestError", "prompt is empty"),
+    )
+
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["req-41"]["event"]["response"]
+    assert (event["status"], event["result"], event["error"]) == (
+        "failed",
+        None,
+        "InvalidRequestError: prompt is empty",
+    )
+    assert event["actual_delivery_rate"] == str(CAP_ONE_USD_6DEC)
+    assert event["computed_price"] == str(CAP_ONE_USD_6DEC)
+    assert event["pricing_mode"] == beh_mod.PRICING_SIGNED_CAP
+    assert event["raw_content"]["fault"] == beh_mod.FAULT_CLIENT
+    assert "fault" not in event
+
+
+def test_offchain_failed_run_commits_its_failure_response(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The CID on the poll envelope commits to the failure response it serves."""
+    done_task, envelope, _ = _priced_failed_run(
+        behaviour, params_stub, shared_state, monkeypatch, RuntimeError("down")
+    )
+
+    response = envelope["response"]
+    assert (response["result"], response["fault"]) == (None, beh_mod.FAULT_MECH)
+    assert envelope["content_cid"] == beh_mod.compute_cidv1(
+        json.dumps(response).encode("utf-8")
+    )
+    assert done_task["task_result"] == beh_mod.to_multihash(envelope["content_cid"])
+
+
+def test_offchain_tool_error_message_hides_configured_api_keys(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """An API key the tool echoes into its error never reaches the requester."""
+    _stub_offchain_io(behaviour, monkeypatch)
+    behaviour._keychain = beh_mod.KeyChain({"google_api_key": [CONFIGURED_API_KEY]})
+    exc = RuntimeError(
+        f"403 Forbidden for url: https://x.test/v1?key={CONFIGURED_API_KEY}"
+    )
+
+    _finish_tool_run(behaviour, params_stub, True, "req-42", _failed_future(exc))
+
+    reason = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-42"]["error"]
+    assert (
+        reason
+        == "RuntimeError: 403 Forbidden for url: https://x.test/v1?key=[redacted]"
+    )
+
+
+# A configured key that contains words the keychain also holds as settings.
+KEY_WITH_SETTING_WORDS = "AIzaSy-google-true-raw-0123456789"
+SETTINGS_AND_KEY_KEYCHAIN = beh_mod.KeyChain(
+    {
+        "search_provider": ["google"],
+        "return_source_content": ["true"],
+        "source_content_mode": ["raw"],
+        "google_api_key": [KEY_WITH_SETTING_WORDS],
+    }
+)
+
+
+def test_tool_error_reason_masks_keys_but_not_setting_values() -> None:
+    """A key holding setting words is masked whole; the words elsewhere stay."""
+    exc = ValueError(f"google search (raw, true) rejected key {KEY_WITH_SETTING_WORDS}")
+
+    reason = beh_mod._tool_error_reason(exc, SETTINGS_AND_KEY_KEYCHAIN)
+
+    assert reason == "ValueError: google search (raw, true) rejected key [redacted]"
+
+
+def test_tool_error_reason_masks_a_longer_key_before_one_it_contains() -> None:
+    """A key that contains another configured key is masked whole."""
+    short_key, long_key = "abcdefghijkl", "abcdefghijkl-0123456789"
+    keychain = beh_mod.KeyChain({"first": [short_key], "second": [long_key]})
+
+    reason = beh_mod._tool_error_reason(ValueError(f"bad key {long_key}"), keychain)
+
+    assert reason == "ValueError: bad key [redacted]"
+
+
+def test_tool_error_reason_masks_a_key_that_straddles_the_cap() -> None:
+    """Masking runs before the cut, so no prefix of a key survives at the edge."""
+    prefix = "x" * (495 - len("ValueError: "))
+    exc = ValueError(prefix + KEY_WITH_SETTING_WORDS)
+
+    reason = beh_mod._tool_error_reason(exc, SETTINGS_AND_KEY_KEYCHAIN)
+
+    assert reason == "ValueError: " + prefix + "[reda"
+    assert KEY_WITH_SETTING_WORDS[:4] not in reason
+
+
+@pytest.mark.parametrize(
+    "message, expected",
+    [
+        (
+            "Rate limit reached for gpt-4o in organization org-AbCdEf0123456789 "
+            "on tokens per min (TPM)",
+            "Rate limit reached for gpt-4o in organization [redacted] "
+            "on tokens per min (TPM)",
+        ),
+        ("quota for project proj_AbCdEf0123456789", "quota for project [redacted]"),
+        ("user user-AbCdEf0123456789 is blocked", "user [redacted] is blocked"),
+        (
+            "rate limit for your organization (8e2b1c3d-1111-4a2b-9c3d-0123456789ab)",
+            "rate limit for your organization ([redacted])",
+        ),
+        (
+            "Incorrect API key provided: sk-proj-abc123XYZ",
+            "Incorrect API key provided: [redacted]",
+        ),
+        ("org-chart and user-agent are fine", "org-chart and user-agent are fine"),
+        ("task-0123456789abcdef not found", "task-0123456789abcdef not found"),
+        ("", ""),
+    ],
+    ids=[
+        "openai_org",
+        "openai_project",
+        "openai_user",
+        "uuid_org",
+        "unconfigured_sk_key",
+        "short_suffix_kept",
+        "no_word_boundary_kept",
+        "empty",
+    ],
+)
+def test_tool_error_reason_masks_account_identifiers(
+    message: str, expected: str
+) -> None:
+    """Provider account ids never reach the requester; ordinary words do."""
+    reason = beh_mod._tool_error_reason(RuntimeError(message), None)
+
+    assert reason == (f"RuntimeError: {expected}" if expected else "RuntimeError")
+
+
+@pytest.mark.parametrize("is_offchain", [True, False], ids=["offchain", "onchain"])
+def test_tool_raise_counts_one_failed_task_for_its_tool(
+    behaviour: Any, params_stub: Any, monkeypatch: Any, is_offchain: bool
+) -> None:
+    """A run whose tool raised is in mech_tasks_failed_total once, by tool."""
+    _, inc = _stub_offchain_io(behaviour, monkeypatch)
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_store_file_req", lambda files: (object(), object())
+    )
+
+    _finish_tool_run(
+        behaviour, params_stub, is_offchain, 49, _failed_future(TOOL_ERROR)
+    )
+
+    source = beh_mod.SOURCE_OFFCHAIN if is_offchain else beh_mod.SOURCE_ONCHAIN
+    assert _metric_calls(inc, behaviour.mech_metrics.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_EXECUTION_FAILED,
+            "source": source,
+        }
+    ]
+
+
+def test_failure_counted_before_execution_is_not_counted_again(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """A request refused on price is one failed task, under its own reason."""
+    _, inc = _stub_offchain_io(behaviour, monkeypatch)
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=50)
+    behaviour._count_task_failure("mytool", beh_mod.FAILURE_REASON_PRICING_INVALID)
+    behaviour._fail_as_mech_fault("tool mytool is priced above the signed rate")
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert _metric_calls(inc, behaviour.mech_metrics.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_PRICING_INVALID,
+            "source": beh_mod.SOURCE_OFFCHAIN,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "exc, expected",
+    [
+        (ValueError(""), "ValueError"),
+        (ValueError("x" * (500 - len("ValueError: "))), "ValueError: " + "x" * 488),
+        (ValueError("x" * 489), "ValueError: " + "x" * 488),
+        (ValueError("x" * 5_000), "ValueError: " + "x" * 488),
+    ],
+    ids=["empty_message", "exactly_at_cap", "one_over_cap", "far_over_cap"],
+)
+def test_tool_error_reason_is_cut_to_the_cap(exc: Exception, expected: str) -> None:
+    """The requester-facing text never exceeds MAX_TOOL_ERROR_CHARS."""
+    assert beh_mod.MAX_TOOL_ERROR_CHARS == 500
+    assert beh_mod._tool_error_reason(exc, None) == expected
+
+
+def test_onchain_tool_error_message_is_delivered_and_marked_failed(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain still delivers, carrying the tool's message; the event row is failed."""
+    params_stub.use_offchain = True
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+
+    _finish_tool_run(behaviour, params_stub, False, 43, _failed_future(TOOL_ERROR))
+
+    assert captured_callback[0].keywords["response"]["result"] == TOOL_ERROR_REASON
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["43"]["event"]["response"]
+    assert (event["status"], event["error"], event["result"]) == (
+        "failed",
+        TOOL_ERROR_REASON,
+        None,
+    )
+    assert behaviour._tool_error_reason is None
+
+
+def test_tool_error_message_does_not_carry_over_to_the_next_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The next run that fails without raising gets its own reason, not the last error."""
+    _stub_offchain_io(behaviour, monkeypatch)
+    _finish_tool_run(behaviour, params_stub, True, "req-44", _failed_future(TOOL_ERROR))
+
+    _finish_tool_run(
+        behaviour, params_stub, True, "req-45", _failed_future(TimeoutError())
+    )
+
+    responses = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]
+    assert responses["req-44"]["error"] == TOOL_ERROR_REASON
+    assert responses["req-45"]["error"] == "Invalid response"
+
+
+def test_new_task_starts_without_a_tool_error_message(
+    behaviour: Any, shared_state: Dict[str, Any], monkeypatch: Any
+) -> None:
+    """Picking up the next pending task clears any message left in the slot."""
+    _stub_offchain_io(behaviour, monkeypatch)
+    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req", lambda *a: (None, None))
+    behaviour._tool_error_reason = TOOL_ERROR_REASON
+    shared_state[beh_mod.PENDING_TASKS].append(
+        _mark_download_finished(
+            behaviour,
+            {
+                "requestId": 46,
+                "request_delivery_rate": 100,
+                "data": b"fake-ipfs-pointer",
+            },
+        )
+    )
+
+    behaviour._execute_task()
+
+    assert behaviour._executing_task["requestId"] == 46
+    assert behaviour._tool_error_reason is None
+
+
+def test_timeout_after_a_tool_error_reports_the_timeout_reason(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A run that reaches the timeout limit is a mech fault with the timeout message."""
+    sent, _ = _stub_offchain_io(behaviour, monkeypatch)
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    params_stub.request_id_to_num_timeouts[47] = 0
+    params_stub.timeout_limit = 1
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=47)
+    behaviour._tool_error_reason = TOOL_ERROR_REASON
+
+    behaviour._handle_timeout_task()
+
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["47"]
+    assert (stored["status"], stored["fault"], stored["error"]) == (
+        "failed",
+        beh_mod.FAULT_MECH,
+        "Task timed out 1 times during execution. ",
+    )
+    assert sent == []
+    assert [t["request_id"] for t in shared_state[beh_mod.DONE_TASKS]] == [47]
+
+
+def test_onchain_store_timeout_after_a_tool_error_records_a_failed_run(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """The tool raised, then its store reply timed out at the limit: still failed."""
+    params_stub.use_offchain = True
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    params_stub.request_id_to_num_timeouts[48] = 0
+    params_stub.timeout_limit = 1
+    _finish_tool_run(behaviour, params_stub, False, 48, _failed_future(TOOL_ERROR))
+
+    behaviour._handle_timeout_task()
+    captured_callback[-1](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+
+    event = shared_state[beh_mod.PREDICT_API_EVENTS]["48"]["event"]["response"]
+    assert (event["status"], event["result"], event["error"]) == (
+        "failed",
+        None,
+        "Task timed out 1 times during execution. ",
+    )
+
+
+@pytest.mark.parametrize(
+    "helper, state_key",
+    [
+        (beh_mod._release_outstanding_nonce, beh_mod.ACCEPTED_NONCES_BY_SENDER),
+        (beh_mod._discard_outstanding_nonce, beh_mod.ACCEPTED_NONCES_BY_SENDER),
+        (beh_mod._discard_settling_nonce, beh_mod.SETTLING_NONCES_BY_SENDER),
+    ],
+)
+def test_sequential_nonce_helpers_ignore_explicit_nonce_tasks(
+    shared_state: Any, helper: Any, state_key: str
+) -> None:
+    """An explicit-nonce task never touches the sequential accepted/settling sets.
+
+    Its nonce is a requester-chosen value that may collide numerically with
+    a real sequential slot of the same sender.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    :param helper: the bookkeeping helper under test.
+    :param state_key: the set the helper would otherwise mutate.
+    """
+    sender = "0xSender"
+    shared_state[state_key] = {sender: {7}}
+    helper(
+        shared_state,
+        {
+            "sender": sender,
+            "nonce": 7,
+            "is_offchain": True,
+            beh_mod.NONCE_MODE_KEY: beh_mod.NONCE_MODE_EXPLICIT,
+        },
+    )
+    assert shared_state[state_key] == {sender: {7}}
+    assert beh_mod.SETTLING_NONCES_BY_SENDER not in shared_state or shared_state[
+        beh_mod.SETTLING_NONCES_BY_SENDER
+    ] == {sender: {7}}
 
 
 # ---------------------------------------------------------------------------

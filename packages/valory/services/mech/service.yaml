@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeihqd3tlx346e6hk33waypgf5wywk4y6qa6p32jqb3x7bo5x4ewn6a
+agent: valory/mech:0.1.0:bafybeifykt7ks47tzg7mhf6sglxiz72ugtczosurljvt2si3svqaoqfdmq
 number_of_agents: 4
 deployment:
   agent:
@@ -39,6 +39,15 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -83,6 +92,15 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
@@ -124,6 +142,15 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
@@ -165,6 +192,15 @@ type: skill
         erc8004_agent_id: ${ERC8004_AGENT_ID:int:null}
         mech_events_chain_id: ${MECH_EVENTS_CHAIN_ID:int:0}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        cap_and_actual_enabled: ${CAP_AND_ACTUAL_ENABLED:bool:false}
+        explicit_deadline_settlement_margin_seconds: ${EXPLICIT_DEADLINE_SETTLEMENT_MARGIN_SECONDS:int:180}
+        settlement_base_gas: ${SETTLEMENT_BASE_GAS:int:300000}
+        settlement_gas_per_request: ${SETTLEMENT_GAS_PER_REQUEST:int:150000}
+        settlement_gas_per_requester_group: ${SETTLEMENT_GAS_PER_REQUESTER_GROUP:int:110000}
+        settlement_process_payment_gas: ${SETTLEMENT_PROCESS_PAYMENT_GAS:int:120000}
+        settlement_profit_transfer_gas: ${SETTLEMENT_PROFIT_TRANSFER_GAS:int:70000}
+        settlement_metadata_hash_gas: ${SETTLEMENT_METADATA_HASH_GAS:int:40000}
+        settlement_legacy_response_gas: ${SETTLEMENT_LEGACY_RESPONSE_GAS:int:150000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -215,6 +251,12 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
+        explicit_nonce_min_deadline_seconds: ${EXPLICIT_NONCE_MIN_DEADLINE_SECONDS:int:600}
+        max_prompt_bytes: ${MAX_PROMPT_BYTES:int:100000}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
@@ -238,6 +280,12 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
+        explicit_nonce_min_deadline_seconds: ${EXPLICIT_NONCE_MIN_DEADLINE_SECONDS:int:600}
+        max_prompt_bytes: ${MAX_PROMPT_BYTES:int:100000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -262,6 +310,12 @@ type: skill
         from_block_range: ${FROM_BLOCK_RANGE:int:1000}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
+        explicit_nonce_min_deadline_seconds: ${EXPLICIT_NONCE_MIN_DEADLINE_SECONDS:int:600}
+        max_prompt_bytes: ${MAX_PROMPT_BYTES:int:100000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -287,6 +341,12 @@ type: skill
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
+        tools_to_minimum_cap: ${TOOLS_TO_MINIMUM_CAP:dict:{}}
+        fixed_cost_per_request: ${FIXED_COST_PER_REQUEST:int:0}
+        marketplace_fee_bp: ${MARKETPLACE_FEE_BP:int:1500}
+        payment_token_decimals: ${PAYMENT_TOKEN_DECIMALS:int:18}
+        explicit_nonce_min_deadline_seconds: ${EXPLICIT_NONCE_MIN_DEADLINE_SECONDS:int:600}
+        max_prompt_bytes: ${MAX_PROMPT_BYTES:int:100000}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
