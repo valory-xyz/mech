@@ -2649,6 +2649,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         task_result = to_multihash(cid)
+        # The run's cost and the tool floor are the mech's own values, or absent.
+        done_task.pop("cost_dict", None)
+        done_task.pop("dynamic_tool_cost", None)
         if response is not None and isinstance(response.get("cost_dict"), dict):
             done_task["cost_dict"] = response["cost_dict"]
         tool = str(done_task.get("tool"))
